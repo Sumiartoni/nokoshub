@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String        @id @default(cuid())
+  telegramId   String        @unique
+  username     String?
+  firstName    String?
+  lastName     String?
+  balance      Int           @default(0)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  orders       Order[]
+  transactions Transaction[]
+  invoices     Invoice[]
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  serviceCode String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  prices      Price[]
+}
+
+model Country {
+  id          String   @id @default(cuid())
+  name        String
+  countryCode String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  prices      Price[]
+}
+
+model Price {
+  id            String   @id @default(cuid())
+  service       Service  @relation(fields: [serviceId], references: [id])
+  serviceId     String
+  country       Country  @relation(fields: [countryId], references: [id])
+  countryId     String
+  priceId       String   @unique // provider's price_id
+  providerPrice Int // in IDR
+  sellPrice     Int // providerPrice × 3.5
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  orders        Order[]
+
+  @@index([serviceId, countryId])
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  user            User     @relation(fields: [userId], references: [id])
+  userId          String
+  price           Price    @relation(fields: [priceId], references: [id])
+  priceId         String
+  providerOrderId String?
+  phoneNumber     String?
+  otpCode         String?
+  status          String   @default("PENDING") // PENDING | ACTIVE | SUCCESS | FAILED | CANCELLED
+  failReason      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([providerOrderId])
+  @@index([status])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  type        String // DEPOSIT | DEDUCT | REFUND
+  amount      Int
+  description String?
+  reference   String? // orderId or invoiceId
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  amount      Int
+  baseAmount  Int      @default(0)
+  status      String   @default("PENDING") // PENDING | PAID | EXPIRED
+  qrisPayload String   @db.Text
+  paidAt      DateTime?
+  expiredAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}

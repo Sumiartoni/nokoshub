@@ -1,0 +1,110 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: nokos_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nokos
+      POSTGRES_PASSWORD: nokos_password
+      POSTGRES_DB: nokos_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nokos -d nokos_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nokos_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend (API + Bot + Worker) ───────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: nokos_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_BASE_URL: http://backend:3000
+      DATABASE_URL: postgresql://nokos:nokos_password@postgres:5432/nokos_db
+      REDIS_URL: redis://redis:6379
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      RUMAHOTP_API_KEY: ${RUMAHOTP_API_KEY}
+      RUMAHOTP_BASE_URL: ${RUMAHOTP_BASE_URL:-https://www.rumahotp.com/api}
+      QRIS_STATIC_STRING: ${QRIS_STATIC_STRING}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      SELL_PRICE_MULTIPLIER: ${SELL_PRICE_MULTIPLIER:-3.5}
+      OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
+      OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}
+    ports:
+      - '3000:3000'
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        node dist/index.js
+      "
+    volumes:
+      - ./prisma:/app/prisma
+
+  # ─── OTP Worker (separate process) ──────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: nokos_worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      API_BASE_URL: http://backend:3000
+      DATABASE_URL: postgresql://nokos:nokos_password@postgres:5432/nokos_db
+      REDIS_URL: redis://redis:6379
+      RUMAHOTP_API_KEY: ${RUMAHOTP_API_KEY}
+      RUMAHOTP_BASE_URL: ${RUMAHOTP_BASE_URL:-https://www.rumahotp.com/api}
+      OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
+      OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}
+      # Worker needs config to pass validation, provide dummy values for unused vars
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      QRIS_STATIC_STRING: ${QRIS_STATIC_STRING}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+    command: ['node', 'dist/worker.js']
+
+volumes:
+  postgres_data:
+  redis_data:
