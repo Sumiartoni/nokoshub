@@ -17,6 +17,12 @@ export const serviceService = {
         let pricesCount = 0;
 
         for (const item of items) {
+            // Skip items with missing required fields
+            if (!item.service || !item.country || !item.price_id) {
+                logger.warn({ item }, 'Skipping item with missing fields');
+                continue;
+            }
+
             // Upsert service
             const service = await prisma.service.upsert({
                 where: { serviceCode: item.service },
