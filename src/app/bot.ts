@@ -49,6 +49,17 @@ function clearSession(chatId: number) {
 export function createBot(): TelegramBot {
     const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
 
+    // Set Telegram Bot Commands Menu (the blue Menu button in the chat input bar)
+    bot.setMyCommands([
+        { command: '/start', description: 'Mulai bot NokosHUB' },
+        { command: '/menu', description: 'Buka menu utama' },
+        { command: '/buy', description: 'Beli nomor virtual' },
+        { command: '/deposit', description: 'Isi saldo' },
+        { command: '/balance', description: 'Cek sisa saldo' },
+        { command: '/history', description: 'Riwayat transaksi' },
+        { command: '/help', description: 'Bantuan & Panduan' }
+    ]).catch(err => logger.error({ err: err.message }, 'Failed to set bot commands'));
+
     // ─── OTP Notification handler (from worker) ───────────────────────────────
     setNotifyHandler(async (data: any) => {
         const { telegramId, type, orderId, otpCode } = data;
