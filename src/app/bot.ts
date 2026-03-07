@@ -207,6 +207,29 @@ export function createBot(): TelegramBot {
             }
         }
 
+        // Pagination for services
+        if (data.startsWith('page_svc:')) {
+            const [, pageStr] = data.split(':');
+            return handleBuyStart(bot, chatId, parseInt(pageStr), query.message?.message_id);
+        }
+
+        // Pagination for countries
+        if (data.startsWith('page_ctr:')) {
+            const [, pageStr] = data.split(':');
+            const session = getSession(chatId);
+            if (!session.selectedServiceId || !session.selectedServiceName) {
+                return bot.sendMessage(chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy');
+            }
+            return handleServiceSelected(
+                bot,
+                chatId,
+                session.selectedServiceId,
+                session.selectedServiceName,
+                parseInt(pageStr),
+                query.message?.message_id
+            );
+        }
+
         if (data.startsWith('service:')) {
             const [, serviceId, ...nameParts] = data.split(':');
             const serviceName = nameParts.join(':');
@@ -317,7 +340,7 @@ async function handleHistory(bot: TelegramBot, chatId: number, telegramId: strin
     }
 }
 
-async function handleBuyStart(bot: TelegramBot, chatId: number) {
+async function handleBuyStart(bot: TelegramBot, chatId: number, page: number = 0, messageId?: number) {
     try {
         const res = await apiGet('/api/services');
         const services: any[] = res.data ?? [];
@@ -326,8 +349,12 @@ async function handleBuyStart(bot: TelegramBot, chatId: number) {
             return bot.sendMessage(chatId, '❌ Tidak ada layanan tersedia saat ini.');
         }
 
+        const ITEMS_PER_PAGE = 10;
+        const totalPages = Math.ceil(services.length / ITEMS_PER_PAGE);
+        const paginated = services.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
+
         // Build inline keyboard, max 2 per row
-        const buttons = services.map((s: any) => ({
+        const buttons = paginated.map((s: any) => ({
             text: s.name,
             callback_data: `service:${s.id}:${s.name}`,
         }));
@@ -337,14 +364,27 @@ async function handleBuyStart(bot: TelegramBot, chatId: number) {
             rows.push(buttons.slice(i, i + 2));
         }
 
-        await bot.sendMessage(
-            chatId,
-            `📲 *Pilih Aplikasi*\n\nPilih aplikasi yang ingin kamu verifikasi:`,
-            {
-                parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: rows },
-            }
-        );
+        const navRow = [];
+        if (page > 0) {
+            navRow.push({ text: '⬅️ Prev', callback_data: `page_svc:${page - 1}` });
+        }
+        if (page < totalPages - 1) {
+            navRow.push({ text: 'Next ➡️', callback_data: `page_svc:${page + 1}` });
+        }
+        if (navRow.length > 0) {
+            rows.push(navRow);
+        }
+
+        const text = `📲 *Pilih Aplikasi*\n\nPilih aplikasi yang ingin kamu verifikasi:\n\n_Halaman ${page + 1} dari ${totalPages}_`;
+        const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
+
+        if (messageId) {
+            options.chat_id = chatId;
+            options.message_id = messageId;
+            await bot.editMessageText(text, options);
+        } else {
+            await bot.sendMessage(chatId, text, options);
+        }
     } catch {
         await bot.sendMessage(chatId, '❌ Gagal memuat daftar layanan. Coba lagi.');
     }
@@ -354,7 +394,9 @@ async function handleServiceSelected(
     bot: TelegramBot,
     chatId: number,
     serviceId: string,
-    serviceName: string
+    serviceName: string,
+    page: number = 0,
+    messageId?: number
 ) {
     const session = getSession(chatId);
     session.selectedServiceId = serviceId;
@@ -368,7 +410,11 @@ async function handleServiceSelected(
             return bot.sendMessage(chatId, `❌ Tidak ada negara tersedia untuk ${serviceName}.`);
         }
 
-        const buttons = countries.map((c: any) => ({
+        const ITEMS_PER_PAGE = 16;
+        const totalPages = Math.ceil(countries.length / ITEMS_PER_PAGE);
+        const paginated = countries.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
+
+        const buttons = paginated.map((c: any) => ({
             text: c.name,
             callback_data: `country:${c.id}:${c.name}`,
         }));
@@ -378,14 +424,27 @@ async function handleServiceSelected(
             rows.push(buttons.slice(i, i + 2));
         }
 
-        await bot.sendMessage(
-            chatId,
-            `🌍 *Pilih Negara*\n\nLayanan: *${serviceName}*\n\nPilih negara yang tersedia:`,
-            {
-                parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: rows },
-            }
-        );
+        const navRow = [];
+        if (page > 0) {
+            navRow.push({ text: '⬅️ Prev', callback_data: `page_ctr:${page - 1}` });
+        }
+        if (page < totalPages - 1) {
+            navRow.push({ text: 'Next ➡️', callback_data: `page_ctr:${page + 1}` });
+        }
+        if (navRow.length > 0) {
+            rows.push(navRow);
+        }
+
+        const text = `🌍 *Pilih Negara*\n\nLayanan: *${serviceName}*\n_Halaman ${page + 1} dari ${totalPages}_\n\nPilih negara yang tersedia:`;
+        const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
+
+        if (messageId) {
+            options.chat_id = chatId;
+            options.message_id = messageId;
+            await bot.editMessageText(text, options);
+        } else {
+            await bot.sendMessage(chatId, text, options);
+        }
     } catch {
         await bot.sendMessage(chatId, '❌ Gagal memuat daftar negara. Coba lagi.');
     }
