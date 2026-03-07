@@ -6,7 +6,7 @@ import { setNotifyHandler } from '../modules/routes/webhook.routes';
 import logger from '../utils/logger';
 import { formatRupiah } from '../utils/helpers';
 
-const BASE_URL = config.API_BASE_URL;
+const BASE_URL = `http://127.0.0.1:${config.PORT}`;
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
