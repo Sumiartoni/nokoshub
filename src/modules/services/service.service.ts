@@ -65,6 +65,8 @@ export const serviceService = {
                             providerPrice: price.price,
                             sellPrice,
                         },
+                    }).catch(err => {
+                        logger.error({ err, priceId }, 'Failed to upsert price');
                     });
                     pricesCount++;
                 });

@@ -69,11 +69,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.post('/sync', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         try {
+            logger.info('Admin triggered manual provider sync');
             const result = await serviceService.syncFromProvider();
             return { success: true, data: result };
-        } catch (err) {
+        } catch (err: any) {
             logger.error({ err }, 'Admin sync failed');
-            return reply.status(500).send({ success: false, error: (err as Error).message });
+            return reply.status(500).send({
+                success: false,
+                error: err.message,
+                details: err.response?.data || err.stack
+            });
         }
     });
 
