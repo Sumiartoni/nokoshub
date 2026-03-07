@@ -6,52 +6,64 @@ import logger from '../../utils/logger';
 
 export const serviceService = {
     /**
-     * Sync all services, countries, and prices from RumahOTP into the database.
-     * Runs on startup and can be triggered manually via admin API.
+     * Sync services and countries from RumahOTP V2 API.
+     * 1. Fetch all services → upsert into DB
+     * 2. For each service, fetch countries → upsert countries + prices
      */
     async syncFromProvider(): Promise<{ services: number; prices: number }> {
         logger.info('Starting provider sync...');
-        const items = await rumahOTPProvider.getServices();
+
+        const services = await rumahOTPProvider.getServices();
+        if (!services.length) {
+            logger.warn('No services returned from provider');
+            return { services: 0, prices: 0 };
+        }
 
         let servicesCount = 0;
         let pricesCount = 0;
 
-        for (const item of items) {
-            // Skip items with missing required fields
-            if (!item.service || !item.country || !item.price_id) {
-                logger.warn({ item }, 'Skipping item with missing fields');
-                continue;
-            }
+        for (const svc of services) {
+            if (!svc.service_code || !svc.service_name) continue;
 
             // Upsert service
+            const serviceCode = String(svc.service_code);
             const service = await prisma.service.upsert({
-                where: { serviceCode: item.service },
-                update: { name: item.service },
-                create: { name: item.service, serviceCode: item.service },
+                where: { serviceCode },
+                update: { name: svc.service_name },
+                create: { name: svc.service_name, serviceCode },
             });
             servicesCount++;
 
-            // Upsert country
-            const country = await prisma.country.upsert({
-                where: { countryCode: item.country },
-                update: { name: item.country },
-                create: { name: item.country, countryCode: item.country },
-            });
+            // Fetch countries for this service
+            const countries = await rumahOTPProvider.getCountries(svc.service_code);
 
-            // Upsert price
-            const sellPrice = calculateSellPrice(item.price, config.SELL_PRICE_MULTIPLIER);
-            await prisma.price.upsert({
-                where: { priceId: item.price_id },
-                update: { providerPrice: item.price, sellPrice },
-                create: {
-                    serviceId: service.id,
-                    countryId: country.id,
-                    priceId: item.price_id,
-                    providerPrice: item.price,
-                    sellPrice,
-                },
-            });
-            pricesCount++;
+            for (const ctr of countries) {
+                if (!ctr.country_name || !ctr.country_id) continue;
+
+                const countryCode = String(ctr.country_id);
+                const country = await prisma.country.upsert({
+                    where: { countryCode },
+                    update: { name: ctr.country_name },
+                    create: { name: ctr.country_name, countryCode },
+                });
+
+                // Use provider_id as the unique price identifier
+                const priceId = `${svc.service_code}_${ctr.country_id}_${ctr.provider_id}`;
+                const sellPrice = calculateSellPrice(ctr.price, config.SELL_PRICE_MULTIPLIER);
+
+                await prisma.price.upsert({
+                    where: { priceId },
+                    update: { providerPrice: ctr.price, sellPrice },
+                    create: {
+                        serviceId: service.id,
+                        countryId: country.id,
+                        priceId,
+                        providerPrice: ctr.price,
+                        sellPrice,
+                    },
+                });
+                pricesCount++;
+            }
         }
 
         logger.info({ servicesCount, pricesCount }, 'Provider sync completed');
@@ -84,7 +96,7 @@ export const serviceService = {
         });
     },
 
-    /** Get prices for a service + country combination, sorted ascending by sellPrice */
+    /** Get prices for a service + country combination */
     async getPrices(serviceId: string, countryId: string) {
         return prisma.price.findMany({
             where: { serviceId, countryId, isActive: true },

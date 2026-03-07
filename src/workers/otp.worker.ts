@@ -33,22 +33,33 @@ const worker = new Worker<OtpJobData>(
                 return;
             }
 
-            const smsResult = await rumahOTPProvider.checkSMS(providerOrderId);
+            const statusResult = await rumahOTPProvider.checkStatus(providerOrderId);
 
-            if (smsResult.success && smsResult.otpCode) {
+            if (statusResult.success && statusResult.sms_code) {
                 // OTP found! Update order
                 await prisma.order.update({
                     where: { id: orderId },
                     data: {
-                        otpCode: smsResult.otpCode,
+                        otpCode: statusResult.sms_code,
                         status: 'SUCCESS',
                     },
                 });
 
-                logger.info({ orderId, otpCode: smsResult.otpCode }, 'OTP received');
+                logger.info({ orderId, otpCode: statusResult.sms_code }, 'OTP received');
 
-                // Notify user via backend API (bot will handle sending)
-                await notifyOtpReceived(telegramId, orderId, smsResult.otpCode);
+                // Notify user via backend API
+                await notifyOtpReceived(telegramId, orderId, statusResult.sms_code);
+                return;
+            }
+
+            // If status is cancelled/expired by provider
+            if (statusResult.status === 'cancelled' || statusResult.status === 'expiring') {
+                await prisma.order.update({
+                    where: { id: orderId },
+                    data: { status: 'FAILED', failReason: `Provider status: ${statusResult.status}` },
+                });
+                logger.warn({ orderId, status: statusResult.status }, 'Order expired/cancelled by provider');
+                await notifyOtpTimeout(telegramId, orderId);
                 return;
             }
 

@@ -4,150 +4,177 @@ import logger from '../../utils/logger';
 
 // ─── Response Types ────────────────────────────────────────────────────────────
 
-export interface ProviderServiceItem {
-    service: string;
-    country: string;
-    price_id: string;
+export interface ProviderService {
+    service_code: number;
+    service_name: string;
+    service_img?: string;
+}
+
+export interface ProviderCountry {
+    country_id: number;
+    country_name: string;
+    country_code: string;
     price: number;
+    provider_id: number;
+}
+
+export interface ProviderOperator {
+    operator_id: number;
+    operator_name: string;
+    number_id: number;
+    price: number;
+    provider_id: number;
 }
 
 export interface ProviderOrderResult {
     success: boolean;
-    number: string | null;
-    providerOrderId: string | null;
+    order_id: string | null;
+    phone_number: string | null;
     message: string;
 }
 
-export interface ProviderSmsResult {
+export interface ProviderStatusResult {
     success: boolean;
-    otpCode: string | null;
+    status: string;
+    sms_code: string | null;
+    phone_number: string | null;
     message: string;
 }
 
-// ─── RumahOTP Provider ─────────────────────────────────────────────────────────
+// ─── RumahOTP Provider (V2 API) ────────────────────────────────────────────────
 
 class RumahOTPProvider {
     private client: AxiosInstance;
 
     constructor() {
         this.client = axios.create({
-            baseURL: config.RUMAHOTP_BASE_URL,
+            baseURL: 'https://www.rumahotp.com/api',
             timeout: 15000,
+            headers: {
+                'x-apikey': config.RUMAHOTP_API_KEY,
+                'Accept': 'application/json',
+            },
         });
     }
 
-    private apiKey(): string {
-        return config.RUMAHOTP_API_KEY;
-    }
-
-    /** Get provider account balance */
-    async getBalance(): Promise<number> {
+    /** Get all available services */
+    async getServices(): Promise<ProviderService[]> {
         try {
-            const res = await this.client.get('/user', {
-                params: { api_key: this.apiKey() },
-            });
-            return res.data?.balance ?? 0;
-        } catch (err) {
-            logger.error({ err }, 'RumahOTP getBalance failed');
-            throw err;
-        }
-    }
-
-    /** Get full service + price list */
-    async getServices(): Promise<ProviderServiceItem[]> {
-        try {
-            const res = await this.client.get('/service', {
-                params: { api_key: this.apiKey() },
-            });
-
-            const raw = res.data;
-
-            // Provider may return array or object keyed by price_id
-            if (Array.isArray(raw)) return raw;
-
-            // Normalize object response
-            return Object.values(raw).map((item: any) => ({
-                service: item.service ?? item.name,
-                country: item.country,
-                price_id: String(item.price_id ?? item.id),
-                price: Number(item.price ?? item.harga ?? 0),
-            }));
+            const res = await this.client.get('/v2/services');
+            const body = res.data;
+            if (!body?.success || !Array.isArray(body.data)) {
+                logger.warn({ body }, 'Unexpected getServices response');
+                return [];
+            }
+            return body.data;
         } catch (err) {
             logger.error({ err }, 'RumahOTP getServices failed');
-            throw err;
+            return [];
         }
     }
 
-    /** Order a number by price_id */
-    async orderNumber(priceId: string): Promise<ProviderOrderResult> {
+    /** Get countries available for a service */
+    async getCountries(serviceId: number): Promise<ProviderCountry[]> {
         try {
-            const res = await this.client.get('/order', {
-                params: { api_key: this.apiKey(), price_id: priceId },
+            const res = await this.client.get('/v2/countries', {
+                params: { service_id: serviceId },
             });
+            const body = res.data;
+            if (!body?.success || !Array.isArray(body.data)) {
+                return [];
+            }
+            return body.data;
+        } catch (err) {
+            logger.error({ err, serviceId }, 'RumahOTP getCountries failed');
+            return [];
+        }
+    }
 
-            const data = res.data;
+    /** Get operators/numbers for a country + provider */
+    async getOperators(country: string, providerId: number): Promise<ProviderOperator[]> {
+        try {
+            const res = await this.client.get('/v2/operators', {
+                params: { country, provider_id: providerId },
+            });
+            const body = res.data;
+            if (!body?.status || !Array.isArray(body.data)) {
+                return [];
+            }
+            return body.data;
+        } catch (err) {
+            logger.error({ err, country, providerId }, 'RumahOTP getOperators failed');
+            return [];
+        }
+    }
 
-            if (!data || data.status === 'error' || data.status === 'false') {
+    /** Order a number (V2) */
+    async orderNumber(numberId: number, providerId: number, operatorId: number): Promise<ProviderOrderResult> {
+        try {
+            const res = await this.client.get('/v2/orders', {
+                params: { number_id: numberId, provider_id: providerId, operator_id: operatorId },
+            });
+            const body = res.data;
+            if (!body?.success) {
                 return {
                     success: false,
-                    number: null,
-                    providerOrderId: null,
-                    message: data?.message ?? 'Order failed',
+                    order_id: null,
+                    phone_number: null,
+                    message: body?.message ?? 'Order failed',
                 };
             }
-
+            const d = body.data;
             return {
                 success: true,
-                number: data.number ?? data.phone ?? null,
-                providerOrderId: String(data.order_id ?? data.id ?? ''),
-                message: data.message ?? 'Order created',
+                order_id: String(d?.order_id ?? ''),
+                phone_number: d?.phone_number ?? null,
+                message: body.message ?? 'Order created',
             };
         } catch (err) {
-            logger.error({ err, priceId }, 'RumahOTP orderNumber failed');
-            return {
-                success: false,
-                number: null,
-                providerOrderId: null,
-                message: (err as Error).message,
-            };
+            logger.error({ err }, 'RumahOTP orderNumber failed');
+            return { success: false, order_id: null, phone_number: null, message: (err as Error).message };
         }
     }
 
-    /** Check SMS / OTP for an order */
-    async checkSMS(providerOrderId: string): Promise<ProviderSmsResult> {
+    /** Check order status / SMS (V1 endpoint) */
+    async checkStatus(orderId: string): Promise<ProviderStatusResult> {
         try {
-            const res = await this.client.get('/sms', {
-                params: { api_key: this.apiKey(), order_id: providerOrderId },
+            const res = await this.client.get('/v1/orders/get_status', {
+                params: { order_id: orderId },
             });
-
-            const data = res.data;
-
-            if (!data || !data.sms) {
-                return { success: false, otpCode: null, message: 'Waiting for OTP...' };
+            const body = res.data;
+            if (!body?.success) {
+                return { success: false, status: 'waiting', sms_code: null, phone_number: null, message: 'Waiting...' };
             }
-
-            // Extract OTP from SMS text (first sequence of 4-8 digits)
-            const msg: string = String(data.sms);
-            const match = msg.match(/\b(\d{4,8})\b/);
-            const otpCode = match ? match[1] : msg;
-
-            return { success: true, otpCode, message: msg };
+            const d = body.data;
+            const status = d?.status ?? 'waiting';
+            // Extract OTP from sms_code field
+            let smsCode: string | null = d?.sms_code ?? null;
+            if (!smsCode && d?.sms) {
+                // Fallback: extract digits from sms text
+                const match = String(d.sms).match(/\b(\d{4,8})\b/);
+                smsCode = match ? match[1] : String(d.sms);
+            }
+            return {
+                success: status === 'completed' || status === 'received',
+                status,
+                sms_code: smsCode,
+                phone_number: d?.phone_number ?? null,
+                message: d?.message ?? status,
+            };
         } catch (err) {
-            logger.error({ err, providerOrderId }, 'RumahOTP checkSMS failed');
-            return { success: false, otpCode: null, message: (err as Error).message };
+            logger.error({ err, orderId }, 'RumahOTP checkStatus failed');
+            return { success: false, status: 'error', sms_code: null, phone_number: null, message: (err as Error).message };
         }
     }
 
-    /** Cancel an order */
-    async cancelOrder(providerOrderId: string): Promise<boolean> {
+    /** Get user balance/profile */
+    async getBalance(): Promise<number> {
         try {
-            const res = await this.client.get('/cancel', {
-                params: { api_key: this.apiKey(), order_id: providerOrderId },
-            });
-            return res.data?.status !== 'error';
+            const res = await this.client.get('/v1/profile');
+            return res.data?.data?.balance ?? res.data?.balance ?? 0;
         } catch (err) {
-            logger.error({ err, providerOrderId }, 'RumahOTP cancelOrder failed');
-            return false;
+            logger.error({ err }, 'RumahOTP getBalance failed');
+            return 0;
         }
     }
 }

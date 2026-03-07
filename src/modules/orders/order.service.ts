@@ -10,12 +10,12 @@ export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELL
 
 export const orderService = {
     /**
-     * Create a new order:
-     * 1. Validate user balance
-     * 2. Call provider API
-     * 3. Deduct balance
-     * 4. Save order to DB
-     * 5. Enqueue OTP polling job
+     * Create a new order (V2 API flow):
+     * 1. Parse priceId to get provider info
+     * 2. Get available operators/numbers
+     * 3. Call provider to order
+     * 4. Deduct balance & save to DB
+     * 5. Enqueue OTP polling
      */
     async createOrder(userId: string, priceId: string) {
         const price = await serviceService.getPriceById(priceId);
@@ -29,9 +29,28 @@ export const orderService = {
             );
         }
 
-        // Call provider to get a number
-        const result = await rumahOTPProvider.orderNumber(price.priceId);
-        if (!result.success || !result.number || !result.providerOrderId) {
+        // Parse composite priceId: serviceCode_countryId_providerId
+        const parts = price.priceId.split('_');
+        if (parts.length < 3) throw new Error('Invalid price configuration');
+        const [, , providerIdStr] = parts;
+        const providerId = Number(providerIdStr);
+
+        // Get operators/numbers available
+        const operators = await rumahOTPProvider.getOperators(
+            price.country.name,
+            providerId
+        );
+
+        if (!operators.length) {
+            throw new Error('No numbers available for this service right now');
+        }
+
+        // Pick first available operator
+        const op = operators[0];
+
+        // Call provider to order the number
+        const result = await rumahOTPProvider.orderNumber(op.number_id, providerId, op.operator_id);
+        if (!result.success || !result.phone_number || !result.order_id) {
             throw new Error(result.message || 'Failed to get number from provider');
         }
 
@@ -48,8 +67,8 @@ export const orderService = {
             data: {
                 userId,
                 priceId,
-                providerOrderId: result.providerOrderId,
-                phoneNumber: result.number,
+                providerOrderId: result.order_id,
+                phoneNumber: result.phone_number,
                 status: 'ACTIVE',
             },
             include: {
@@ -59,13 +78,13 @@ export const orderService = {
             },
         });
 
-        // Update the deduct transaction reference
+        // Update transaction reference
         await prisma.transaction.updateMany({
             where: { userId, type: 'DEDUCT', reference: null },
             data: { reference: order.id },
         });
 
-        logger.info({ orderId: order.id, phoneNumber: result.number }, 'Order created');
+        logger.info({ orderId: order.id, phoneNumber: result.phone_number }, 'Order created');
 
         // Enqueue OTP polling job
         const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -74,7 +93,7 @@ export const orderService = {
                 'poll-otp',
                 {
                     orderId: order.id,
-                    providerOrderId: result.providerOrderId,
+                    providerOrderId: result.order_id,
                     telegramId: user.telegramId,
                 },
                 {
@@ -121,11 +140,6 @@ export const orderService = {
         if (!order) throw new Error('Order not found');
         if (order.userId !== userId) throw new Error('Unauthorized');
         if (order.status !== 'ACTIVE') throw new Error('Only ACTIVE orders can be cancelled');
-
-        // Cancel with provider
-        if (order.providerOrderId) {
-            await rumahOTPProvider.cancelOrder(order.providerOrderId);
-        }
 
         // Update order status
         await prisma.order.update({
