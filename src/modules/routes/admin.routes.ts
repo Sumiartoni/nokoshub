@@ -12,7 +12,7 @@ const adminKeySchema = z.object({
 });
 
 function requireAdmin(req: any, reply: any): boolean {
-    const key = req.headers['x-admin-key'];
+    const key = req.headers['x-admin-key'] || (req.query && req.query.key);
     if (key !== config.ADMIN_API_KEY) {
         reply.status(401).send({ success: false, error: 'Unauthorized' });
         return false;
@@ -65,8 +65,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return { success: true, data: service };
     });
 
-    // POST /api/admin/sync - manual sync from provider
-    fastify.post('/sync', async (req, reply) => {
+    // ALL /api/admin/sync - manual sync from provider (accepts GET/POST)
+    fastify.all('/sync', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         try {
             logger.info('Admin triggered manual provider sync');
