@@ -38,31 +38,36 @@ export const serviceService = {
             const countries = await rumahOTPProvider.getCountries(svc.service_code);
 
             for (const ctr of countries) {
-                if (!ctr.country_name || !ctr.country_id) continue;
+                if (!ctr.name || !ctr.number_id || !Array.isArray(ctr.pricelist)) continue;
 
-                const countryCode = String(ctr.country_id);
+                const countryCode = String(ctr.number_id);
                 const country = await prisma.country.upsert({
                     where: { countryCode },
-                    update: { name: ctr.country_name },
-                    create: { name: ctr.country_name, countryCode },
+                    update: { name: ctr.name },
+                    create: { name: ctr.name, countryCode },
                 });
 
-                // Use provider_id as the unique price identifier
-                const priceId = `${svc.service_code}_${ctr.country_id}_${ctr.provider_id}`;
-                const sellPrice = calculateSellPrice(ctr.price, config.SELL_PRICE_MULTIPLIER);
+                // Iterate over pricelist for this country
+                for (const price of ctr.pricelist) {
+                    if (!price.provider_id || !price.price) continue;
 
-                await prisma.price.upsert({
-                    where: { priceId },
-                    update: { providerPrice: ctr.price, sellPrice },
-                    create: {
-                        serviceId: service.id,
-                        countryId: country.id,
-                        priceId,
-                        providerPrice: ctr.price,
-                        sellPrice,
-                    },
-                });
-                pricesCount++;
+                    // Use provider_id as the unique price identifier
+                    const priceId = `${svc.service_code}_${ctr.number_id}_${price.provider_id}`;
+                    const sellPrice = calculateSellPrice(price.price, config.SELL_PRICE_MULTIPLIER);
+
+                    await prisma.price.upsert({
+                        where: { priceId },
+                        update: { providerPrice: price.price, sellPrice },
+                        create: {
+                            serviceId: service.id,
+                            countryId: country.id,
+                            priceId,
+                            providerPrice: price.price,
+                            sellPrice,
+                        },
+                    });
+                    pricesCount++;
+                }
             }
         }
 

@@ -10,12 +10,16 @@ export interface ProviderService {
     service_img?: string;
 }
 
-export interface ProviderCountry {
-    country_id: number;
-    country_name: string;
-    country_code: string;
+export interface ProviderPrice {
     price: number;
     provider_id: number;
+}
+
+export interface ProviderCountry {
+    number_id: number;
+    name: string;
+    iso_code: string;
+    pricelist: ProviderPrice[];
 }
 
 export interface ProviderOperator {
@@ -83,6 +87,7 @@ class RumahOTPProvider {
             if (!body?.success || !Array.isArray(body.data)) {
                 return [];
             }
+            // Real API returns { name, number_id, pricelist: [{ price, provider_id }] }
             return body.data;
         } catch (err) {
             logger.error({ err, serviceId }, 'RumahOTP getCountries failed');
