@@ -233,6 +233,24 @@ export function createBot(): TelegramBot {
             );
         }
 
+        // Pagination for prices
+        if (data.startsWith('page_prc:')) {
+            const [, pageStr] = data.split(':');
+            const session = getSession(chatId);
+            if (!session.selectedCountryId || !session.selectedCountryName) {
+                return bot.sendMessage(chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy');
+            }
+            return handleCountrySelected(
+                bot,
+                chatId,
+                telegramId,
+                session.selectedCountryId,
+                session.selectedCountryName,
+                parseInt(pageStr),
+                query.message?.message_id
+            );
+        }
+
         if (data.startsWith('service:')) {
             const [, serviceId, ...nameParts] = data.split(':');
             const serviceName = nameParts.join(':');
@@ -458,7 +476,9 @@ async function handleCountrySelected(
     chatId: number,
     telegramId: string,
     countryId: string,
-    countryName: string
+    countryName: string,
+    page: number = 0,
+    messageId?: number
 ) {
     const session = getSession(chatId);
     const serviceId = session.selectedServiceId;
@@ -479,33 +499,50 @@ async function handleCountrySelected(
             return bot.sendMessage(chatId, `❌ Tidak ada harga tersedia untuk ${serviceName} di ${countryName}.`);
         }
 
-        // Store prices in session (so callback can map index → priceId)
+        // Store prices in session
         session.prices = prices;
 
-        // Build buttons (sorted by sellPrice ascending, already sorted from API)
-        const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
-
-        const buttons = prices.map((p, i) => ({
-            text: `${emojis[i] ?? `${i + 1}.`} ${formatRupiah(p.sellPrice)}`,
-            callback_data: `price:${p.id}`,
-        }));
+        const ITEMS_PER_PAGE = 4;
+        const totalPages = Math.ceil(prices.length / ITEMS_PER_PAGE);
+        const paginated = prices.slice(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE);
 
         // Check user balance
         const balRes = await apiGet('/api/user/balance', { telegramId });
         const balance = balRes.data?.balance ?? 0;
 
-        const rows = buttons.map((b) => [b]); // one per row for readability
+        // Build buttons
+        const rows = paginated.map((p, i) => {
+            const indexStr = `${(page * ITEMS_PER_PAGE) + i + 1}.`;
+            return [{
+                text: `${indexStr} ${formatRupiah(p.sellPrice)}`,
+                callback_data: `price:${p.id}`,
+            }];
+        });
 
-        await bot.sendMessage(
-            chatId,
-            `💳 *${serviceName} ${countryName}*\n\n` +
-            `Saldo kamu: *${formatRupiah(balance)}*\n\n` +
-            `Pilih harga nomor (termurah ke termahal):`,
-            {
-                parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: rows },
-            }
-        );
+        const navRow = [];
+        if (page > 0) {
+            navRow.push({ text: '⬅️ Prev', callback_data: `page_prc:${page - 1}` });
+        }
+        if (page < totalPages - 1) {
+            navRow.push({ text: 'Next ➡️', callback_data: `page_prc:${page + 1}` });
+        }
+        if (navRow.length > 0) {
+            rows.push(navRow);
+        }
+
+        const text = `💳 *${serviceName} ${countryName}*\n\n` +
+            `Saldo kamu: *${formatRupiah(balance)}*\n_Halaman ${page + 1} dari ${totalPages}_\n\n` +
+            `Pilih harga nomor (termurah ke termahal):`;
+
+        const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
+
+        if (messageId) {
+            options.chat_id = chatId;
+            options.message_id = messageId;
+            await bot.editMessageText(text, options);
+        } else {
+            await bot.sendMessage(chatId, text, options);
+        }
     } catch {
         await bot.sendMessage(chatId, '❌ Gagal memuat harga. Coba lagi.');
     }
