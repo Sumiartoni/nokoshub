@@ -47,31 +47,37 @@ export const serviceService = {
                     create: { name: ctr.name, countryCode },
                 });
 
-                // Iterate over pricelist for this country concurrently
-                const pricePromises = ctr.pricelist.map(async (price) => {
-                    if (!price.provider_id || !price.price) return;
+                // Filter valid prices and map them for raw bulk insert
+                const validPrices = ctr.pricelist.filter(p => p.provider_id && p.price);
+                if (validPrices.length === 0) continue;
 
-                    // Use provider_id as the unique price identifier
-                    const priceId = `${svc.service_code}_${ctr.number_id}_${price.provider_id}`;
-                    const sellPrice = calculateSellPrice(price.price, config.SELL_PRICE_MULTIPLIER);
+                // We must do a raw SQL bulk upsert because Prisma has no `upsertMany`
+                // Split into chunks of 500 to avoid Postgres payload/parameter limits
+                const CHUNK_SIZE = 500;
+                for (let i = 0; i < validPrices.length; i += CHUNK_SIZE) {
+                    const chunk = validPrices.slice(i, i + CHUNK_SIZE);
+                    const values = chunk.map(price => {
+                        const priceId = `${svc.service_code}_${ctr.number_id}_${price.provider_id}`;
+                        const sellPrice = calculateSellPrice(price.price, config.SELL_PRICE_MULTIPLIER);
+                        return `(gen_random_uuid(), '${service.id}', '${country.id}', '${priceId}', ${price.price}, ${sellPrice}, current_timestamp(3))`;
+                    }).join(', ');
 
-                    await prisma.price.upsert({
-                        where: { priceId },
-                        update: { providerPrice: price.price, sellPrice },
-                        create: {
-                            serviceId: service.id,
-                            countryId: country.id,
-                            priceId,
-                            providerPrice: price.price,
-                            sellPrice,
-                        },
-                    }).catch(err => {
-                        logger.error({ err, priceId }, 'Failed to upsert price');
-                    });
-                    pricesCount++;
-                });
+                    const query = `
+                        INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "sellPrice", "updatedAt")
+                        VALUES ${values}
+                        ON CONFLICT ("priceId") DO UPDATE SET
+                        "providerPrice" = EXCLUDED."providerPrice",
+                        "sellPrice" = EXCLUDED."sellPrice",
+                        "updatedAt" = EXCLUDED."updatedAt";
+                    `;
 
-                await Promise.all(pricePromises);
+                    try {
+                        await prisma.$executeRawUnsafe(query);
+                        pricesCount += chunk.length;
+                    } catch (err: any) {
+                        logger.error({ err: err.message, country: ctr.name, service: svc.service_name }, 'Raw bulk upsert failed for chunk');
+                    }
+                }
             }
         }
 
