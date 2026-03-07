@@ -69,9 +69,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.all('/sync', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         try {
-            logger.info('Admin triggered manual provider sync');
-            const result = await serviceService.syncFromProvider();
-            return { success: true, data: result };
+            logger.info('Admin triggered manual provider sync. Running in background...');
+            // RUN IN BACKGROUND: Do not await, or Koyeb's 60s proxy will drop the connection 
+            // since inserting 50,000 records takes roughly 2-3 minutes.
+            serviceService.syncFromProvider()
+                .then(res => logger.info(res, 'Manual background sync success'))
+                .catch(err => logger.error({ err }, 'Manual background sync failed'));
+
+            return { success: true, message: "Sync started in background! Check bot or server logs in 3 minutes." };
         } catch (err: any) {
             logger.error({ err }, 'Admin sync failed');
             return reply.status(500).send({
