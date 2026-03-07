@@ -34,6 +34,9 @@ export async function buildServer() {
             req.headers['x-forwarded-for']?.toString() || req.ip,
     });
 
+    // ─── Health check at root for Koyeb ─────────────────────────────────────
+    app.get('/', async () => ({ status: 'ok' }));
+
     // ─── Routes ───────────────────────────────────────────────────────────────
     await app.register(apiRoutes, { prefix: '/api' });
     await app.register(adminRoutes, { prefix: '/api/admin' });
