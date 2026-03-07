@@ -89,7 +89,7 @@ export const serviceService = {
     async getServices() {
         return prisma.service.findMany({
             where: { isActive: true },
-            orderBy: { name: 'asc' },
+            orderBy: { id: 'asc' },
         });
     },
 
@@ -99,15 +99,16 @@ export const serviceService = {
             where: { serviceId, isActive: true },
             include: { country: true },
             distinct: ['countryId'],
+            orderBy: { countryId: 'asc' }
         });
-        return prices.map((p) => p.country).filter((c) => c.isActive);
+        return prices.map((p) => p.country).filter((c) => c.isActive).sort((a, b) => a.id.localeCompare(b.id));
     },
 
     /** List all active countries */
     async getCountries() {
         return prisma.country.findMany({
             where: { isActive: true },
-            orderBy: { name: 'asc' },
+            orderBy: { id: 'asc' },
         });
     },
 
