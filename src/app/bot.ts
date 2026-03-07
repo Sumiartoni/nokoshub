@@ -199,6 +199,14 @@ export function createBot(): TelegramBot {
         if (data === 'deposit') return askDepositAmount(bot, chatId);
         if (data === 'help') return bot.sendMessage(chatId, '/help');
 
+        // Quick deposit amount buttons
+        if (data.startsWith('DEPOSIT_')) {
+            const amount = parseInt(data.replace('DEPOSIT_', ''));
+            if (!isNaN(amount) && amount >= 10000) {
+                return handleDepositWithAmount(bot, chatId, telegramId, amount);
+            }
+        }
+
         if (data.startsWith('service:')) {
             const [, serviceId, ...nameParts] = data.split(':');
             const serviceName = nameParts.join(':');
@@ -613,14 +621,18 @@ async function handleCancelOrder(
     orderId: string
 ) {
     try {
-        const user = await apiGet('/api/user/balance', { telegramId });
-        // We call the cancel route (not yet exposed in public API but via direct prisma in a future endpoint)
-        await bot.sendMessage(
-            chatId,
-            `✅ Permintaan pembatalan order \`${orderId}\` dikirim.\n\n_Refund akan dikreditkan ke saldo kamu._`,
-            { parse_mode: 'Markdown' }
-        );
-    } catch {
-        await bot.sendMessage(chatId, '❌ Gagal membatalkan order. Coba lagi atau hubungi admin.');
+        const res = await apiPost('/api/order/cancel', { orderId, telegramId });
+        if (res.success) {
+            await bot.sendMessage(
+                chatId,
+                `✅ Order \`${orderId}\` berhasil dibatalkan.\n\n_Refund telah dikreditkan ke saldo kamu._`,
+                { parse_mode: 'Markdown' }
+            );
+        } else {
+            await bot.sendMessage(chatId, `❌ Gagal membatalkan: ${res.error ?? 'Unknown error'}`);
+        }
+    } catch (err: any) {
+        const errMsg = err?.response?.data?.error ?? err.message ?? 'Error';
+        await bot.sendMessage(chatId, `❌ Gagal membatalkan order: ${errMsg}`);
     }
 }

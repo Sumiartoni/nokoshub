@@ -146,4 +146,19 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const invoices = await paymentService.getInvoices(user.id);
         return { success: true, data: invoices };
     });
+
+    // POST /api/order/cancel
+    fastify.post('/order/cancel', async (req, reply) => {
+        const body = req.body as { orderId?: string; telegramId?: string };
+        if (!body.orderId || !body.telegramId) {
+            return reply.status(400).send({ success: false, error: 'orderId and telegramId required' });
+        }
+        try {
+            const user = await userService.findOrCreate(body.telegramId);
+            const result = await orderService.cancelOrder(body.orderId, user.id);
+            return { success: true, data: result };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
+        }
+    });
 };
