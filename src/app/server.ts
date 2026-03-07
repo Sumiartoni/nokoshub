@@ -129,13 +129,11 @@ export async function startServer() {
         await app.listen({ port: config.PORT, host: '0.0.0.0' });
         logger.info(`🚀 Server running on port ${config.PORT}`);
 
-        // Auto-sync services from provider on startup
-        try {
-            const result = await serviceService.syncFromProvider();
-            logger.info(result, '✅ Provider sync complete');
-        } catch (err) {
-            logger.warn({ err }, '⚠️ Provider sync failed on startup (non-fatal)');
-        }
+        // Auto-sync services from provider on startup (run in background, do not await!)
+        serviceService.syncFromProvider()
+            .then(result => logger.info(result, '✅ Provider sync complete'))
+            .catch(err => logger.warn({ err }, '⚠️ Provider sync failed on startup'));
+
 
         // Graceful shutdown
         const shutdown = async () => {

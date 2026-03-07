@@ -47,9 +47,9 @@ export const serviceService = {
                     create: { name: ctr.name, countryCode },
                 });
 
-                // Iterate over pricelist for this country
-                for (const price of ctr.pricelist) {
-                    if (!price.provider_id || !price.price) continue;
+                // Iterate over pricelist for this country concurrently
+                const pricePromises = ctr.pricelist.map(async (price) => {
+                    if (!price.provider_id || !price.price) return;
 
                     // Use provider_id as the unique price identifier
                     const priceId = `${svc.service_code}_${ctr.number_id}_${price.provider_id}`;
@@ -67,7 +67,9 @@ export const serviceService = {
                         },
                     });
                     pricesCount++;
-                }
+                });
+
+                await Promise.all(pricePromises);
             }
         }
 
