@@ -83,10 +83,12 @@ export function createBot(): TelegramBot {
 
         await bot.sendMessage(
             chatId,
-            `🎉 *Selamat datang di NOKOS!*\n\n` +
+            `🎉 *Selamat datang di NokosHUB!*\n\n` +
             `Halo, *${firstName}*! 👋\n\n` +
-            `NOKOS adalah layanan pembelian nomor virtual untuk kebutuhan verifikasi OTP.\n\n` +
-            `Ketuk tombol di bawah untuk mulai:`,
+            `*NokosHUB* adalah layanan pembelian nomor virtual cepat & otomatis untuk kebutuhan verifikasi OTP.\n\n` +
+            `⚠️ *PENTING:*\n` +
+            `Silakan lakukan *Deposit Saldo* terlebih dahulu menggunakan /deposit sebelum mulai membeli nomor.\n\n` +
+            `Gunakan menu di bawah atau ketik perintah (contoh: /buy, /deposit):`,
             {
                 parse_mode: 'Markdown',
                 reply_markup: mainMenuKeyboard(),
@@ -138,15 +140,16 @@ export function createBot(): TelegramBot {
     bot.onText(/\/help/, async (msg) => {
         await bot.sendMessage(
             msg.chat.id,
-            `📖 *Panduan NOKOS*\n\n` +
-            `1️⃣ *Beli Nomor*\n` +
-            `• Ketuk "Beli Nomor" → pilih aplikasi → pilih negara → pilih harga\n` +
-            `• Sistem akan memberikan nomor virtual siap pakai\n` +
-            `• OTP akan otomatis dikirim ke sini\n\n` +
-            `2️⃣ *Deposit Saldo*\n` +
+            `📖 *Panduan NokosHUB*\n\n` +
+            `1️⃣ *Deposit Saldo*\n` +
+            `• Wajib dilakukan sebelum membeli nomor.\n` +
             `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
             `• Scan QR QRIS yang tampil\n` +
             `• Saldo masuk otomatis setelah pembayaran\n\n` +
+            `2️⃣ *Beli Nomor*\n` +
+            `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
+            `• Sistem akan memberikan nomor virtual siap pakai\n` +
+            `• OTP akan otomatis dikirim ke sini\n\n` +
             `3️⃣ *Perintah*\n` +
             `/start - Mulai bot\n` +
             `/menu - Menu utama\n` +
@@ -263,15 +266,15 @@ function mainMenuKeyboard() {
     return {
         inline_keyboard: [
             [
-                { text: '1️⃣ Beli Nomor', callback_data: 'buy' },
-                { text: '2️⃣ Deposit Saldo', callback_data: 'deposit' },
+                { text: '1️⃣ Beli Nomor /buy', callback_data: 'buy' },
+                { text: '2️⃣ Deposit Saldo /deposit', callback_data: 'deposit' },
             ],
             [
-                { text: '3️⃣ Riwayat Order', callback_data: 'history' },
-                { text: '4️⃣ Bantuan', callback_data: 'help' },
+                { text: '3️⃣ Riwayat Order /history', callback_data: 'history' },
+                { text: '4️⃣ Bantuan /help', callback_data: 'help' },
             ],
             [
-                { text: '💰 Cek Saldo', callback_data: 'balance' },
+                { text: '💰 Cek Saldo /balance', callback_data: 'balance' },
             ],
         ],
     };
@@ -280,7 +283,7 @@ function mainMenuKeyboard() {
 async function sendMainMenu(bot: TelegramBot, chatId: number) {
     await bot.sendMessage(
         chatId,
-        `📱 *Menu Utama NOKOS*\n\nPilih layanan yang kamu butuhkan:`,
+        `📱 *Menu Utama NokosHUB*\n\nPilih layanan atau gunakan perintah teks (e.g. /buy):`,
         {
             parse_mode: 'Markdown',
             reply_markup: mainMenuKeyboard(),
