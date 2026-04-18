@@ -14,6 +14,8 @@ nano .env
 docker compose up -d --build
 ```
 
+`COMPOSE_PROJECT_NAME=backend` dipakai agar VPS yang sebelumnya deploy dari folder `backend/` tetap memakai volume database lama.
+
 Backoffice test via IP:
 
 ```text
