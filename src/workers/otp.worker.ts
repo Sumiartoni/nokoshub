@@ -49,6 +49,7 @@ const worker = new Worker<OtpJobData>(
 
                 // Notify user via backend API
                 await notifyOtpReceived(telegramId, orderId, statusResult.sms_code);
+                await heroSMSProvider.finishActivation(providerOrderId);
                 return;
             }
 
@@ -67,6 +68,7 @@ const worker = new Worker<OtpJobData>(
         }
 
         // Timeout — mark as FAILED
+        await heroSMSProvider.cancelActivation(providerOrderId);
         await prisma.order.update({
             where: { id: orderId },
             data: { status: 'FAILED', failReason: 'OTP not received within 120 seconds' },

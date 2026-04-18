@@ -131,6 +131,10 @@ export const orderService = {
         if (order.userId !== userId) throw new Error('Unauthorized');
         if (order.status !== 'ACTIVE') throw new Error('Only ACTIVE orders can be cancelled');
 
+        if (order.providerOrderId) {
+            await heroSMSProvider.cancelActivation(order.providerOrderId);
+        }
+
         // Update order status
         await prisma.order.update({
             where: { id: orderId },

@@ -158,14 +158,16 @@ function normalizeStatus(data: unknown): ProviderStatusResult {
     }
 
     if (isRecord(data)) {
-        const code = toStringValue(data.code ?? data.sms_code ?? data.otp);
-        const status = toStringValue(data.status ?? data.state) ?? 'waiting';
+        const sms = isRecord(data.sms) ? data.sms : undefined;
+        const call = isRecord(data.call) ? data.call : undefined;
+        const code = toStringValue(data.code ?? data.sms_code ?? data.otp ?? sms?.code ?? call?.code);
+        const status = toStringValue(data.status ?? data.state) ?? (code ? 'completed' : 'waiting');
         return {
             success: Boolean(code),
             status: code ? 'completed' : status.toLowerCase(),
             sms_code: code,
             phone_number: toStringValue(data.phone ?? data.number ?? data.phone_number),
-            message: toStringValue(data.message) ?? status,
+            message: toStringValue(data.message ?? sms?.text ?? call?.text) ?? status,
         };
     }
 
@@ -247,7 +249,7 @@ class HeroSMSProvider {
                 requestParams.maxPrice = maxPrice;
             }
 
-            const res = await this.request('getNumber', requestParams);
+            const res = await this.request('getNumberV2', requestParams);
             const text = textFromResponse(res.data);
 
             if (text.startsWith('ACCESS_NUMBER:')) {
@@ -261,8 +263,12 @@ class HeroSMSProvider {
             }
 
             if (isRecord(res.data)) {
-                const orderId = toStringValue(res.data.id ?? res.data.order_id ?? res.data.activation_id);
-                const phoneNumber = toStringValue(res.data.number ?? res.data.phone ?? res.data.phone_number);
+                const orderId = toStringValue(
+                    res.data.activationId ?? res.data.id ?? res.data.order_id ?? res.data.activation_id
+                );
+                const phoneNumber = toStringValue(
+                    res.data.phoneNumber ?? res.data.number ?? res.data.phone ?? res.data.phone_number
+                );
                 return {
                     success: Boolean(orderId && phoneNumber),
                     order_id: orderId,
@@ -285,11 +291,35 @@ class HeroSMSProvider {
 
     async checkStatus(orderId: string): Promise<ProviderStatusResult> {
         try {
+            const res = await this.request('getStatusV2', { id: orderId });
+            return normalizeStatus(res.data);
+        } catch (err: any) {
+            logger.warn({ err: this.errorSummary(err), orderId }, 'HeroSMS getStatusV2 failed, trying getStatus');
+        }
+
+        try {
             const res = await this.request('getStatus', { id: orderId });
             return normalizeStatus(res.data);
         } catch (err: any) {
-            logger.error({ err: this.errorSummary(err), orderId }, 'HeroSMS checkStatus failed');
+            logger.error({ err: this.errorSummary(err), orderId }, 'HeroSMS getStatus failed');
             return { success: false, status: 'error', sms_code: null, phone_number: null, message: err.message };
+        }
+    }
+
+    async finishActivation(orderId: string): Promise<void> {
+        try {
+            await this.request('finishActivation', { id: orderId });
+        } catch (err: any) {
+            logger.warn({ err: this.errorSummary(err), orderId }, 'HeroSMS finishActivation failed');
+        }
+    }
+
+    async cancelActivation(orderId: string): Promise<void> {
+        try {
+            await this.request('cancelActivation', { id: orderId });
+        } catch (err: any) {
+            logger.warn({ err: this.errorSummary(err), orderId }, 'HeroSMS cancelActivation failed, trying SMS-Activate setStatus=8');
+            await this.request('setStatus', { id: orderId, status: 8 });
         }
     }
 
@@ -332,6 +362,9 @@ class HeroSMSProvider {
         countriesById: Map<string, string>
     ): ProviderCountry[] {
         const priceRoot = isRecord(body) && isRecord(body.data) ? body.data : body;
+        if (Array.isArray(priceRoot)) {
+            return this.normalizePriceArray(priceRoot, serviceCode, countriesById);
+        }
         if (!isRecord(priceRoot)) return [];
 
         const countries: ProviderCountry[] = [];
@@ -361,6 +394,33 @@ class HeroSMSProvider {
         }
 
         return countries;
+    }
+
+    private normalizePriceArray(
+        priceRoot: unknown[],
+        serviceCode: string,
+        countriesById: Map<string, string>
+    ): ProviderCountry[] {
+        return priceRoot
+            .map((entry, index): ProviderCountry | null => {
+                if (!isRecord(entry)) return null;
+
+                const countryCode = toStringValue(entry.country ?? entry.countryCode ?? entry.id) ?? String(index);
+                const servicePrice = isRecord(entry[serviceCode]) ? entry[serviceCode] : entry;
+
+                const count = toNumberValue(servicePrice.count ?? servicePrice.quantity ?? servicePrice.available);
+                if (count !== null && count <= 0) return null;
+
+                const rawPrice = toNumberValue(servicePrice.cost ?? servicePrice.price ?? servicePrice.amount);
+                if (rawPrice === null || rawPrice <= 0) return null;
+
+                return {
+                    number_id: countryCode,
+                    name: countriesById.get(countryCode) ?? countryCode,
+                    pricelist: [{ price: this.toIdrPrice(rawPrice), provider_id: 'default' }],
+                };
+            })
+            .filter((item: ProviderCountry | null): item is ProviderCountry => Boolean(item));
     }
 
     private request(action: string, params: AnyRecord = {}) {
