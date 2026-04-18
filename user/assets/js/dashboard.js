@@ -403,6 +403,7 @@ function updateUI() {
   });
 
   set('sb-name', S.user.name);
+  set('sb-email', S.user.email || (S.user.telegramId ? `Telegram ID: ${S.user.telegramId}` : 'Dashboard NokosHUB'));
   set('hero-name', `${S.user.name}!`);
   set('prof-name', S.user.name);
   set('tb-name', (S.user.firstName || S.user.name).split(' ')[0] || 'User');
