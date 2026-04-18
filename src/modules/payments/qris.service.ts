@@ -44,49 +44,91 @@ function serializeTLV(tags: TLVTag[]): string {
 
 // ─── Main Generator ───────────────────────────────────────────────────────────
 
-export function generateDynamicQRIS(
-    staticQris: string,
-    amount: number,
-    referenceId?: string
-): string {
-    if (!staticQris || staticQris.length < 50) {
+export function generateDynamicQRIS(staticQris: string, amount: number, _referenceId?: string): string {
+    const normalizedQris = normalizePayload(staticQris);
+
+    if (!normalizedQris || normalizedQris.length < 50) {
+        throw new Error('Invalid static QRIS string');
+    }
+
+    try {
+        return generateDynamicQRISStrict(normalizedQris, amount);
+    } catch {
+        return generateDynamicQRISCompat(normalizedQris, amount);
+    }
+}
+
+function generateDynamicQRISCompat(staticQris: string, amount: number): string {
+    if (!staticQris.includes('5802ID')) {
+        throw new Error('Invalid QRIS country tag');
+    }
+
+    const withoutCrc = staticQris.replace(/6304[0-9A-Fa-f]{4}$/, '');
+    const dynamicBase = withoutCrc.replace('010211', '010212');
+    const amountStr = String(Math.trunc(amount));
+    const amountTag = `54${amountStr.length.toString().padStart(2, '0')}${amountStr}`;
+    const countryTagIndex = dynamicBase.lastIndexOf('5802ID');
+    if (countryTagIndex === -1) {
+        throw new Error('Invalid QRIS country tag');
+    }
+    const payloadWithoutCrc =
+        dynamicBase.slice(0, countryTagIndex) +
+        amountTag +
+        dynamicBase.slice(countryTagIndex);
+    const payloadForCrc = payloadWithoutCrc + '6304';
+    const calculatedCrc = crc16(payloadForCrc)
+        .toString(16)
+        .toUpperCase()
+        .padStart(4, '0');
+
+    return payloadForCrc + calculatedCrc;
+}
+
+export function generateDynamicQRISStrict(staticQris: string, amount: number): string {
+    const normalizedQris = normalizePayload(staticQris);
+
+    if (!normalizedQris || normalizedQris.length < 50) {
         throw new Error('Invalid static QRIS string');
     }
 
     // 1. Parse the static QRIS into TLV tags
-    const tags = parseTLV(staticQris);
+    const tags = parseTLV(normalizedQris);
+    const consumedLength = tags.reduce((sum, tag) => sum + 4 + tag.value.length, 0);
+    if (consumedLength !== normalizedQris.length) {
+        throw new Error('Invalid static QRIS TLV structure');
+    }
 
     // 2. Remove CRC tag (Tag 63) — we will recalculate it
     const tagsWithoutCrc = tags.filter((t) => t.tag !== '63');
+    if (!tags.some((t) => t.tag === '63')) {
+        throw new Error('Invalid static QRIS CRC tag');
+    }
 
     // 3. Change Tag 01 (Point of Initiation Method) from "11" (Static) to "12" (Dynamic)
+    let hasPointOfInitiation = false;
     for (const t of tagsWithoutCrc) {
         if (t.tag === '01') {
             t.value = '12';
             t.length = 2;
+            hasPointOfInitiation = true;
         }
     }
-
-    // 4. Remove any existing Tag 54 (Transaction Amount) and Tag 62 (Additional Data)
-    let finalTags = tagsWithoutCrc.filter((t) => t.tag !== '54' && t.tag !== '62');
-
-    // 5. Create new Tag 54 (Transaction Amount)
-    const amountStr = String(amount);
-    const tag54: TLVTag = { tag: '54', length: amountStr.length, value: amountStr };
-
-    // 6. Create new Tag 62 (Additional Data Field) with Bill Number (subtag 01) if reference provided
-    let tag62: TLVTag | null = null;
-    if (referenceId) {
-        const safeRef = referenceId.substring(0, 25);
-        const subtag01 = `01${safeRef.length.toString().padStart(2, '0')}${safeRef}`;
-        tag62 = { tag: '62', length: subtag01.length, value: subtag01 };
+    if (!hasPointOfInitiation) {
+        throw new Error('Invalid static QRIS point of initiation tag');
     }
 
-    // 7. Insert Tag 54 and Tag 62 in the correct numerical position
-    //    Tag order: ... 52, 53, [54], 55-57, 58, 59, 60, 61, [62], 63
+    // 4. Remove any existing Tag 54 (Transaction Amount).
+    // Keep the rest of the merchant payload exactly as-is for broad wallet compatibility.
+    const finalTags = tagsWithoutCrc.filter((t) => t.tag !== '54');
+
+    // 5. Create new Tag 54 (Transaction Amount)
+    const amountStr = String(Math.trunc(amount));
+    const tag54: TLVTag = { tag: '54', length: amountStr.length, value: amountStr };
+
+    // 6. Insert Tag 54 in the correct numerical position.
+    //    Tag order: ... 52, 53, [54], 55-57, 58, 59, 60, 61, 62, 63
     const newTags: TLVTag[] = [];
     let inserted54 = false;
-    let inserted62 = false;
 
     for (const t of finalTags) {
         const tagNum = parseInt(t.tag, 10);
@@ -97,28 +139,25 @@ export function generateDynamicQRIS(
             inserted54 = true;
         }
 
-        // Insert Tag 62 before any tag with number >= 62
-        if (!inserted62 && tag62 && tagNum >= 62) {
-            newTags.push(tag62);
-            inserted62 = true;
-        }
-
         newTags.push(t);
     }
 
-    // If tags 54/62 haven't been inserted yet (all existing tags have lower numbers), append them
+    // If tag 54 hasn't been inserted yet (all existing tags have lower numbers), append it
     if (!inserted54) newTags.push(tag54);
-    if (!inserted62 && tag62) newTags.push(tag62);
 
-    // 8. Serialize tags and append CRC placeholder
+    // 7. Serialize tags and append CRC placeholder
     const payloadWithoutCrc = serializeTLV(newTags);
     const payloadForCrc = payloadWithoutCrc + '6304';
 
-    // 9. Calculate CRC-16/CCITT-FALSE (polynomial 0x1021, init 0xFFFF)
+    // 8. Calculate CRC-16/CCITT-FALSE (polynomial 0x1021, init 0xFFFF)
     const calculatedCrc = crc16(payloadForCrc)
         .toString(16)
         .toUpperCase()
         .padStart(4, '0');
 
     return payloadForCrc + calculatedCrc;
+}
+
+function normalizePayload(payload: string): string {
+    return payload.replace(/[\r\n\t]/g, '').trim();
 }

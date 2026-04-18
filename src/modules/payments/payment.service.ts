@@ -49,8 +49,7 @@ export const paymentService = {
             try {
                 qrisPayload = generateDynamicQRIS(
                     staticQris,
-                    finalAmount,
-                    invoice.id.substring(0, 25)
+                    finalAmount
                 );
             } catch (err) {
                 logger.warn({ err, invoiceId: invoice.id }, 'Dynamic QRIS generation failed, using static QRIS');
@@ -168,5 +167,5 @@ export const paymentService = {
 };
 
 function normalizeQrisPayload(payload: string): string {
-    return payload.replace(/\s+/g, '').trim();
+    return payload.replace(/[\r\n\t]/g, '').trim();
 }
