@@ -1,7 +1,4 @@
-version: '3.9'
-
 services:
-  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: nokos_postgres
@@ -20,7 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Redis ──────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: nokos_redis
@@ -36,10 +32,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Backend (API + Bot + Worker) ───────────────────────────────────────────
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       target: production
     container_name: nokos_backend
@@ -75,19 +70,18 @@ services:
       OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
       OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}
     ports:
-      - '3000:3000'
+      - '${API_PORT:-3000}:3000'
     command: >
       sh -c "
         npx prisma migrate deploy &&
         node dist/src/index.js
       "
     volumes:
-      - ./prisma:/app/prisma
+      - ./backend/prisma:/app/prisma
 
-  # ─── OTP Worker (separate process) ──────────────────────────────────────────
   worker:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       target: production
     container_name: nokos_worker
@@ -108,7 +102,6 @@ services:
       HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
       OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}
-      # Worker needs config to pass validation, provide dummy values for unused vars
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       QRIS_STATIC_STRING: ${QRIS_STATIC_STRING}
       QRIS_DYNAMIC_ENABLED: ${QRIS_DYNAMIC_ENABLED:-true}
@@ -122,6 +115,17 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       JWT_SECRET: ${JWT_SECRET}
     command: ['node', 'dist/src/worker.js']
+
+  backoffice:
+    build:
+      context: ./backoffice
+      dockerfile: Dockerfile
+    container_name: nokos_backoffice
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${BACKOFFICE_PORT:-8080}:80'
 
 volumes:
   postgres_data:

@@ -42,9 +42,8 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy compiled JS
 COPY --from=builder /app/dist ./dist
-COPY backoffice ./backoffice
 
-EXPOSE 8000
+EXPOSE 3000
 
 # Default: run main server + bot
 CMD ["node", "dist/src/index.js"]

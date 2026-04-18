@@ -1,7 +1,10 @@
-node_modules/
-dist/
-.env
+**/node_modules/
+**/dist/
+**/.env
 *.log
 *.pid
 .DS_Store
 Thumbs.db
+
+# Local one-off debug file
+backend/test-qris-debug.ts

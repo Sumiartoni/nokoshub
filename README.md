@@ -1,31 +1,38 @@
-# NOKOS HUB - Virtual Number / OTP Sales System
+# NokosHUB
 
-## Environment Variables
+Struktur deploy sekarang dipisah:
 
-Copy `.env.example` to `.env` and fill in all values.
+- `backend/` berisi API, worker OTP, bot Telegram, Prisma, dan provider HeroSMS.
+- `backoffice/` berisi halaman super admin static yang berjalan sebagai service terpisah.
+- `docker-compose.yml` di root menjalankan `backend`, `worker`, `backoffice`, `postgres`, dan `redis`.
+
+## VPS Quick Start
 
 ```bash
 cp .env.example .env
+nano .env
+docker compose up -d --build
 ```
 
-## Quick Start (Docker)
+Backoffice test via IP:
 
-```bash
-docker compose up -d
+```text
+http://IP-VPS:8080
 ```
 
-## Development
+Backend API test via IP:
 
-```bash
-npm run dev:server   # Start API server
-npm run dev:bot      # Start Telegram bot only
-npm run dev:worker   # Start OTP worker
+```text
+http://IP-VPS:3000/api/health
 ```
 
-## Database
+Untuk domain production, arahkan:
 
-```bash
-npm run db:migrate   # Run migrations
-npm run db:generate  # Generate Prisma client
-npm run db:studio    # Open Prisma Studio
+- `admin.domainanda.com` ke service backoffice port `8080`
+- `api.domainanda.com` ke service backend port `3000`
+
+Saat sudah memakai HTTPS untuk backoffice, ubah:
+
+```env
+BACKOFFICE_COOKIE_SECURE=true
 ```
