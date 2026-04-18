@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daftar Akun | NokosHUB</title>
+  <meta name="description" content="Daftar akun NokosHUB untuk membeli nomor virtual, nokos WA/WhatsApp, SMS OTP, dan mengelola saldo dari dashboard." />
+  <meta name="robots" content="noindex, follow" />
+  <meta name="theme-color" content="#4F9CF9" />
+  <link rel="canonical" href="https://nokoshub.com/register/" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" type="image/png" href="../assets/images/favicon.png" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="login-page-body">
+  <main class="login-page">
+    <div class="login-bg-shapes" aria-hidden="true">
+      <span class="login-shape login-shape-1">OTP</span>
+      <span class="login-shape login-shape-2">WA</span>
+      <span class="login-shape login-shape-3">SMS</span>
+      <span class="login-shape login-shape-4">24/7</span>
+    </div>
+
+    <section class="login-shell">
+      <div class="login-brand-panel">
+        <a href="../index.html" class="login-logo" aria-label="Kembali ke beranda NokosHUB">
+          <img src="../assets/images/favicon.png" alt="NokosHUB" class="login-logo-img" />
+          <div>
+            <div class="login-logo-text">Nokos<span>HUB</span></div>
+            <div class="login-logo-sub">OTP Platform</div>
+          </div>
+        </a>
+
+        <div class="login-copy">
+          <div class="section-badge"><i data-lucide="sparkles"></i> Mulai Gratis</div>
+          <h1 class="login-title">Buat akun untuk mulai beli OTP virtual.</h1>
+          <p class="login-desc">
+            Satu akun untuk top up saldo, membeli nomor kosong, menerima kode OTP, dan memantau semua transaksi Anda.
+          </p>
+        </div>
+
+        <div class="login-highlights">
+          <div class="login-highlight">
+            <i data-lucide="badge-check"></i>
+            <span>Daftar cepat</span>
+          </div>
+          <div class="login-highlight">
+            <i data-lucide="scan-line"></i>
+            <span>QRIS deposit</span>
+          </div>
+          <div class="login-highlight">
+            <i data-lucide="bot"></i>
+            <span>Bot Telegram siap</span>
+          </div>
+        </div>
+
+        <div class="login-mascot-wrap">
+          <div class="login-mascot-bubble">Akun siap, OTP meluncur!</div>
+          <img src="../assets/images/mascot.png" alt="Maskot NokosHUB" class="login-mascot" />
+        </div>
+      </div>
+
+      <div class="login-card cartoon-card">
+        <div class="login-card-head">
+          <div class="login-card-icon"><i data-lucide="user-plus"></i></div>
+          <div>
+            <h2>Daftar Akun</h2>
+            <p>Isi data dasar akun Anda.</p>
+          </div>
+        </div>
+
+        <button type="button" class="login-google-btn" id="googleRegisterBtn">
+          <img src="https://cdn.simpleicons.org/google/4285F4" alt="" width="20" height="20" />
+          Daftar dengan Google
+        </button>
+
+        <div class="login-divider"><span>atau daftar dengan email</span></div>
+
+        <form class="login-form" id="registerForm" novalidate>
+          <label class="login-field" for="fullName">
+            <span>Nama Lengkap</span>
+            <div class="login-input-wrap">
+              <i data-lucide="circle-user"></i>
+              <input id="fullName" name="fullName" type="text" autocomplete="name" placeholder="Nama Anda" required />
+            </div>
+            <small class="login-error" id="fullNameError"></small>
+          </label>
+
+          <label class="login-field" for="registerEmail">
+            <span>Email</span>
+            <div class="login-input-wrap">
+              <i data-lucide="mail"></i>
+              <input id="registerEmail" name="email" type="email" autocomplete="email" placeholder="nama@email.com" required />
+            </div>
+            <small class="login-error" id="registerEmailError"></small>
+          </label>
+
+          <label class="login-field" for="registerPassword">
+            <span>Password</span>
+            <div class="login-input-wrap">
+              <i data-lucide="lock-keyhole"></i>
+              <input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="Minimal 8 karakter" minlength="8" required />
+              <button type="button" class="login-password-toggle" id="registerPasswordToggle" aria-label="Tampilkan password">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+            <small class="login-error" id="registerPasswordError"></small>
+          </label>
+
+          <label class="login-field" for="confirmPassword">
+            <span>Ulangi Password</span>
+            <div class="login-input-wrap">
+              <i data-lucide="shield-check"></i>
+              <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" placeholder="Ulangi password" minlength="8" required />
+              <button type="button" class="login-password-toggle" id="confirmPasswordToggle" aria-label="Tampilkan password">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+            <small class="login-error" id="confirmPasswordError"></small>
+          </label>
+
+          <label class="login-check login-terms">
+            <input type="checkbox" id="terms" name="terms" />
+            <span>Saya setuju dengan syarat layanan dan kebijakan privasi NokosHUB.</span>
+          </label>
+          <small class="login-error" id="termsError"></small>
+
+          <button type="submit" class="btn btn-primary btn-lg login-submit" id="registerSubmit">
+            <i data-lucide="rocket"></i>
+            Buat Akun
+          </button>
+        </form>
+
+        <p class="login-register">
+          Sudah punya akun?
+          <a href="/login/">Login sekarang</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <div class="login-toast" id="loginToast" role="status" aria-live="polite"></div>
+  <script src="../assets/js/login.js"></script>
+</body>
+</html>

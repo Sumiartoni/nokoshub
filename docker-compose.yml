@@ -129,6 +129,17 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     command: ['node', 'dist/src/worker.js']
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: nokos_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '${FRONTEND_PORT:-8081}:80'
+
   backoffice:
     build:
       context: ./backoffice

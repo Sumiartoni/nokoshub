@@ -19,6 +19,33 @@ model User {
   orders       Order[]
   transactions Transaction[]
   invoices     Invoice[]
+  webUsers     WebUser[]
+}
+
+model WebUser {
+  id           String                @id @default(cuid())
+  email        String                @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  telegramId   String?               @unique
+  telegramUser User?                 @relation(fields: [telegramId], references: [telegramId])
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  linkCodes    WebTelegramLinkCode[]
+}
+
+model WebTelegramLinkCode {
+  id         String    @id @default(cuid())
+  webUser    WebUser   @relation(fields: [webUserId], references: [id], onDelete: Cascade)
+  webUserId  String
+  code       String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([webUserId])
+  @@index([expiresAt])
 }
 
 model Service {

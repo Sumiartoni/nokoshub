@@ -20,6 +20,7 @@ const BOT_COMMANDS = [
     { command: '/deposit', description: 'Isi saldo' },
     { command: '/balance', description: 'Cek sisa saldo' },
     { command: '/history', description: 'Riwayat transaksi' },
+    { command: '/linked', description: 'Tautkan akun web' },
     { command: '/myid', description: 'Lihat Telegram ID' },
     { command: '/help', description: 'Bantuan & Panduan' },
 ];
@@ -50,6 +51,7 @@ interface Session {
     prices?: Array<{ id: string; sellPrice: number }>;
     depositAmount?: number;
     pendingDeposit?: PendingDeposit;
+    pendingWebLink?: boolean;
 }
 
 interface PendingDeposit {
@@ -67,6 +69,11 @@ interface PaymentProof {
 
 const sessions = new Map<number, Session>();
 
+function isDepositExpired(deposit: PendingDeposit): boolean {
+    const expiredAt = new Date(deposit.expiredAt).getTime();
+    return Number.isFinite(expiredAt) && expiredAt <= Date.now();
+}
+
 function getSession(chatId: number): Session {
     if (!sessions.has(chatId)) sessions.set(chatId, {});
     return sessions.get(chatId)!;
@@ -74,6 +81,40 @@ function getSession(chatId: number): Session {
 
 function clearSession(chatId: number) {
     sessions.set(chatId, {});
+}
+
+async function handleWebLinkCode(bot: TelegramBot, msg: TelegramBot.Message, code: string) {
+    const chatId = msg.chat.id;
+    const telegramId = String(msg.from?.id ?? msg.chat.id);
+
+    try {
+        const res = await apiPost('/api/auth/telegram-link/confirm', {
+            code,
+            telegramId,
+            username: msg.from?.username,
+            firstName: msg.from?.first_name,
+            lastName: msg.from?.last_name,
+        });
+
+        clearSession(chatId);
+
+        const email = res.data?.user?.email ?? 'akun web';
+        await bot.sendMessage(
+            chatId,
+            `✅ *Akun Telegram berhasil ditautkan!*\n\n` +
+            `Telegram ID: \`${telegramId}\`\n` +
+            `Akun web: *${email}*\n\n` +
+            `Sekarang saldo dan riwayat bot bisa dipakai juga di dashboard web.`,
+            { parse_mode: 'Markdown' }
+        );
+    } catch (err: any) {
+        const errMsg = err?.response?.data?.error ?? err.message ?? 'Kode tidak valid';
+        await bot.sendMessage(
+            chatId,
+            `❌ Gagal menautkan akun.\n\n${errMsg}\n\n` +
+            `Buat kode baru dari dashboard web jika kode sudah kadaluarsa.`
+        );
+    }
 }
 
 function parseTelegramAdminIds(value: string): string[] {
@@ -185,6 +226,28 @@ export function createBot(): TelegramBot {
         await handleHistory(bot, msg.chat.id, String(msg.from?.id));
     });
 
+    // ─── /linked ──────────────────────────────────────────────────────────────
+    bot.onText(/\/linked(?:\s+(\d{4,8}))?/, async (msg, match) => {
+        const code = match?.[1];
+        if (code) {
+            await handleWebLinkCode(bot, msg, code);
+            return;
+        }
+
+        const session = getSession(msg.chat.id);
+        session.pendingWebLink = true;
+        session.step = 'AWAIT_WEB_LINK_CODE';
+
+        await bot.sendMessage(
+            msg.chat.id,
+            `🔗 *Tautkan Akun Web NokosHUB*\n\n` +
+            `Buka dashboard web, masuk ke menu *Profil*, lalu tekan *Buat Kode Link Telegram*.\n\n` +
+            `Kirim kode 6 digit yang muncul di web ke chat ini.\n\n` +
+            `Contoh: \`123456\``,
+            { parse_mode: 'Markdown' }
+        );
+    });
+
     // ─── /myid ────────────────────────────────────────────────────────────────
     bot.onText(/\/myid/, async (msg) => {
         const telegramId = String(msg.from?.id ?? msg.chat.id);
@@ -241,6 +304,7 @@ export function createBot(): TelegramBot {
             `/deposit [jumlah] - Deposit saldo\n` +
             `/balance - Lihat saldo\n` +
             `/history - Riwayat order\n` +
+            `/linked - Tautkan akun web\n` +
             `/myid - Lihat Telegram ID\n` +
             `/status [orderId] - Status order\n\n` +
             `📞 *Butuh bantuan?*\n` +
@@ -254,6 +318,16 @@ export function createBot(): TelegramBot {
         const chatId = msg.chat.id;
         const telegramId = String(msg.from?.id);
         const session = getSession(chatId);
+
+        if (session.step === 'AWAIT_WEB_LINK_CODE' && msg.text && !msg.text.startsWith('/')) {
+            const code = msg.text.replace(/[^\d]/g, '');
+            if (!/^\d{6}$/.test(code)) {
+                await bot.sendMessage(chatId, '❗ Kode harus 6 digit. Cek kode di dashboard web lalu kirim ulang.');
+                return;
+            }
+            await handleWebLinkCode(bot, msg, code);
+            return;
+        }
 
         if (session.step === 'AWAIT_PAYMENT_PROOF') {
             const proof = getPaymentProofFromMessage(msg);
@@ -273,6 +347,21 @@ export function createBot(): TelegramBot {
             }
 
             const pendingDeposit = session.pendingDeposit;
+            if (isDepositExpired(pendingDeposit)) {
+                session.step = undefined;
+                session.pendingDeposit = undefined;
+                await apiGet('/api/invoices', { telegramId }).catch(err => {
+                    logger.warn({ err, invoiceId: pendingDeposit.invoiceId }, 'Failed to refresh expired invoice after late proof');
+                });
+                await bot.sendMessage(
+                    chatId,
+                    `❌ Invoice \`${pendingDeposit.invoiceId}\` sudah expired.\n\n` +
+                    `Silakan buat invoice deposit baru dengan /deposit.`,
+                    { parse_mode: 'Markdown' }
+                );
+                return;
+            }
+
             const adminNotified = await notifyAdminsManualDeposit(bot, pendingDeposit, proof);
             session.step = undefined;
             session.pendingDeposit = undefined;

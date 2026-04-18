@@ -49,7 +49,10 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/admin/invoices
     fastify.get('/invoices', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
-        const invoices = await paymentService.getAllInvoices();
+        const query = req.query as { limit?: string };
+        const rawLimit = Number.parseInt(query.limit ?? '50', 10);
+        const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
+        const invoices = await paymentService.getAllInvoices(limit);
         return { success: true, data: invoices };
     });
 

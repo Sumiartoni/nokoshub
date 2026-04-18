@@ -11,6 +11,8 @@ export const paymentService = {
      */
     async createInvoice(userId: string, amount: number) {
         if (amount < 10000) throw new Error('Minimum deposit is Rp10.000');
+        await paymentService.expireOverdueInvoices();
+
         // Give the user a unique final amount (append random 1-999)
         let finalAmount = amount;
         let isUnique = false;
@@ -20,7 +22,14 @@ export const paymentService = {
             finalAmount = amount + uniqueCode;
 
             const existing = await prisma.invoice.findFirst({
-                where: { amount: finalAmount, status: 'PENDING' }
+                where: {
+                    amount: finalAmount,
+                    status: 'PENDING',
+                    OR: [
+                        { expiredAt: null },
+                        { expiredAt: { gt: new Date() } },
+                    ],
+                }
             });
             if (!existing) {
                 isUnique = true;
@@ -80,6 +89,8 @@ export const paymentService = {
         },
         rawBody: string
     ): Promise<{ success: boolean; message: string }> {
+        await paymentService.expireOverdueInvoices();
+
         // 1. Verify Authentication: either via HMAC signature on rawBody, or direct secret pass (for simple forwarders)
         let isAuthenticated = false;
 
@@ -118,6 +129,13 @@ export const paymentService = {
         if (!invoice) return { success: false, message: 'Invoice not found' };
         if (invoice.status === 'PAID') return { success: true, message: 'Already paid' };
         if (invoice.status === 'EXPIRED') return { success: false, message: 'Invoice expired' };
+        if (invoice.expiredAt && invoice.expiredAt.getTime() <= Date.now()) {
+            await prisma.invoice.updateMany({
+                where: { id: invoice.id, status: 'PENDING' },
+                data: { status: 'EXPIRED' },
+            });
+            return { success: false, message: 'Invoice expired' };
+        }
 
         // 3. Verify amount (if invoiceId was provided but amount didn't match, or just double check)
         const checkAmount = amount ? Number(amount) : undefined;
@@ -149,6 +167,8 @@ export const paymentService = {
 
     /** Get invoices for a user */
     async getInvoices(userId: string, limit = 10) {
+        await paymentService.expireOverdueInvoices();
+
         return prisma.invoice.findMany({
             where: { userId },
             orderBy: { createdAt: 'desc' },
@@ -158,11 +178,30 @@ export const paymentService = {
 
     /** Get all invoices (admin) */
     async getAllInvoices(limit = 50) {
+        await paymentService.expireOverdueInvoices();
+
         return prisma.invoice.findMany({
             include: { user: { select: { telegramId: true, username: true } } },
             orderBy: { createdAt: 'desc' },
             take: limit,
         });
+    },
+
+    /** Mark pending invoices as expired after expiredAt has passed. */
+    async expireOverdueInvoices(now = new Date()) {
+        const result = await prisma.invoice.updateMany({
+            where: {
+                status: 'PENDING',
+                expiredAt: { lte: now },
+            },
+            data: { status: 'EXPIRED' },
+        });
+
+        if (result.count > 0) {
+            logger.info({ count: result.count }, 'Expired overdue invoices');
+        }
+
+        return result.count;
     },
 };
 

@@ -15,7 +15,9 @@
   <link rel="canonical" href="https://nokoshub.com/" />
   <link rel="preload" as="image" href="assets/images/mascot.png" />
   <link rel="stylesheet" href="assets/css/style.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <meta property="og:locale" content="id_ID" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="NokosHUB" />
@@ -112,7 +114,7 @@
   <nav id="navbar">
     <div class="navbar-inner">
       <a href="#hero" class="navbar-logo">
-        <div class="navbar-logo-icon">🤖</div>
+        <img src="assets/images/favicon.png" alt="NokosHUB" class="navbar-logo-img" />
         <div>
           <div class="navbar-logo-text">Nokos<span>HUB</span></div>
           <div class="navbar-logo-tagline">OTP Platform</div>
@@ -129,8 +131,8 @@
       </ul>
 
       <div class="navbar-actions">
-        <a href="/login" class="btn btn-outline btn-sm">🔑 Login</a>
-        <a href="/register" class="btn btn-primary btn-sm">✨ Daftar Gratis</a>
+        <a href="/login/" class="btn btn-outline btn-sm"><i data-lucide="log-in"></i> Login</a>
+        <a href="/register/" class="btn btn-primary btn-sm"><i data-lucide="user-plus"></i> Daftar Gratis</a>
       </div>
 
       <button class="navbar-hamburger" id="hamburger" aria-label="Menu">
@@ -143,16 +145,16 @@
 
   <!-- MOBILE NAV -->
   <nav class="navbar-mobile" id="mobileNav">
-    <button id="mobileClose" style="align-self:flex-end;background:none;border:none;font-size:2rem;cursor:pointer;margin-bottom:8px;">✕</button>
-    <a href="#hero">🏠 Beranda</a>
-    <a href="#features">⚡ Fitur</a>
-    <a href="#layanan">📱 Layanan</a>
-    <a href="#cara-kerja">🎯 Cara Kerja</a>
-    <a href="#testimoni">⭐ Testimoni</a>
-    <a href="#faq">❓ FAQ</a>
+    <button id="mobileClose" style="align-self:flex-end;background:none;border:none;font-size:2rem;cursor:pointer;margin-bottom:8px;">×</button>
+    <a href="#hero"><i data-lucide="house"></i> Beranda</a>
+    <a href="#features"><i data-lucide="zap"></i> Fitur</a>
+    <a href="#layanan"><i data-lucide="smartphone"></i> Layanan</a>
+    <a href="#cara-kerja"><i data-lucide="list-ordered"></i> Cara Kerja</a>
+    <a href="#testimoni"><i data-lucide="star"></i> Testimoni</a>
+    <a href="#faq"><i data-lucide="circle-help"></i> FAQ</a>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
-      <a href="/login" class="btn btn-outline">🔑 Login</a>
-      <a href="/register" class="btn btn-primary">✨ Daftar Gratis</a>
+      <a href="/login/" class="btn btn-outline"><i data-lucide="log-in"></i> Login</a>
+      <a href="/register/" class="btn btn-primary"><i data-lucide="user-plus"></i> Daftar Gratis</a>
     </div>
   </nav>
 
@@ -192,11 +194,11 @@
           </p>
 
           <div class="hero-cta">
-            <a href="/register" id="cta-hero-register" class="btn btn-primary btn-lg">
-              🚀 Mulai Gratis Sekarang
+            <a href="/register/" id="cta-hero-register" class="btn btn-primary btn-lg">
+              <i data-lucide="rocket"></i> Mulai Gratis Sekarang
             </a>
             <a href="#layanan" id="cta-hero-layanan" class="btn btn-outline btn-lg">
-              📋 Lihat Layanan
+              <i data-lucide="layout-list"></i> Lihat Layanan
             </a>
           </div>
 
@@ -227,15 +229,19 @@
 
             <!-- Floating Cards -->
             <div class="otp-card-float card-1" id="float-card-1">
-              <div class="otp-card-icon yellow">📱</div>
+              <div class="otp-card-icon" style="background:#d9fae8;">
+                <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" width="18" height="18">
+              </div>
               <div class="otp-card-text">
                 <span class="otp-card-title">WhatsApp OTP</span>
-                <span class="otp-card-value" style="color:var(--accent-dark);">Tersedia ✓</span>
+                <span class="otp-card-value" style="color:var(--accent-dark);">Tersedia &#10003;</span>
               </div>
             </div>
 
             <div class="otp-card-float card-2" id="float-card-2">
-              <div class="otp-card-icon green">✅</div>
+              <div class="otp-card-icon green">
+                <i data-lucide="check-circle-2"></i>
+              </div>
               <div class="otp-card-text">
                 <span class="otp-card-title">OTP Berhasil!</span>
                 <span class="otp-card-value" style="color: var(--accent-dark);">123456</span>
@@ -243,7 +249,9 @@
             </div>
 
             <div class="otp-card-float card-3" id="float-card-3">
-              <div class="otp-card-icon">⚡</div>
+              <div class="otp-card-icon">
+                <i data-lucide="zap"></i>
+              </div>
               <div class="otp-card-text">
                 <span class="otp-card-title">Kecepatan</span>
                 <span class="otp-card-value">&lt;5 detik</span>
@@ -283,24 +291,24 @@
        ============================================= -->
   <div id="ticker">
     <div class="ticker-inner">
-      <div class="ticker-item"><span class="ticker-dot"></span>📱 WhatsApp OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>💬 Telegram OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>📘 Facebook OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🐦 Twitter / X OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>📸 Instagram OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🎮 Discord OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🎵 TikTok OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🛒 Shopee OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🛍️ Tokopedia OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🎬 Netflix OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>☁️ Google OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🍎 Apple ID OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>💼 LinkedIn OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🏦 GrabPay OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🚗 Gojek OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>💳 PayPal OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🟡 Steam OTP</div>
-      <div class="ticker-item"><span class="ticker-dot"></span>🎧 Spotify OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/whatsapp/ffffff" alt="" width="14" height="14"> WhatsApp OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/telegram/ffffff" alt="" width="14" height="14"> Telegram OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/facebook/ffffff" alt="" width="14" height="14"> Facebook OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/x/ffffff" alt="" width="14" height="14"> Twitter / X OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="" width="14" height="14"> Instagram OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/discord/ffffff" alt="" width="14" height="14"> Discord OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="" width="14" height="14"> TikTok OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/shopee/ffffff" alt="" width="14" height="14"> Shopee OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/tokopedia/ffffff" alt="" width="14" height="14"> Tokopedia OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/netflix/ffffff" alt="" width="14" height="14"> Netflix OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/google/ffffff" alt="" width="14" height="14"> Google OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/apple/ffffff" alt="" width="14" height="14"> Apple ID OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/linkedin/ffffff" alt="" width="14" height="14"> LinkedIn OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/grab/ffffff" alt="" width="14" height="14"> GrabPay OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/gojek/ffffff" alt="" width="14" height="14"> Gojek OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/paypal/ffffff" alt="" width="14" height="14"> PayPal OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/steam/ffffff" alt="" width="14" height="14"> Steam OTP</div>
+      <div class="ticker-item"><img src="https://cdn.simpleicons.org/spotify/ffffff" alt="" width="14" height="14"> Spotify OTP</div>
     </div>
   </div>
 
@@ -318,45 +326,45 @@
       <div class="features-grid">
 
         <div class="feature-card cartoon-card animate-on-scroll" data-delay="0">
-          <div class="feature-icon">⚡</div>
+          <div class="feature-icon"><i data-lucide="zap"></i></div>
           <h3 class="feature-title">Super Cepat</h3>
           <p class="feature-desc">OTP langsung diterima dalam hitungan detik. Sistem kami memproses ribuan permintaan secara bersamaan tanpa delay!</p>
-          <div class="feature-deco">⚡</div>
+          <div class="feature-deco"><i data-lucide="zap"></i></div>
         </div>
 
         <div class="feature-card cartoon-card animate-on-scroll" data-delay="100">
-          <div class="feature-icon">💰</div>
+          <div class="feature-icon"><i data-lucide="wallet"></i></div>
           <h3 class="feature-title">Harga Kompetitif</h3>
           <p class="feature-desc">Sistem top-up saldo yang fleksibel dan transparan. Cek harga lengkap di dashboard setelah login — tidak ada biaya tersembunyi!</p>
-          <div class="feature-deco">💰</div>
+          <div class="feature-deco"><i data-lucide="wallet"></i></div>
         </div>
 
         <div class="feature-card cartoon-card animate-on-scroll" data-delay="200">
-          <div class="feature-icon">🌍</div>
+          <div class="feature-icon"><i data-lucide="globe"></i></div>
           <h3 class="feature-title">500+ Layanan Global</h3>
           <p class="feature-desc">Tersedia untuk lebih dari 500 aplikasi dan platform dari seluruh penjuru dunia. Dari e-commerce, media sosial, hingga finansial!</p>
-          <div class="feature-deco">🌍</div>
+          <div class="feature-deco"><i data-lucide="globe"></i></div>
         </div>
 
         <div class="feature-card cartoon-card animate-on-scroll" data-delay="300">
-          <div class="feature-icon">🔐</div>
-          <h3 class="feature-title">100% Aman & Privat</h3>
+          <div class="feature-icon"><i data-lucide="shield-check"></i></div>
+          <h3 class="feature-title">100% Aman &amp; Privat</h3>
           <p class="feature-desc">Privasi Anda adalah prioritas utama kami. Nomor virtual yang digunakan tidak dapat dilacak kembali ke identitas asli Anda.</p>
-          <div class="feature-deco">🔐</div>
+          <div class="feature-deco"><i data-lucide="shield-check"></i></div>
         </div>
 
         <div class="feature-card cartoon-card animate-on-scroll" data-delay="400">
-          <div class="feature-icon">🤖</div>
+          <div class="feature-icon"><i data-lucide="bot"></i></div>
           <h3 class="feature-title">Sistem Otomatis</h3>
           <p class="feature-desc">Tidak perlu menunggu admin! Semua proses berjalan otomatis 24 jam sehari, 7 hari seminggu, bahkan saat Anda tidur!</p>
-          <div class="feature-deco">🤖</div>
+          <div class="feature-deco"><i data-lucide="bot"></i></div>
         </div>
 
         <div class="feature-card cartoon-card animate-on-scroll" data-delay="500">
-          <div class="feature-icon">📞</div>
+          <div class="feature-icon"><i data-lucide="headset"></i></div>
           <h3 class="feature-title">Support 24/7</h3>
           <p class="feature-desc">Tim support kami siap membantu Anda kapan saja melalui live chat, WhatsApp, dan Telegram. Respon cepat dijamin!</p>
-          <div class="feature-deco">📞</div>
+          <div class="feature-deco"><i data-lucide="headset"></i></div>
         </div>
 
       </div>
@@ -395,10 +403,10 @@
 
         <div class="service-item cartoon-card" data-category="social">
           <div class="service-item-top">
-            <div class="service-logo">📱</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp"></div>
             <div>
               <div class="service-name">WhatsApp</div>
-              <div class="service-country">🌍 Semua Negara</div>
+              <div class="service-country">&#127758; Semua Negara</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -406,10 +414,10 @@
 
         <div class="service-item cartoon-card" data-category="social">
           <div class="service-item-top">
-            <div class="service-logo">💬</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="Telegram"></div>
             <div>
               <div class="service-name">Telegram</div>
-              <div class="service-country">🌍 Semua Negara</div>
+              <div class="service-country">&#127758; Semua Negara</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -417,10 +425,10 @@
 
         <div class="service-item cartoon-card" data-category="social">
           <div class="service-item-top">
-            <div class="service-logo">📘</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook"></div>
             <div>
               <div class="service-name">Facebook</div>
-              <div class="service-country">🌍 Semua Negara</div>
+              <div class="service-country">&#127758; Semua Negara</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -428,10 +436,10 @@
 
         <div class="service-item cartoon-card" data-category="social">
           <div class="service-item-top">
-            <div class="service-logo">📸</div>
+            <div class="service-logo" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);"><img src="https://cdn.simpleicons.org/instagram/ffffff" alt="Instagram"></div>
             <div>
               <div class="service-name">Instagram</div>
-              <div class="service-country">🌍 Semua Negara</div>
+              <div class="service-country">&#127758; Semua Negara</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -439,10 +447,10 @@
 
         <div class="service-item cartoon-card" data-category="social">
           <div class="service-item-top">
-            <div class="service-logo">🐦</div>
+            <div class="service-logo" style="background:#000;"><img src="https://cdn.simpleicons.org/x/ffffff" alt="X (Twitter)"></div>
             <div>
               <div class="service-name">Twitter/X</div>
-              <div class="service-country">🌍 Semua Negara</div>
+              <div class="service-country">&#127758; Semua Negara</div>
             </div>
           </div>
           <div class="service-status limited"><span class="status-dot"></span>Terbatas</div>
@@ -450,10 +458,10 @@
 
         <div class="service-item cartoon-card" data-category="social">
           <div class="service-item-top">
-            <div class="service-logo">🎵</div>
+            <div class="service-logo" style="background:#010101;"><img src="https://cdn.simpleicons.org/tiktok/ffffff" alt="TikTok"></div>
             <div>
               <div class="service-name">TikTok</div>
-              <div class="service-country">🌍 Semua Negara</div>
+              <div class="service-country">&#127758; Semua Negara</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -461,10 +469,10 @@
 
         <div class="service-item cartoon-card" data-category="ecommerce">
           <div class="service-item-top">
-            <div class="service-logo">🛒</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/shopee/EE4D2D" alt="Shopee"></div>
             <div>
               <div class="service-name">Shopee</div>
-              <div class="service-country">🇮🇩 Indonesia</div>
+              <div class="service-country">&#127470;&#127465; Indonesia</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -472,10 +480,10 @@
 
         <div class="service-item cartoon-card" data-category="ecommerce">
           <div class="service-item-top">
-            <div class="service-logo">🛍️</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/tokopedia/42B549" alt="Tokopedia"></div>
             <div>
               <div class="service-name">Tokopedia</div>
-              <div class="service-country">🇮🇩 Indonesia</div>
+              <div class="service-country">&#127470;&#127465; Indonesia</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -483,10 +491,10 @@
 
         <div class="service-item cartoon-card" data-category="ecommerce">
           <div class="service-item-top">
-            <div class="service-logo">🟠</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/lazada/0F146D" alt="Lazada"></div>
             <div>
               <div class="service-name">Lazada</div>
-              <div class="service-country">🌍 Asia</div>
+              <div class="service-country">&#127758; Asia</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -494,10 +502,10 @@
 
         <div class="service-item cartoon-card" data-category="financial">
           <div class="service-item-top">
-            <div class="service-logo">💙</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/paypal/003087" alt="PayPal"></div>
             <div>
               <div class="service-name">PayPal</div>
-              <div class="service-country">🌍 Global</div>
+              <div class="service-country">&#127758; Global</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -505,10 +513,10 @@
 
         <div class="service-item cartoon-card" data-category="financial">
           <div class="service-item-top">
-            <div class="service-logo">🟢</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/gojek/00AED6" alt="GoPay"></div>
             <div>
               <div class="service-name">GoPay</div>
-              <div class="service-country">🇮🇩 Indonesia</div>
+              <div class="service-country">&#127470;&#127465; Indonesia</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -516,10 +524,10 @@
 
         <div class="service-item cartoon-card" data-category="financial">
           <div class="service-item-top">
-            <div class="service-logo">🔵</div>
+            <div class="service-logo" style="background:#4C3494;"><img src="https://cdn.simpleicons.org/ovo/ffffff" alt="OVO" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=&quot;font-weight:900;font-size:0.8rem;color:#fff&quot;>OVO</span>';"></div>
             <div>
               <div class="service-name">OVO</div>
-              <div class="service-country">🇮🇩 Indonesia</div>
+              <div class="service-country">&#127470;&#127465; Indonesia</div>
             </div>
           </div>
           <div class="service-status limited"><span class="status-dot"></span>Terbatas</div>
@@ -527,10 +535,10 @@
 
         <div class="service-item cartoon-card" data-category="gaming">
           <div class="service-item-top">
-            <div class="service-logo">🎮</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/discord/5865F2" alt="Discord"></div>
             <div>
               <div class="service-name">Discord</div>
-              <div class="service-country">🌍 Global</div>
+              <div class="service-country">&#127758; Global</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -538,10 +546,10 @@
 
         <div class="service-item cartoon-card" data-category="gaming">
           <div class="service-item-top">
-            <div class="service-logo">🟡</div>
+            <div class="service-logo" style="background:#1b2838;"><img src="https://cdn.simpleicons.org/steam/ffffff" alt="Steam"></div>
             <div>
               <div class="service-name">Steam</div>
-              <div class="service-country">🌍 Global</div>
+              <div class="service-country">&#127758; Global</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -549,10 +557,10 @@
 
         <div class="service-item cartoon-card" data-category="streaming">
           <div class="service-item-top">
-            <div class="service-logo">🎬</div>
+            <div class="service-logo" style="background:#141414;"><img src="https://cdn.simpleicons.org/netflix/E50914" alt="Netflix"></div>
             <div>
               <div class="service-name">Netflix</div>
-              <div class="service-country">🌍 Global</div>
+              <div class="service-country">&#127758; Global</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -560,10 +568,10 @@
 
         <div class="service-item cartoon-card" data-category="streaming">
           <div class="service-item-top">
-            <div class="service-logo">🎧</div>
+            <div class="service-logo"><img src="https://cdn.simpleicons.org/spotify/1DB954" alt="Spotify"></div>
             <div>
               <div class="service-name">Spotify</div>
-              <div class="service-country">🌍 Global</div>
+              <div class="service-country">&#127758; Global</div>
             </div>
           </div>
           <div class="service-status available"><span class="status-dot"></span>Tersedia</div>
@@ -574,14 +582,14 @@
       <!-- CTA: Login to see price -->
       <div class="service-login-cta animate-on-scroll" data-delay="300">
         <div class="service-login-cta-inner cartoon-card">
-          <div class="service-login-cta-icon">🔐</div>
+          <div class="service-login-cta-icon"><i data-lucide="lock-keyhole"></i></div>
           <div class="service-login-cta-text">
-            <h3>Ingin Cek Harga & Ketersediaan?</h3>
+            <h3>Ingin Cek Harga &amp; Ketersediaan?</h3>
             <p>Login ke dashboard untuk melihat harga terbaru, stok, dan langsung order OTP!</p>
           </div>
           <div class="service-login-cta-btns">
-            <a href="/login" class="btn btn-primary">🔑 Login Sekarang</a>
-            <a href="/register" class="btn btn-secondary">✨ Daftar Gratis</a>
+            <a href="/login/" class="btn btn-primary"><i data-lucide="log-in"></i> Login Sekarang</a>
+            <a href="/register/" class="btn btn-secondary"><i data-lucide="user-plus"></i> Daftar Gratis</a>
           </div>
         </div>
       </div>
@@ -602,28 +610,28 @@
       <div class="steps-container">
         <div class="step-card animate-on-scroll" data-delay="0">
           <div class="step-number">1</div>
-          <div class="step-emoji">👤</div>
+          <div class="step-emoji"><i data-lucide="user-round-plus"></i></div>
           <h3 class="step-title">Daftar Akun</h3>
           <p class="step-desc">Buat akun gratis di NokosHUB. Proses registrasi cepat dan mudah, hanya butuh email!</p>
         </div>
 
         <div class="step-card animate-on-scroll" data-delay="150">
           <div class="step-number">2</div>
-          <div class="step-emoji">💳</div>
+          <div class="step-emoji"><i data-lucide="credit-card"></i></div>
           <h3 class="step-title">Isi Saldo</h3>
           <p class="step-desc">Top-up saldo akun Anda dengan berbagai metode pembayaran yang tersedia. Minimal deposit hanya Rp 5.000!</p>
         </div>
 
         <div class="step-card animate-on-scroll" data-delay="300">
           <div class="step-number">3</div>
-          <div class="step-emoji">📲</div>
+          <div class="step-emoji"><i data-lucide="smartphone"></i></div>
           <h3 class="step-title">Pilih Layanan</h3>
-          <p class="step-desc">Pilih aplikasi yang ingin Anda verifikasi dari 500+ layanan yang tersedia. Klik & konfirmasi!</p>
+          <p class="step-desc">Pilih aplikasi yang ingin Anda verifikasi dari 500+ layanan yang tersedia. Klik &amp; konfirmasi!</p>
         </div>
 
         <div class="step-card animate-on-scroll" data-delay="450">
           <div class="step-number">4</div>
-          <div class="step-emoji">🎉</div>
+          <div class="step-emoji"><i data-lucide="message-square-check"></i></div>
           <h3 class="step-title">Terima OTP</h3>
           <p class="step-desc">OTP langsung muncul di dashboard Anda dalam hitungan detik. Gunakan sebelum expired!</p>
         </div>
@@ -645,25 +653,25 @@
       <div class="login-gate-grid animate-on-scroll" data-delay="100">
 
         <div class="login-gate-card cartoon-card">
-          <div class="login-gate-icon">📊</div>
+          <div class="login-gate-icon"><i data-lucide="chart-bar"></i></div>
           <h3 class="login-gate-title">Harga Real-Time</h3>
           <p class="login-gate-desc">Harga diperbarui secara otomatis mengikuti ketersediaan stok dan kondisi pasar.</p>
         </div>
 
         <div class="login-gate-card cartoon-card">
-          <div class="login-gate-icon">🌐</div>
+          <div class="login-gate-icon"><i data-lucide="globe"></i></div>
           <h3 class="login-gate-title">500+ Layanan</h3>
           <p class="login-gate-desc">Akses lengkap ke seluruh layanan OTP dari berbagai negara dan platform global.</p>
         </div>
 
         <div class="login-gate-card cartoon-card">
-          <div class="login-gate-icon">⚡</div>
+          <div class="login-gate-icon"><i data-lucide="zap"></i></div>
           <h3 class="login-gate-title">Order Instan</h3>
           <p class="login-gate-desc">Langsung order OTP dari dashboard setelah login. Proses otomatis, hasilnya dalam detik.</p>
         </div>
 
         <div class="login-gate-card cartoon-card">
-          <div class="login-gate-icon">🔄</div>
+          <div class="login-gate-icon"><i data-lucide="refresh-ccw"></i></div>
           <h3 class="login-gate-title">Refund Otomatis</h3>
           <p class="login-gate-desc">Saldo otomatis kembali jika OTP gagal terkirim. Aman dan terjamin 100%.</p>
         </div>
@@ -673,15 +681,15 @@
       <!-- Big CTA Card -->
       <div class="login-big-cta cartoon-card animate-on-scroll" data-delay="200">
         <div class="login-big-cta-left">
-          <span class="login-big-cta-emoji">🔐</span>
+          <span class="login-big-cta-emoji"><i data-lucide="lock-keyhole"></i></span>
           <div>
             <h3 class="login-big-cta-title">Lihat Harga Sekarang</h3>
-            <p class="login-big-cta-desc">Gratis daftar • Tidak perlu kartu kredit • Top-up fleksibel</p>
+            <p class="login-big-cta-desc">Gratis daftar &bull; Tidak perlu kartu kredit &bull; Top-up fleksibel</p>
           </div>
         </div>
         <div class="login-big-cta-right">
-          <a href="/login" id="btn-login-harga" class="btn btn-outline btn-lg">🔑 Sudah Punya Akun</a>
-          <a href="/register" id="btn-register-harga" class="btn btn-primary btn-lg">🚀 Daftar & Cek Harga</a>
+          <a href="/login/" id="btn-login-harga" class="btn btn-outline btn-lg"><i data-lucide="log-in"></i> Sudah Punya Akun</a>
+          <a href="/register/" id="btn-register-harga" class="btn btn-primary btn-lg"><i data-lucide="rocket"></i> Daftar &amp; Cek Harga</a>
         </div>
       </div>
 
@@ -794,16 +802,16 @@
        ============================================= -->
   <section id="partners">
     <div class="container">
-      <p class="partners-label">📱 Didukung oleh 500+ Platform Terpopuler</p>
+      <p class="partners-label">Didukung oleh 500+ Platform Terpopuler</p>
       <div class="partners-logos">
-        <div class="partner-logo"><span class="logo-emoji">📱</span> WhatsApp</div>
-        <div class="partner-logo"><span class="logo-emoji">💬</span> Telegram</div>
-        <div class="partner-logo"><span class="logo-emoji">📘</span> Facebook</div>
-        <div class="partner-logo"><span class="logo-emoji">📸</span> Instagram</div>
-        <div class="partner-logo"><span class="logo-emoji">🎵</span> TikTok</div>
-        <div class="partner-logo"><span class="logo-emoji">🎬</span> Netflix</div>
-        <div class="partner-logo"><span class="logo-emoji">🛒</span> Shopee</div>
-        <div class="partner-logo"><span class="logo-emoji">☁️</span> Google</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" width="22" height="22"> WhatsApp</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/telegram/26A5E4" alt="Telegram" width="22" height="22"> Telegram</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/facebook/1877F2" alt="Facebook" width="22" height="22"> Facebook</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/instagram/E4405F" alt="Instagram" width="22" height="22"> Instagram</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/tiktok/010101" alt="TikTok" width="22" height="22"> TikTok</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/netflix/E50914" alt="Netflix" width="22" height="22"> Netflix</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/shopee/EE4D2D" alt="Shopee" width="22" height="22"> Shopee</div>
+        <div class="partner-logo"><img src="https://cdn.simpleicons.org/google/4285F4" alt="Google" width="22" height="22"> Google</div>
       </div>
     </div>
   </section>
@@ -920,10 +928,10 @@
         <h2 class="cta-title">Siap Mulai Dapat OTP<br />Dalam Detik?</h2>
         <p class="cta-desc">Bergabunglah dengan 15.000+ pengguna aktif dan rasakan perbedaannya. Daftar gratis sekarang, tidak perlu kartu kredit!</p>
         <div class="cta-buttons">
-          <a href="/register" id="cta-daftar" class="btn btn-secondary btn-lg">
+          <a href="/register/" id="cta-daftar" class="btn btn-secondary btn-lg">
             🎉 Daftar Gratis Sekarang
           </a>
-          <a href="/login" id="cta-login" class="btn btn-outline btn-lg" style="color:white;border-color:rgba(255,255,255,0.5);">
+          <a href="/login/" id="cta-login" class="btn btn-outline btn-lg" style="color:white;border-color:rgba(255,255,255,0.5);">
             🔑 Login ke Dashboard
           </a>
         </div>
@@ -988,7 +996,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p class="footer-copy">© 2025 NokosHUB. Semua hak cipta dilindungi. 🤖</p>
+        <p class="footer-copy">&copy; 2025 NokosHUB. Semua hak cipta dilindungi.</p>
         <div class="footer-legal">
           <a href="/kebijakan-privasi">Kebijakan Privasi</a>
           <a href="/syarat-ketentuan">Syarat & Ketentuan</a>
@@ -999,8 +1007,12 @@
   </footer>
 
   <!-- Scroll to Top Button -->
-  <button id="scrollTop" aria-label="Scroll to top">⬆️</button>
+  <button id="scrollTop" aria-label="Scroll to top"><i data-lucide="arrow-up"></i></button>
 
   <script src="assets/js/main.js"></script>
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
 </body>
 </html>

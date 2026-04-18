@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
+  <title>NokosHUB Dashboard 🤖</title>
+  <link rel="stylesheet" href="assets/css/dashboard.css" />
+  <link rel="icon" type="image/png" href="assets/images/favicon.png" />
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+  <!-- TOASTS -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- SIDEBAR OVERLAY (mobile) -->
+  <div class="sidebar-ov" id="sidebarOv" onclick="closeSidebar()"></div>
+
+  <div class="layout">
+
+    <!-- =============================================
+         SIDEBAR
+         ============================================= -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Logo -->
+      <div class="sidebar-logo">
+        <img src="assets/images/favicon.png" alt="NokosHUB" class="sidebar-logo-img" />
+        <div class="sidebar-logo-text-wrap">
+          <div class="sidebar-logo-name">Nokos<span>HUB</span></div>
+          <div class="sidebar-logo-sub">OTP Platform</div>
+        </div>
+      </div>
+
+      <!-- User -->
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">😎</div>
+        <div style="flex:1;min-width:0;">
+          <div class="sidebar-user-name" id="sb-name">Budi Santoso</div>
+          <div class="sidebar-user-email">budi@example.com</div>
+        </div>
+      </div>
+
+      <!-- Balance -->
+      <div class="sidebar-balance">
+        <div class="sidebar-balance-label"><i data-lucide="wallet" style="width:13px;height:13px;vertical-align:middle;"></i> Saldo</div>
+        <div class="sidebar-balance-amount" id="sb-balance">Rp 125.500</div>
+        <div class="sidebar-balance-topup" onclick="nav('topup')"><i data-lucide="plus-circle" style="width:13px;height:13px;"></i> Top Up Sekarang</div>
+      </div>
+
+      <!-- Nav -->
+      <nav class="sidebar-nav">
+        <div class="sidebar-nav-group">Menu Utama</div>
+        <div class="sidebar-nav-item active" id="n-home"         onclick="nav('home')"><span class="n-icon"><i data-lucide="house"></i></span> Beranda</div>
+        <div class="sidebar-nav-item"         id="n-buy"          onclick="nav('buy')"><span class="n-icon"><i data-lucide="smartphone"></i></span> Beli Nomor OTP <span class="n-dot g">Baru</span></div>
+        <div class="sidebar-nav-item"         id="n-topup"        onclick="nav('topup')"><span class="n-icon"><i data-lucide="credit-card"></i></span> Top Up / Deposit</div>
+
+        <div class="sidebar-nav-group">Riwayat</div>
+        <div class="sidebar-nav-item"         id="n-orders"       onclick="nav('orders')"><span class="n-icon"><i data-lucide="clipboard-list"></i></span> Pesanan Saya <span class="n-dot">3</span></div>
+        <div class="sidebar-nav-item"         id="n-transactions" onclick="nav('transactions')"><span class="n-icon"><i data-lucide="receipt"></i></span> Transaksi</div>
+
+        <div class="sidebar-nav-group">Akun</div>
+        <div class="sidebar-nav-item"         id="n-profile"      onclick="nav('profile')"><span class="n-icon"><i data-lucide="circle-user"></i></span> Profil Saya</div>
+        <div class="sidebar-nav-item"         id="n-api"          onclick="nav('api')"><span class="n-icon"><i data-lucide="key-round"></i></span> API Key</div>
+      </nav>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-item"><i data-lucide="message-circle"></i> Live Chat</div>
+        <div class="sidebar-footer-item"><i data-lucide="circle-help"></i> Bantuan</div>
+        <div class="sidebar-footer-item logout" onclick="doLogout()"><i data-lucide="log-out"></i> Keluar</div>
+      </div>
+    </aside>
+
+    <!-- =============================================
+         MAIN
+         ============================================= -->
+    <div class="main">
+
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="topbar-hamburger" id="hamburger" aria-label="Menu">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="topbar-title" id="topbarTitle">Beranda</div>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-balance">
+            <span class="tl">Saldo</span>
+            <span class="ta" id="tb-balance">Rp 125.500</span>
+          </div>
+          <div class="topbar-notif"><i data-lucide="bell"></i><div class="notif-dot"></div></div>
+          <div class="topbar-user" onclick="nav('profile')">
+            <div class="topbar-user-av">😎</div>
+            <span id="tb-name">Budi</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- PAGES -->
+      <div class="page-wrap">
+
+        <!-- =============================================
+             PAGE: HOME
+             ============================================= -->
+        <div class="page active" id="page-home">
+
+          <!-- Hero -->
+          <div class="hero-banner">
+            <div class="hero-text">
+              <div class="hero-greet">👋 Selamat datang kembali,</div>
+              <div class="hero-name" id="hero-name">Budi Santoso!</div>
+              <div class="hero-desc">Saldo kamu: <span class="hero-bal" id="hero-balance">Rp 125.500</span> — siap order OTP? 🚀</div>
+            </div>
+            <div class="hero-emoji">🤖</div>
+            <div class="hero-actions">
+              <button class="btn btn-secondary" onclick="nav('buy')">📱 Beli Nomor</button>
+              <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.5);" onclick="nav('topup')">💳 Top Up</button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="stats-grid">
+            <div class="stat-card" style="background:#DBF4FF;">
+              <div class="stat-icon" style="background:#b3e5ff;"><i data-lucide="wallet" style="color:var(--primary-dark);"></i></div>
+              <div class="stat-val" id="stat-balance">Rp 125.500</div>
+              <div class="stat-label">Total Saldo</div>
+              <div class="stat-badge sb-ok">Aktif ✔</div>
+            </div>
+            <div class="stat-card" style="background:#FFF3D4;">
+              <div class="stat-icon" style="background:#ffe9a0;"><i data-lucide="package" style="color:var(--orange);"></i></div>
+              <div class="stat-val" id="stat-orders">47</div>
+              <div class="stat-label">Total Pesanan</div>
+              <div class="stat-badge sb-up" id="stat-orders-note">↑ +5 minggu ini</div>
+            </div>
+            <div class="stat-card" style="background:#D4FFF0;">
+              <div class="stat-icon" style="background:#a0ffd9;"><i data-lucide="shield-check" style="color:var(--accent-dark);"></i></div>
+              <div class="stat-val" id="stat-success-rate">93,6%</div>
+              <div class="stat-label">OTP Sukses</div>
+              <div class="stat-badge sb-up" id="stat-success-note">44 berhasil</div>
+            </div>
+            <div class="stat-card" style="background:#F3D4FF;">
+              <div class="stat-icon" style="background:#e0a0ff;"><i data-lucide="refresh-ccw" style="color:var(--purple);"></i></div>
+              <div class="stat-val" id="stat-refund">Rp 9.600</div>
+              <div class="stat-label">Total Refund</div>
+              <div class="stat-badge sb-ok" id="stat-refund-note">3 transaksi</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div style="margin-bottom:24px;">
+            <div style="font-family:var(--font-h);font-size:1.05rem;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+              ⚡ Aksi Cepat
+            </div>
+            <div class="quick-grid">
+              <div class="quick-card" onclick="nav('buy')">
+                <div class="q-icon" style="background:#DBF4FF;"><i data-lucide="smartphone" style="color:var(--primary);"></i></div>
+                <div class="q-label">Beli Nomor</div>
+                <div class="q-desc" id="quick-service-count">500+ layanan</div>
+              </div>
+              <div class="quick-card" onclick="nav('topup')">
+                <div class="q-icon" style="background:#FFF3D4;"><i data-lucide="credit-card" style="color:var(--orange);"></i></div>
+                <div class="q-label">Top Up</div>
+                <div class="q-desc">Isi saldo</div>
+              </div>
+              <div class="quick-card" onclick="nav('orders')">
+                <div class="q-icon" style="background:#D4FFF0;"><i data-lucide="clipboard-list" style="color:var(--accent-dark);"></i></div>
+                <div class="q-label">Pesanan</div>
+                <div class="q-desc">Status & OTP</div>
+              </div>
+              <div class="quick-card" onclick="nav('api')">
+                <div class="q-icon" style="background:#F3D4FF;"><i data-lucide="key-round" style="color:var(--purple);"></i></div>
+                <div class="q-label">API Key</div>
+                <div class="q-desc">Integrasi</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dashboard grid -->
+          <div class="dash-grid">
+            <!-- Recent orders table -->
+            <div class="table-card">
+              <div class="card-hdr">
+                <div class="card-title">📋 Pesanan Terbaru</div>
+                <button class="btn btn-outline btn-xs" onclick="nav('orders')">Lihat Semua</button>
+              </div>
+              <div class="tbl-wrap">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th>Layanan</th>
+                      <th>Nomor</th>
+                      <th>Kode OTP</th>
+                      <th>Status</th>
+                      <th>Biaya</th>
+                    </tr>
+                  </thead>
+                  <tbody id="homeRecentOrdersBody">
+                    <tr>
+                      <td>
+                        <div class="svc-cell">
+                          <div class="svc-icon-sm" style="background:#FFF3D4;">📱</div>
+                          <div><div class="svc-n">WhatsApp</div><div class="svc-c">🌍 Global</div></div>
+                        </div>
+                      </td>
+                      <td style="font-family:monospace;font-size:0.78rem;color:var(--muted);">+62 812***</td>
+                      <td><span class="otp-chip" onclick="openOtpModal('857293','WhatsApp')">857293 📋</span></td>
+                      <td><span class="badge badge-success"><span class="badge-dot"></span>Berhasil</span></td>
+                      <td style="color:var(--danger);font-weight:800;">-Rp 1.200</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="svc-cell">
+                          <div class="svc-icon-sm" style="background:#DBF4FF;">💬</div>
+                          <div><div class="svc-n">Telegram</div><div class="svc-c">🌍 Global</div></div>
+                        </div>
+                      </td>
+                      <td style="font-family:monospace;font-size:0.78rem;color:var(--muted);">+62 813***</td>
+                      <td><span class="otp-chip" onclick="openOtpModal('423951','Telegram')">423951 📋</span></td>
+                      <td><span class="badge badge-success"><span class="badge-dot"></span>Berhasil</span></td>
+                      <td style="color:var(--danger);font-weight:800;">-Rp 800</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="svc-cell">
+                          <div class="svc-icon-sm" style="background:#D4FFF0;">📸</div>
+                          <div><div class="svc-n">Instagram</div><div class="svc-c">🌍 Global</div></div>
+                        </div>
+                      </td>
+                      <td style="font-family:monospace;font-size:0.78rem;color:var(--muted);">+62 819***</td>
+                      <td><span style="color:var(--muted);font-size:0.78rem;font-weight:700;" class="anim-pulse">⏳ Menunggu…</span></td>
+                      <td><span class="badge badge-waiting"><span class="badge-dot"></span>Menunggu</span></td>
+                      <td style="color:var(--danger);font-weight:800;">-Rp 1.500</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="svc-cell">
+                          <div class="svc-icon-sm" style="background:#F3D4FF;">🎮</div>
+                          <div><div class="svc-n">Discord</div><div class="svc-c">🌍 Global</div></div>
+                        </div>
+                      </td>
+                      <td style="font-family:monospace;font-size:0.78rem;color:var(--muted);">+1 407***</td>
+                      <td><span style="color:var(--muted);font-size:0.78rem;font-weight:700;">— Refund</span></td>
+                      <td><span class="badge badge-danger"><span class="badge-dot"></span>Refund</span></td>
+                      <td style="color:var(--success);font-weight:800;">+Rp 2.200</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Activity Feed -->
+            <div class="table-card">
+              <div class="card-hdr">
+                <div class="card-title">⚡ Aktivitas Terbaru</div>
+                <button class="btn btn-outline btn-xs" onclick="nav('transactions')">Semua</button>
+              </div>
+              <div class="act-list" id="homeActivityList">
+                <div class="act-item" onclick="openOtpModal('857293','WhatsApp')">
+                  <div class="act-icon" style="background:#FFF3D4;">📱</div>
+                  <div class="act-body"><div class="act-t">WhatsApp OTP</div><div class="act-s">Berhasil diterima</div></div>
+                  <div class="act-r"><div class="act-amt act-out">-Rp 1.200</div><div class="act-time">2j lalu</div></div>
+                </div>
+                <div class="act-item">
+                  <div class="act-icon" style="background:#D4FFF0;">💰</div>
+                  <div class="act-body"><div class="act-t">Top Up GoPay</div><div class="act-s">Saldo masuk</div></div>
+                  <div class="act-r"><div class="act-amt act-in">+Rp 50.000</div><div class="act-time">2j lalu</div></div>
+                </div>
+                <div class="act-item" onclick="openOtpModal('423951','Telegram')">
+                  <div class="act-icon" style="background:#DBF4FF;">💬</div>
+                  <div class="act-body"><div class="act-t">Telegram OTP</div><div class="act-s">Berhasil diterima</div></div>
+                  <div class="act-r"><div class="act-amt act-out">-Rp 800</div><div class="act-time">3j lalu</div></div>
+                </div>
+                <div class="act-item">
+                  <div class="act-icon" style="background:#ffe0e0;">🔄</div>
+                  <div class="act-body"><div class="act-t">Refund Discord</div><div class="act-s">Dikembalikan otomatis</div></div>
+                  <div class="act-r"><div class="act-amt act-ref">+Rp 2.200</div><div class="act-time">5j lalu</div></div>
+                </div>
+                <div class="act-item">
+                  <div class="act-icon" style="background:#D4FFF0;">💰</div>
+                  <div class="act-body"><div class="act-t">Top Up Transfer Bank</div><div class="act-s">+Rp 100.000</div></div>
+                  <div class="act-r"><div class="act-amt act-in">+Rp 100.000</div><div class="act-time">Kemarin</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /page-home -->
+
+
+        <!-- =============================================
+             PAGE: BUY OTP (MULTI-STEP)
+             ============================================= -->
+        <div class="page" id="page-buy">
+          <div class="ph">
+            <h1>📱 Beli Nomor OTP</h1>
+            <p>Pilih layanan, pilih negara, lalu tunggu kode OTP masuk otomatis.</p>
+          </div>
+
+          <!-- Progress steps -->
+          <div class="buy-steps" id="buySteps">
+            <div class="buy-step active" id="bStep1">
+              <div class="step-num">1</div>
+              <div class="step-info">
+                <div class="step-title">Pilih Layanan</div>
+                <div class="step-sub">500+ platform tersedia</div>
+              </div>
+            </div>
+            <div class="step-line" id="bLine1"></div>
+            <div class="buy-step" id="bStep2">
+              <div class="step-num">2</div>
+              <div class="step-info">
+                <div class="step-title">Pilih Negara</div>
+                <div class="step-sub">Sesuai kebutuhan</div>
+              </div>
+            </div>
+            <div class="step-line" id="bLine2"></div>
+            <div class="buy-step" id="bStep3">
+              <div class="step-num">3</div>
+              <div class="step-info">
+                <div class="step-title">Menunggu OTP</div>
+                <div class="step-sub">Maks. 2 menit</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-PAGE 1: Select Service -->
+          <div class="buy-sub active" id="buyStep1">
+            <!-- Search + filter -->
+            <div class="buy-controls">
+              <div class="search-wrap">
+                <span>🔍</span>
+                <input type="text" id="svcSearch" placeholder="Cari layanan… WhatsApp, Shopee, dll" oninput="filterSvc()" />
+              </div>
+              <div class="filter-chips">
+                <div class="fc active" onclick="setCat(this,'all')">🌐 Semua</div>
+                <div class="fc" onclick="setCat(this,'social')">📱 Sosmed</div>
+                <div class="fc" onclick="setCat(this,'ecommerce')">🛒 E-Commerce</div>
+                <div class="fc" onclick="setCat(this,'financial')">💳 Finansial</div>
+                <div class="fc" onclick="setCat(this,'gaming')">🎮 Gaming</div>
+                <div class="fc" onclick="setCat(this,'streaming')">🎬 Streaming</div>
+              </div>
+            </div>
+            <div class="svc-list" id="svcList"><!-- JS --></div>
+          </div>
+
+          <!-- SUB-PAGE 2: Select Country -->
+          <div class="buy-sub" id="buyStep2">
+            <div style="margin-bottom:16px;">
+              <button class="btn btn-outline btn-sm" onclick="goStep(1)">← Ganti Layanan</button>
+              <div style="display:inline-flex;align-items:center;gap:10px;margin-left:12px;background:#fff;border:var(--bw) solid var(--border);border-radius:var(--r-full);padding:6px 16px;box-shadow:var(--shadow-xs);">
+                <span id="selSvcIcon" style="font-size:1.3rem;">📱</span>
+                <span id="selSvcName" style="font-weight:800;">WhatsApp</span>
+                <span id="selSvcPrice" style="font-family:var(--font-h);color:var(--primary);">Rp 1.200</span>
+              </div>
+            </div>
+            <div style="font-family:var(--font-h);font-size:1.1rem;margin-bottom:14px;">🌍 Pilih Negara</div>
+            <div class="country-grid" id="countryGrid"><!-- JS --></div>
+          </div>
+
+          <!-- SUB-PAGE 3: Waiting / Result -->
+          <div class="buy-sub" id="buyStep3">
+            <!-- State: waiting -->
+            <div id="otpStateWaiting">
+              <div class="otp-waiting-card">
+                <div class="otp-svc-badge">
+                  <span id="waitIcon">📱</span>
+                  <span id="waitSvc">WhatsApp</span>
+                  <span id="waitCountry">🌍 Global</span>
+                </div>
+
+                <div class="timer-ring-wrap">
+                  <svg class="timer-svg" width="160" height="160" viewBox="0 0 160 160">
+                    <circle class="timer-track" cx="80" cy="80" r="65"/>
+                    <circle class="timer-progress" id="timerRing" cx="80" cy="80" r="65"/>
+                  </svg>
+                  <div class="timer-inner">
+                    <div class="timer-count" id="timerCount">5:00</div>
+                    <div class="timer-label">Menunggu OTP</div>
+                  </div>
+                </div>
+
+                <div class="wait-title">Menerima Kode OTP…</div>
+                <div class="wait-desc">Nomor virtual telah disiapkan. OTP akan muncul otomatis ketika SMS diterima.</div>
+                <div class="wait-phone">📞 <span id="waitPhone">+62 812 3456 7890</span></div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;position:relative;z-index:1;">
+                  <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.4);" onclick="cancelOrder()">❌ Batalkan</button>
+                </div>
+              </div>
+
+              <div class="table-card" style="margin-top:4px;">
+                <div class="card-title" style="margin-bottom:12px;">ℹ️ Informasi</div>
+                <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+                  <li style="display:flex;align-items:center;gap:8px;font-size:0.84rem;font-weight:700;">✅ OTP akan muncul otomatis, tidak perlu refresh halaman</li>
+                  <li style="display:flex;align-items:center;gap:8px;font-size:0.84rem;font-weight:700;">⏱ Batas waktu tunggu: <strong>2 menit</strong></li>
+                  <li style="display:flex;align-items:center;gap:8px;font-size:0.84rem;font-weight:700;">🔄 Saldo dikembalikan <strong>100%</strong> jika OTP tidak diterima</li>
+                  <li style="display:flex;align-items:center;gap:8px;font-size:0.84rem;font-weight:700;">📵 Jangan tutup halaman ini saat menunggu</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- State: received -->
+            <div id="otpStateReceived" style="display:none;">
+              <div class="otp-received-card">
+                <div style="font-size:3rem;margin-bottom:8px;animation:mascotFloat 2s ease-in-out infinite;">🎉</div>
+                <div class="otp-recv-label">✅ OTP Berhasil Diterima!</div>
+                <div class="otp-code-big" id="receivedCode">857293</div>
+                <div class="number-display" id="receivedPhone">+62 812 3456 7890</div>
+                <div class="otp-recv-time" id="receivedSvc">WhatsApp — 🌍 Global</div>
+              </div>
+              <div style="display:flex;gap:10px;margin-bottom:16px;">
+                <button class="btn btn-primary btn-lg" style="flex:1;" onclick="copyOtpCode()">📋 Salin Kode OTP</button>
+                <button class="btn btn-outline btn-sm" onclick="newOrder()">🔄 Order Lagi</button>
+              </div>
+              <div style="padding:14px;background:#D4FFF0;border:var(--bw) solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow-xs);font-size:0.82rem;font-weight:700;">
+                ⚠️ <strong>Segera gunakan kode ini!</strong> OTP biasanya berlaku 5–10 menit tergantung platform. Jangan bagikan ke siapapun.
+              </div>
+            </div>
+
+            <!-- State: expired (tidak diterima) -->
+            <div id="otpStateExpired" style="display:none;">
+              <div class="otp-expired-card">
+                <div style="font-size:3rem;margin-bottom:12px;">⏰</div>
+                <div style="font-family:var(--font-h);font-size:1.4rem;color:#fff;margin-bottom:6px;">OTP Tidak Diterima</div>
+                <div style="font-size:0.84rem;color:rgba(255,255,255,0.7);font-weight:600;margin-bottom:16px;">
+                  Waktu tunggu habis. Saldo kamu akan dikembalikan secara otomatis dalam 1–3 menit.
+                </div>
+                <div style="background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.15);border-radius:var(--r-md);padding:14px;color:#fff;font-weight:800;font-size:0.9rem;">
+                  🔄 Refund: <span id="refundAmount">Rp 1.200</span> → dikembalikan ke saldo
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-primary btn-lg" style="flex:1;" onclick="newOrder()">🔄 Coba Lagi</button>
+                <button class="btn btn-outline btn-sm" onclick="nav('home')">🏠 Beranda</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /page-buy -->
+
+
+        <!-- =============================================
+             PAGE: TOP UP
+             ============================================= -->
+        <div class="page" id="page-topup">
+          <div class="ph"><h1>💳 Top Up / Deposit</h1><p>Isi saldo akun dengan berbagai metode pembayaran yang tersedia.</p></div>
+
+          <div class="topup-layout">
+            <!-- Form -->
+            <div>
+              <div class="table-card" style="margin-bottom:16px;">
+                <div class="card-title" style="margin-bottom:16px;">🧾 Detail Top Up</div>
+
+                <div class="f-group">
+                  <label class="f-label">💰 Jumlah Top Up (Rp)</label>
+                  <input type="number" class="f-input" id="topupAmt" placeholder="Minimal Rp 10.000" min="10000" oninput="onTopupChange()" />
+                  <div class="amount-presets" style="margin-top:10px;">
+                    <div class="preset" onclick="setPreset(10000,this)">Rp 10K</div>
+                    <div class="preset" onclick="setPreset(25000,this)">Rp 25K</div>
+                    <div class="preset" onclick="setPreset(50000,this)">Rp 50K</div>
+                    <div class="preset" onclick="setPreset(100000,this)">Rp 100K</div>
+                    <div class="preset" onclick="setPreset(250000,this)">Rp 250K</div>
+                    <div class="preset" onclick="setPreset(500000,this)">Rp 500K</div>
+                  </div>
+                </div>
+
+                <div class="f-group" style="margin-top:6px;">
+                  <label class="f-label">💳 Metode Pembayaran</label>
+                  <div class="pay-list">
+                    <div class="pay-item sel" onclick="selectPay(this,'Transfer Bank',0)">
+                      <div class="pay-radio"></div><div class="pay-ico">🏦</div>
+                      <div><div class="pay-name">Transfer Bank</div><div class="pay-desc">BCA, Mandiri, BNI, BRI</div></div>
+                      <div class="pay-fee">Gratis</div>
+                    </div>
+                    <div class="pay-item" onclick="selectPay(this,'GoPay',0)">
+                      <div class="pay-radio"></div><div class="pay-ico">🟢</div>
+                      <div><div class="pay-name">GoPay</div><div class="pay-desc">Saldo langsung masuk</div></div>
+                      <div class="pay-fee">Gratis</div>
+                    </div>
+                    <div class="pay-item" onclick="selectPay(this,'OVO',0)">
+                      <div class="pay-radio"></div><div class="pay-ico">🔵</div>
+                      <div><div class="pay-name">OVO</div><div class="pay-desc">Saldo langsung masuk</div></div>
+                      <div class="pay-fee">Gratis</div>
+                    </div>
+                    <div class="pay-item" onclick="selectPay(this,'DANA',0)">
+                      <div class="pay-radio"></div><div class="pay-ico">💙</div>
+                      <div><div class="pay-name">DANA</div><div class="pay-desc">Saldo langsung masuk</div></div>
+                      <div class="pay-fee">Gratis</div>
+                    </div>
+                    <div class="pay-item" onclick="selectPay(this,'QRIS',0)">
+                      <div class="pay-radio"></div><div class="pay-ico">📱</div>
+                      <div><div class="pay-name">QRIS</div><div class="pay-desc">Scan & bayar instan</div></div>
+                      <div class="pay-fee">Gratis</div>
+                    </div>
+                    <div class="pay-item" onclick="selectPay(this,'Indomaret',2500)">
+                      <div class="pay-radio"></div><div class="pay-ico">🏪</div>
+                      <div><div class="pay-name">Indomaret</div><div class="pay-desc">Bayar di kasir terdekat</div></div>
+                      <div class="pay-fee">+Rp 2.500</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="f-group">
+                  <label class="f-label">📝 Catatan (Opsional)</label>
+                  <input type="text" class="f-input" placeholder="Mis: untuk bisnis online" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="sum-card">
+              <div class="card-title" style="margin-bottom:14px;">📊 Ringkasan</div>
+              <div class="sum-row"><span class="sum-l">Saldo sekarang</span><span class="sum-v" id="sum-cur">Rp 125.500</span></div>
+              <div class="sum-row"><span class="sum-l">Jumlah top up</span><span class="sum-v" id="sum-amt">Rp 0</span></div>
+              <div class="sum-row"><span class="sum-l">Metode</span><span class="sum-v" id="sum-met">Transfer Bank</span></div>
+              <div class="sum-row"><span class="sum-l">Biaya admin</span><span class="sum-v" id="sum-fee">Gratis</span></div>
+              <div class="sum-row total"><span class="sum-l" style="font-weight:800;color:var(--text);">Total bayar</span><span class="sum-v hi" id="sum-tot">Rp 0</span></div>
+              <div style="padding:6px 0;font-size:0.78rem;font-weight:700;color:var(--muted);">Saldo setelah top up: <strong id="sum-aft" style="color:var(--primary);">Rp 125.500</strong></div>
+              <button class="btn btn-primary btn-full btn-lg" onclick="doTopup()" style="margin-top:12px;">🚀 Konfirmasi Top Up</button>
+              <div class="topup-notice" style="margin-top:10px;">📸 Untuk sementara, invoice dibuat otomatis lalu bukti transfer dikirim manual ke admin Telegram.</div>
+
+              <!-- Pay badges -->
+              <div style="margin-top:14px;text-align:center;">
+                <p style="font-size:0.65rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Tersedia</p>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">
+                  <span class="badge badge-info">🏦 Bank</span>
+                  <span class="badge badge-info">🟢 GoPay</span>
+                  <span class="badge badge-info">🔵 OVO</span>
+                  <span class="badge badge-info">💙 DANA</span>
+                  <span class="badge badge-info">📱 QRIS</span>
+                  <span class="badge badge-info">🏪 Indomaret</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /page-topup -->
+
+
+        <!-- =============================================
+             PAGE: ORDERS
+             ============================================= -->
+        <div class="page" id="page-orders">
+          <div class="ph"><h1>📋 Pesanan Saya</h1><p>Semua pesanan OTP beserta status dan kode yang diterima.</p></div>
+
+          <div class="table-card">
+            <div class="card-hdr">
+              <div class="card-title">📋 Daftar Pesanan</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <div class="search-wrap" style="min-width:160px;">
+                  <span>🔍</span><input type="text" placeholder="Cari pesanan…" />
+                </div>
+                <select class="f-input" style="width:auto;padding:8px 12px;font-size:0.82rem;">
+                  <option>Semua Status</option>
+                  <option>Berhasil</option>
+                  <option>Menunggu</option>
+                  <option>Refund</option>
+                </select>
+              </div>
+            </div>
+            <div class="order-cards" id="ordersList">
+              <div class="order-card-big" onclick="openOtpModal('857293','WhatsApp')">
+                <div class="oc-top">
+                  <div class="oc-icon" style="background:#FFF3D4;">📱</div>
+                  <div><div class="oc-svc">WhatsApp</div><div class="oc-id">#ORD001 · +62 812 3456 7890 · 🌍 Global</div></div>
+                  <div style="margin-left:auto;flex-shrink:0;"><span class="badge badge-success"><span class="badge-dot"></span>Berhasil</span></div>
+                </div>
+                <div class="oc-mid">
+                  <div class="oc-otp">857293</div>
+                  <button class="btn btn-primary btn-xs" onclick="event.stopPropagation();copyText('857293')">📋 Salin</button>
+                </div>
+                <div class="oc-foot">
+                  <div class="oc-time">📅 18 Apr 2026 · 16:30 WIB</div>
+                  <div class="oc-price act-out">-Rp 1.200</div>
+                </div>
+              </div>
+
+              <div class="order-card-big" onclick="openOtpModal('423951','Telegram')">
+                <div class="oc-top">
+                  <div class="oc-icon" style="background:#DBF4FF;">💬</div>
+                  <div><div class="oc-svc">Telegram</div><div class="oc-id">#ORD002 · +62 813 9012 3456 · 🌍 Global</div></div>
+                  <div style="margin-left:auto;flex-shrink:0;"><span class="badge badge-success"><span class="badge-dot"></span>Berhasil</span></div>
+                </div>
+                <div class="oc-mid">
+                  <div class="oc-otp">423951</div>
+                  <button class="btn btn-primary btn-xs" onclick="event.stopPropagation();copyText('423951')">📋 Salin</button>
+                </div>
+                <div class="oc-foot">
+                  <div class="oc-time">📅 18 Apr 2026 · 15:12 WIB</div>
+                  <div class="oc-price act-out">-Rp 800</div>
+                </div>
+              </div>
+
+              <div class="order-card-big">
+                <div class="oc-top">
+                  <div class="oc-icon" style="background:#D4FFF0;">📸</div>
+                  <div><div class="oc-svc">Instagram</div><div class="oc-id">#ORD003 · +62 819 7654 3210 · 🌍 Global</div></div>
+                  <div style="margin-left:auto;flex-shrink:0;"><span class="badge badge-waiting anim-pulse"><span class="badge-dot"></span>Menunggu</span></div>
+                </div>
+                <div class="oc-mid">
+                  <div style="color:var(--muted);font-size:0.84rem;font-weight:700;">⏳ Menunggu SMS masuk...</div>
+                  <button class="btn btn-danger btn-xs" onclick="showToast('Pesanan dibatalkan!','error')">❌ Batalkan</button>
+                </div>
+                <div class="oc-foot">
+                  <div class="oc-time">📅 18 Apr 2026 · 16:45 WIB</div>
+                  <div class="oc-price act-out">-Rp 1.500</div>
+                </div>
+              </div>
+
+              <div class="order-card-big">
+                <div class="oc-top">
+                  <div class="oc-icon" style="background:#F3D4FF;">🎮</div>
+                  <div><div class="oc-svc">Discord</div><div class="oc-id">#ORD004 · +1 407 333 2211 · 🌍 Global</div></div>
+                  <div style="margin-left:auto;flex-shrink:0;"><span class="badge badge-danger"><span class="badge-dot"></span>Refund</span></div>
+                </div>
+                <div class="oc-mid">
+                  <div style="color:var(--accent-dark);font-size:0.84rem;font-weight:800;">✅ Saldo dikembalikan otomatis</div>
+                  <span style="font-family:var(--font-h);font-size:1rem;color:var(--success);">+Rp 2.200</span>
+                </div>
+                <div class="oc-foot">
+                  <div class="oc-time">📅 17 Apr 2026 · 22:10 WIB</div>
+                  <div class="oc-price" style="color:var(--success);">+Rp 2.200</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="paginator">
+              <div class="paginator-info">Menampilkan 1–4 dari 47 pesanan</div>
+              <div class="paginator-btns">
+                <div class="pg-btn">‹</div>
+                <div class="pg-btn active">1</div>
+                <div class="pg-btn">2</div>
+                <div class="pg-btn">3</div>
+                <div class="pg-btn">…</div>
+                <div class="pg-btn">12</div>
+                <div class="pg-btn">›</div>
+              </div>
+            </div>
+          </div>
+        </div><!-- /page-orders -->
+
+
+        <!-- =============================================
+             PAGE: TRANSACTIONS
+             ============================================= -->
+        <div class="page" id="page-transactions">
+          <div class="ph"><h1>💰 Riwayat Transaksi</h1><p>Semua aktivitas saldo masuk dan keluar pada akun kamu.</p></div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;" class="tx-overview">
+            <div class="table-card" style="background:linear-gradient(135deg,var(--primary),#7C3AED);">
+              <div style="font-size:0.7rem;color:rgba(255,255,255,0.65);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💰 Saldo Aktif</div>
+              <div style="font-family:var(--font-h);font-size:1.7rem;color:#fff;" id="tx-bal">Rp 125.500</div>
+              <div style="font-size:0.72rem;color:rgba(255,255,255,0.6);font-weight:600;margin-top:3px;">Tidak kadaluarsa</div>
+            </div>
+            <div class="table-card">
+              <div style="font-size:0.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">📥 Total Deposit</div>
+              <div style="font-family:var(--font-h);font-size:1.7rem;color:var(--success);" id="tx-total-deposit">Rp 350.000</div>
+              <div class="stat-badge sb-up" style="margin-top:6px;" id="tx-total-deposit-note">5 transaksi</div>
+            </div>
+            <div class="table-card">
+              <div style="font-size:0.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">📤 Total Pakai</div>
+              <div style="font-family:var(--font-h);font-size:1.7rem;color:var(--danger);" id="tx-total-spent">Rp 234.100</div>
+              <div class="stat-badge sb-ok" style="margin-top:6px;" id="tx-total-spent-note">47 pesanan</div>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="card-hdr">
+              <div class="card-title">🧾 Riwayat Saldo</div>
+              <select class="f-input" style="width:auto;padding:7px 12px;font-size:0.8rem;">
+                <option>Semua Tipe</option><option>Deposit</option><option>Pembelian</option><option>Refund</option>
+              </select>
+            </div>
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>ID</th><th>Tipe</th><th>Deskripsi</th><th>Metode</th><th>Jumlah</th><th>Saldo</th><th>Status</th><th>Waktu</th></tr></thead>
+                <tbody id="transactionsBody">
+                  <tr><td style="font-family:monospace;font-size:0.72rem;color:var(--muted);">#TXN001</td><td><span class="badge badge-success">Deposit</span></td><td>Top Up via GoPay</td><td>🟢 GoPay</td><td style="color:var(--success);font-weight:800;">+Rp 50.000</td><td style="font-family:var(--font-h);">Rp 125.500</td><td><span class="badge badge-success"><span class="badge-dot"></span>OK</span></td><td style="font-size:0.72rem;color:var(--muted);">18 Apr 16:00</td></tr>
+                  <tr><td style="font-family:monospace;font-size:0.72rem;color:var(--muted);">#TXN002</td><td><span class="badge badge-danger">Pembelian</span></td><td>WhatsApp OTP #ORD001</td><td>📱 Saldo</td><td style="color:var(--danger);font-weight:800;">-Rp 1.200</td><td style="font-family:var(--font-h);">Rp 75.500</td><td><span class="badge badge-success"><span class="badge-dot"></span>OK</span></td><td style="font-size:0.72rem;color:var(--muted);">18 Apr 16:30</td></tr>
+                  <tr><td style="font-family:monospace;font-size:0.72rem;color:var(--muted);">#TXN003</td><td><span class="badge badge-info">Refund</span></td><td>Refund Discord #ORD004</td><td>🔄 Sistem</td><td style="color:var(--success);font-weight:800;">+Rp 2.200</td><td style="font-family:var(--font-h);">Rp 76.700</td><td><span class="badge badge-success"><span class="badge-dot"></span>OK</span></td><td style="font-size:0.72rem;color:var(--muted);">17 Apr 22:10</td></tr>
+                  <tr><td style="font-family:monospace;font-size:0.72rem;color:var(--muted);">#TXN004</td><td><span class="badge badge-success">Deposit</span></td><td>Top Up Transfer Bank BCA</td><td>🏦 BCA</td><td style="color:var(--success);font-weight:800;">+Rp 100.000</td><td style="font-family:var(--font-h);">Rp 74.500</td><td><span class="badge badge-success"><span class="badge-dot"></span>OK</span></td><td style="font-size:0.72rem;color:var(--muted);">17 Apr 10:00</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /page-transactions -->
+
+
+        <!-- =============================================
+             PAGE: PROFILE
+             ============================================= -->
+        <div class="page" id="page-profile">
+          <div class="ph"><h1>👤 Profil Saya</h1><p>Kelola informasi akun dan keamanan.</p></div>
+
+          <div class="profile-layout">
+            <div class="profile-card">
+              <div class="profile-av">😎</div>
+              <div class="profile-name" id="prof-name">Budi Santoso</div>
+              <div class="profile-email" id="prof-email">budi@example.com</div>
+              <span class="badge badge-warning" style="margin-bottom:16px;">⭐ Member Aktif</span>
+              <div class="profile-stats">
+                <div class="ps"><div class="ps-v" id="prof-orders">47</div><div class="ps-l">Pesanan</div></div>
+                <div class="ps"><div class="ps-v" id="prof-success-rate">93%</div><div class="ps-l">Sukses</div></div>
+                <div class="ps" style="grid-column:span 2;"><div class="ps-v" style="color:var(--success);font-size:0.95rem;" id="prof-bal">Rp 125.500</div><div class="ps-l">Saldo Aktif</div></div>
+              </div>
+              <button class="btn btn-outline btn-sm btn-full" onclick="showToast('Fitur upload foto segera hadir! 📸','info')">📸 Ganti Foto</button>
+            </div>
+
+            <div>
+              <div class="table-card" style="margin-bottom:16px;">
+                <div class="card-title" style="margin-bottom:16px;">📝 Informasi Pribadi</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div class="f-group"><label class="f-label">Nama Depan</label><input type="text" class="f-input" id="pFirst" value="Budi" /></div>
+                  <div class="f-group"><label class="f-label">Nama Belakang</label><input type="text" class="f-input" id="pLast" value="Santoso" /></div>
+                </div>
+                <div class="f-group"><label class="f-label">Email</label><input type="email" class="f-input" id="pEmail" value="budi@example.com" /></div>
+                <div class="f-group"><label class="f-label">Telegram ID</label><input type="text" class="f-input" id="pTelegramId" placeholder="Belum tertaut" readonly /></div>
+                <div class="f-group"><label class="f-label">No. Telepon</label><input type="tel" class="f-input" placeholder="+62 812 3456 7890" /></div>
+                <div style="display:flex;gap:8px;">
+                  <button class="btn btn-primary btn-sm" onclick="saveProfile()">💾 Simpan</button>
+                  <button class="btn btn-outline btn-sm">Batal</button>
+                </div>
+              </div>
+
+              <div class="table-card" style="margin-bottom:16px;">
+                <div class="card-title" style="margin-bottom:12px;">🔗 Tautkan Telegram</div>
+                <p style="font-size:0.82rem;color:var(--muted);font-weight:700;margin-bottom:12px;">
+                  Buat kode dari web, lalu buka bot Telegram dan ketik /linked. Setelah itu kirim kode 6 digit yang muncul di bawah.
+                </p>
+                <div class="link-code-box" id="telegramLinkCodeBox">
+                  <span id="telegramLinkCode">Belum ada kode</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                  <button class="btn btn-primary btn-sm" onclick="createTelegramLinkCode()">🔑 Buat Kode Link</button>
+                  <button class="btn btn-outline btn-sm" onclick="loadDashboardData()">🔄 Cek Status Link</button>
+                </div>
+                <div class="topup-notice" id="telegramLinkHint" style="margin-top:10px;">Kode berlaku 10 menit dan hanya bisa dipakai satu kali.</div>
+              </div>
+
+              <form class="table-card" style="margin-bottom:16px;" onsubmit="event.preventDefault();showToast('Password berhasil diperbarui! 🔐','success')">
+                <div class="card-title" style="margin-bottom:16px;">🔐 Ganti Password</div>
+                <div class="f-group"><label class="f-label">Password Lama</label><input type="password" class="f-input" autocomplete="current-password" placeholder="Password lama" /></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div class="f-group"><label class="f-label">Password Baru</label><input type="password" class="f-input" autocomplete="new-password" placeholder="Min. 8 karakter" /></div>
+                  <div class="f-group"><label class="f-label">Konfirmasi</label><input type="password" class="f-input" autocomplete="new-password" placeholder="Ulangi" /></div>
+                </div>
+                <button type="submit" class="btn btn-danger btn-sm">🔐 Perbarui Password</button>
+              </form>
+            </div>
+          </div>
+        </div><!-- /page-profile -->
+
+
+        <!-- =============================================
+             PAGE: API KEY
+             ============================================= -->
+        <div class="page" id="page-api">
+          <div class="ph"><h1>🔑 API Key</h1><p>Integrasi layanan NokosHUB ke sistem kamu secara otomatis.</p></div>
+
+          <div class="table-card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:12px;">🔑 API Key Aktif</div>
+            <p style="font-size:0.82rem;color:var(--muted);font-weight:600;margin-bottom:4px;">Jangan bagikan API key ini. Gunakan environment variable.</p>
+            <div class="api-key-box">
+              <div class="api-key-txt" id="apiKeyTxt">nk_live_••••••••••••••••••••••••••••••••</div>
+              <button class="btn btn-outline btn-xs" onclick="toggleApi()" id="btnToggleApi">👁 Tampil</button>
+              <button class="btn btn-primary btn-xs" onclick="copyApiKey()">📋 Salin</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+              <button class="btn btn-danger btn-sm" onclick="showToast('API key direset! Key baru aktif 🔑','warning')">🔄 Reset Key</button>
+              <button class="btn btn-outline btn-sm" onclick="showToast('Dokumentasi segera tersedia! 📖','info')">📖 Dokumentasi</button>
+            </div>
+          </div>
+
+          <div class="table-card" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:14px;">📊 Statistik Penggunaan</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+              <div class="stat-card" style="background:#DBF4FF;" data-e="📡"><div class="stat-icon" style="background:#b3e5ff;">📡</div><div class="stat-val">247</div><div class="stat-label">Req Hari Ini</div></div>
+              <div class="stat-card" style="background:#D4FFF0;" data-e="📈"><div class="stat-icon" style="background:#a0ffd9;">📈</div><div class="stat-val">5.840</div><div class="stat-label">Total Request</div></div>
+              <div class="stat-card" style="background:#FFF3D4;" data-e="⚡"><div class="stat-icon" style="background:#ffe9a0;">⚡</div><div class="stat-val">10.000</div><div class="stat-label">Limit/Hari</div></div>
+            </div>
+            <div style="background:var(--bg-dark);border:var(--bw) solid var(--border);border-radius:var(--r-md);padding:16px;box-shadow:var(--shadow-s);">
+              <div style="font-size:0.68rem;font-weight:800;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">💻 Contoh Request cURL</div>
+              <pre style="color:var(--accent);font-size:0.78rem;overflow-x:auto;line-height:1.8;white-space:pre-wrap;">curl -X GET "https://api.nokoshub.com/v1/order" \
+  -H "Authorization: Bearer nk_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"service":"wa","country":"id"}'</pre>
+            </div>
+          </div>
+        </div><!-- /page-api -->
+
+      </div><!-- /page-wrap -->
+
+      <!-- =============================================
+           MOBILE BOTTOM NAV
+           ============================================= -->
+      <nav class="bottom-nav">
+        <div class="nav-item active" id="mn-home" onclick="nav('home')">
+          <div class="nav-icon-box"><i data-lucide="house"></i></div>
+          <div class="nav-label">Beranda</div>
+        </div>
+        <div class="nav-item" id="mn-orders" onclick="nav('orders')">
+          <div class="nav-icon-box" style="position:relative;">
+            <i data-lucide="clipboard-list"></i>
+            <div class="nav-dot"></div>
+          </div>
+          <div class="nav-label">Pesanan</div>
+        </div>
+        <!-- FAB: Beli OTP (CENTER) -->
+        <div class="nav-item nav-fab" id="mn-buy" onclick="nav('buy')">
+          <div class="nav-icon-box"><i data-lucide="smartphone"></i></div>
+          <div class="nav-label">Beli OTP</div>
+        </div>
+        <div class="nav-item" id="mn-topup" onclick="nav('topup')">
+          <div class="nav-icon-box"><i data-lucide="credit-card"></i></div>
+          <div class="nav-label">Top Up</div>
+        </div>
+        <div class="nav-item" id="mn-profile" onclick="nav('profile')">
+          <div class="nav-icon-box"><i data-lucide="circle-user"></i></div>
+          <div class="nav-label">Profil</div>
+        </div>
+      </nav>
+
+    </div><!-- /main -->
+  </div><!-- /layout -->
+
+
+  <!-- =============================================
+       MODAL: OTP DETAIL
+       ============================================= -->
+  <div class="modal-ov" id="modalOtp">
+    <div class="modal-box">
+      <div class="modal-x" onclick="closeModal('modalOtp')">✕</div>
+      <div class="modal-title">🎉 Kode OTP Kamu!</div>
+      <div class="modal-sub" id="otp-modal-sub">WhatsApp — Kode diterima</div>
+
+      <div class="otp-result-box">
+        <div class="otp-res-label">🔐 KODE OTP</div>
+        <div class="otp-res-code" id="otp-modal-code">857293</div>
+        <div class="otp-res-timer">⏱ Berlaku 5 menit setelah diterima</div>
+        <div class="otp-bar"><div class="otp-fill" id="otp-modal-fill"></div></div>
+      </div>
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-primary btn-lg" style="flex:1;" onclick="copyModalOtp()">📋 Salin Kode OTP</button>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('modalOtp')">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============================================
+       MODAL: TOPUP SUCCESS
+       ============================================= -->
+  <div class="modal-ov" id="modalTopupOk">
+    <div class="modal-box" style="text-align:center;">
+      <div style="font-size:4rem;margin-bottom:12px;animation:mascotFloat 2s ease-in-out infinite;">🎉</div>
+      <div class="modal-title">Invoice Top Up Dibuat</div>
+      <div class="modal-sub" id="topupOkMsg">Silakan bayar nominal unik sesuai invoice.</div>
+      <div class="invoice-countdown" id="topupInvoiceCountdown">Batas waktu: —</div>
+      <div style="background:linear-gradient(135deg,var(--primary),#7C3AED);border:var(--bw) solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--shadow);margin:16px 0;">
+        <div style="font-size:0.7rem;color:rgba(255,255,255,0.65);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Bayar</div>
+        <div style="font-family:var(--font-h);font-size:2rem;color:#fff;" id="topupOkBal">Rp 175.500</div>
+      </div>
+      <div class="invoice-qris-box">
+        <div class="invoice-qris-label">QRIS Payload</div>
+        <code id="topupQrisPayload">-</code>
+      </div>
+      <button class="btn btn-primary btn-lg btn-full" onclick="copyInvoicePayload()">📋 Salin QRIS Payload</button>
+      <button class="btn btn-outline btn-full" onclick="closeModal('modalTopupOk');nav('transactions');" style="margin-top:8px;">Lihat Riwayat</button>
+    </div>
+  </div>
+
+  <script src="assets/js/dashboard.js"></script>
+</body>
+</html>

@@ -524,6 +524,7 @@
     //  INVOICES PAGE
     // ═══════════════════════════════════════════════════════════════════════════
     let _invoicesData = [];
+    let invoiceCountdownTimer = null;
 
     window.loadInvoices = async function () {
         const body = document.getElementById('invoicesTableBody');
@@ -531,21 +532,34 @@
         document.getElementById('invoiceStats').style.display = 'none';
 
         try {
-            const res = await api('/api/admin/invoices');
+            const limit = document.getElementById('invoiceLimitFilter')?.value || '50';
+            const res = await api(`/api/admin/invoices?limit=${encodeURIComponent(limit)}`);
             if (!res.success) throw new Error(res.error || 'Gagal memuat invoice');
             _invoicesData = res.data || [];
             renderInvoiceStats(_invoicesData);
             renderInvoicesTable(applyInvoiceFilter(_invoicesData));
+            startInvoiceCountdownTimer();
         } catch (err) {
             body.innerHTML = errorHTML(err.message);
         }
     };
 
+    function getInvoiceStatus(invoice) {
+        if (
+            invoice.status === 'PENDING' &&
+            invoice.expiredAt &&
+            new Date(invoice.expiredAt).getTime() <= Date.now()
+        ) {
+            return 'EXPIRED';
+        }
+        return invoice.status;
+    }
+
     function applyInvoiceFilter(data) {
         const statusFilter = document.getElementById('invoiceStatusFilter').value;
         const q = document.getElementById('invoiceSearchInput').value.toLowerCase();
         return data.filter(i => {
-            const matchStatus = !statusFilter || i.status === statusFilter;
+            const matchStatus = !statusFilter || getInvoiceStatus(i) === statusFilter;
             const matchSearch = !q ||
                 (i.user?.telegramId || '').includes(q) ||
                 (i.id || '').toLowerCase().includes(q);
@@ -554,19 +568,34 @@
     }
 
     window.filterInvoicesTable = function () {
+        renderInvoiceStats(_invoicesData);
         renderInvoicesTable(applyInvoiceFilter(_invoicesData));
     };
 
     function renderInvoiceStats(data) {
         const stats = document.getElementById('invoiceStats');
-        const paid = data.filter(i => i.status === 'PAID');
+        const paid = data.filter(i => getInvoiceStatus(i) === 'PAID');
         const revenue = paid.reduce((s, i) => s + (i.baseAmount || i.amount), 0);
         document.getElementById('inv-total').textContent = data.length;
         document.getElementById('inv-paid').textContent = paid.length;
-        document.getElementById('inv-pending').textContent = data.filter(i => i.status === 'PENDING').length;
-        document.getElementById('inv-expired').textContent = data.filter(i => i.status === 'EXPIRED').length;
+        document.getElementById('inv-pending').textContent = data.filter(i => getInvoiceStatus(i) === 'PENDING').length;
+        document.getElementById('inv-expired').textContent = data.filter(i => getInvoiceStatus(i) === 'EXPIRED').length;
         document.getElementById('inv-revenue').textContent = formatRupiah(revenue);
         stats.style.display = 'flex';
+    }
+
+    function invoiceExpiryText(invoice) {
+        if (!invoice.expiredAt) return '—';
+        const status = getInvoiceStatus(invoice);
+        if (status === 'PAID') return 'Paid';
+        if (status === 'EXPIRED') return 'Expired';
+
+        const remainingMs = new Date(invoice.expiredAt).getTime() - Date.now();
+        if (remainingMs <= 0) return 'Expired';
+
+        const minutes = Math.floor(remainingMs / 60000);
+        const seconds = Math.floor((remainingMs % 60000) / 1000);
+        return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
     }
 
     function renderInvoicesTable(data) {
@@ -577,20 +606,34 @@
             <table class="data-table">
                 <thead><tr>
                     <th>ID</th><th>User</th><th>Jumlah Asli</th><th>Jumlah Final</th>
-                    <th>Status</th><th>Dibuat</th><th>Dibayar</th>
+                    <th>Status</th><th>Expired</th><th>Dibuat</th><th>Dibayar</th>
                 </tr></thead>
                 <tbody>
-                    ${data.map(i => `<tr>
+                    ${data.map(i => {
+                        const status = getInvoiceStatus(i);
+                        return `<tr>
                         <td>${idChip(i.id)}</td>
                         <td class="mono text-indigo">${i.user?.telegramId || '—'}</td>
                         <td class="mono">${formatRupiahFull(i.baseAmount)}</td>
-                        <td class="mono ${i.status === 'PAID' ? 'text-emerald fw-600' : 'text-amber'}">${formatRupiahFull(i.amount)}</td>
-                        <td>${statusBadge(i.status)}</td>
+                        <td class="mono ${status === 'PAID' ? 'text-emerald fw-600' : 'text-amber'}">${formatRupiahFull(i.amount)}</td>
+                        <td>${statusBadge(status)}</td>
+                        <td class="text-sm ${status === 'PENDING' ? 'text-amber' : status === 'EXPIRED' ? 'text-muted' : 'text-emerald'}">${invoiceExpiryText(i)}</td>
                         <td class="text-muted text-sm">${formatDateShort(i.createdAt)}</td>
                         <td class="${i.paidAt ? 'text-emerald' : 'text-muted'} text-sm">${i.paidAt ? formatDateShort(i.paidAt) : '—'}</td>
-                    </tr>`).join('')}
+                    </tr>`;
+                    }).join('')}
                 </tbody>
             </table>`;
+    }
+
+    function startInvoiceCountdownTimer() {
+        if (invoiceCountdownTimer) return;
+        invoiceCountdownTimer = setInterval(() => {
+            const invoicePageActive = document.getElementById('page-invoices')?.classList.contains('active');
+            if (!invoicePageActive || !_invoicesData.some(i => i.status === 'PENDING' && i.expiredAt)) return;
+            renderInvoiceStats(_invoicesData);
+            renderInvoicesTable(applyInvoiceFilter(_invoicesData));
+        }, 1000);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

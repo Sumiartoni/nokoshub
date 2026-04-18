@@ -10,10 +10,12 @@ import { adminRoutes } from '../modules/routes/admin.routes';
 import { backofficeRoutes } from '../modules/routes/backoffice.routes';
 import { webhookRoutes, internalRoutes } from '../modules/routes/webhook.routes';
 import { serviceService } from '../modules/services/service.service';
+import { paymentService } from '../modules/payments/payment.service';
 import logger from '../utils/logger';
 
 let providerSyncInterval: NodeJS.Timeout | null = null;
 let providerSyncStartupTimer: NodeJS.Timeout | null = null;
+let invoiceExpiryInterval: NodeJS.Timeout | null = null;
 
 export async function buildServer() {
     const app = Fastify({
@@ -145,11 +147,13 @@ export async function startServer() {
         logger.info(`🚀 Server running on port ${config.PORT}`);
 
         startProviderSyncScheduler();
+        startInvoiceExpiryScheduler();
 
         // Graceful shutdown
         const shutdown = async () => {
             logger.info('Shutting down...');
             stopProviderSyncScheduler();
+            stopInvoiceExpiryScheduler();
             await app.close();
             await redisConnection.quit();
             process.exit(0);
@@ -165,6 +169,27 @@ export async function startServer() {
 
 if (require.main === module) {
     startServer();
+}
+
+function startInvoiceExpiryScheduler() {
+    if (invoiceExpiryInterval) return;
+
+    paymentService.expireOverdueInvoices()
+        .catch(err => logger.warn({ err }, 'Initial invoice expiry sweep failed'));
+
+    invoiceExpiryInterval = setInterval(() => {
+        paymentService.expireOverdueInvoices()
+            .catch(err => logger.warn({ err }, 'Scheduled invoice expiry sweep failed'));
+    }, 60 * 1000);
+
+    logger.info('Invoice expiry scheduler started');
+}
+
+function stopInvoiceExpiryScheduler() {
+    if (invoiceExpiryInterval) {
+        clearInterval(invoiceExpiryInterval);
+        invoiceExpiryInterval = null;
+    }
 }
 
 function startProviderSyncScheduler() {
