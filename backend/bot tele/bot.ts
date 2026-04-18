@@ -330,7 +330,7 @@ function scheduleBotCommandsSetup(bot: TelegramBot, attempt = 1) {
             const retryMs = Math.min(TELEGRAM_COMMANDS_RETRY_MAX_MS, attempt * 15000);
             logger.warn(
                 {
-                    ...summarizeTelegramError(err, false),
+                    ...summarizeTelegramNetworkIssue(err),
                     attempt,
                     retryMs,
                 },
@@ -345,7 +345,15 @@ function logTelegramNetworkWarning(err: any, message: string) {
     if (now - lastTelegramNetworkWarningAt < TELEGRAM_NETWORK_WARNING_INTERVAL_MS) return;
 
     lastTelegramNetworkWarningAt = now;
-    logger.warn(summarizeTelegramError(err, false), message);
+    logger.warn(summarizeTelegramNetworkIssue(err), message);
+}
+
+function summarizeTelegramNetworkIssue(err: any) {
+    return {
+        code: 'TELEGRAM_NETWORK_TIMEOUT',
+        retryable: true,
+        networkCodes: extractTelegramNetworkCodes(err),
+    };
 }
 
 function summarizeTelegramError(err: any, includeStack = true) {
@@ -410,6 +418,43 @@ function collectTelegramErrorText(err: any): string {
 
     visit(err);
     return parts.filter(Boolean).join(' ');
+}
+
+function extractTelegramNetworkCodes(err: any): string[] {
+    const codes = new Set<string>();
+
+    function visit(value: any, depth = 0) {
+        if (!value || depth > 3) return;
+
+        if (Array.isArray(value)) {
+            value.forEach((item) => visit(item, depth + 1));
+            return;
+        }
+
+        if (typeof value !== 'object') return;
+
+        const code = String(value.code ?? '').toUpperCase();
+        if (
+            code &&
+            code !== 'EFATAL' &&
+            [
+                'ETIMEDOUT',
+                'ESOCKETTIMEDOUT',
+                'ECONNRESET',
+                'ECONNREFUSED',
+                'ENOTFOUND',
+                'EAI_AGAIN',
+            ].includes(code)
+        ) {
+            codes.add(code);
+        }
+
+        visit(value.cause, depth + 1);
+        visit(value.errors, depth + 1);
+    }
+
+    visit(err);
+    return [...codes];
 }
 
 function redactTelegramToken(value: unknown): unknown {
