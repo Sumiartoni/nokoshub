@@ -33,9 +33,6 @@ export const serviceService = {
             let servicesCount = 0;
             let pricesCount = 0;
             const sellPriceMultiplier = await pricingService.getSellPriceMultiplier();
-            const seenServiceCodes: string[] = [];
-            const seenCountryCodes = new Set<string>();
-
             for (const svc of services) {
                 if (!svc.service_code || !svc.service_name) continue;
 
@@ -46,7 +43,6 @@ export const serviceService = {
                     update: { name: svc.service_name, isActive: true },
                     create: { name: svc.service_name, serviceCode, isActive: true },
                 });
-                seenServiceCodes.push(serviceCode);
                 servicesCount++;
 
                 // Fetch countries for this service
@@ -61,7 +57,6 @@ export const serviceService = {
                         update: { name: ctr.name, isActive: true },
                         create: { name: ctr.name, countryCode, isActive: true },
                     });
-                    seenCountryCodes.add(countryCode);
 
                     const validPrices = ctr.pricelist
                         .map((price) => normalizePriceForSync(
@@ -114,9 +109,6 @@ export const serviceService = {
                     }
                 }
             }
-
-            await deactivateMissingServices(seenServiceCodes);
-            await deactivateMissingCountries([...seenCountryCodes]);
 
             logger.info({ servicesCount, pricesCount }, 'Provider sync completed');
             return { services: servicesCount, prices: pricesCount };
@@ -224,24 +216,6 @@ function normalizePriceForSync(
         providerPriceUsd,
         sellPrice,
     };
-}
-
-async function deactivateMissingServices(seenServiceCodes: string[]) {
-    if (!seenServiceCodes.length) return;
-
-    await prisma.service.updateMany({
-        where: { serviceCode: { notIn: seenServiceCodes } },
-        data: { isActive: false },
-    });
-}
-
-async function deactivateMissingCountries(seenCountryCodes: string[]) {
-    if (!seenCountryCodes.length) return;
-
-    await prisma.country.updateMany({
-        where: { countryCode: { notIn: seenCountryCodes } },
-        data: { isActive: false },
-    });
 }
 
 function sqlString(value: string): string {

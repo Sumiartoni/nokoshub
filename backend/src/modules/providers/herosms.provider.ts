@@ -193,29 +193,13 @@ class HeroSMSProvider {
     async getServices(): Promise<ProviderService[]> {
         try {
             const res = await this.request('getServicesList');
-            const rawServices = Array.isArray(res.data?.services)
-                ? res.data.services
-                : Object.entries(isRecord(res.data?.services) ? res.data.services : {});
-
-            const services = rawServices
-                .map((item: any): ProviderService | null => {
-                    if (Array.isArray(item)) {
-                        const [code, value] = item;
-                        const name = isRecord(value) ? value.name : value;
-                        return code && name ? { service_code: String(code), service_name: String(name).trim() } : null;
-                    }
-
-                    const serviceCode = toStringValue(item.code ?? item.service ?? item.id);
-                    const serviceName = toStringValue(item.name ?? item.title ?? item.label ?? serviceCode);
-                    if (!serviceCode || !serviceName) return null;
-                    return { service_code: serviceCode, service_name: serviceName.trim() };
-                })
-                .filter((item: ProviderService | null): item is ProviderService => Boolean(item));
+            const services = normalizeServicesResponse(res.data);
 
             if (!services.length) {
                 logger.warn({ body: res.data }, 'No HeroSMS services returned');
             }
 
+            logger.info({ count: services.length }, 'HeroSMS services loaded');
             return services;
         } catch (err: any) {
             logger.error({ err: this.errorSummary(err) }, 'HeroSMS getServices failed');
@@ -469,3 +453,59 @@ class HeroSMSProvider {
 }
 
 export const heroSMSProvider = new HeroSMSProvider();
+
+function normalizeServicesResponse(body: unknown): ProviderService[] {
+    const servicesByCode = new Map<string, ProviderService>();
+
+    const roots: unknown[] = [body];
+    if (isRecord(body)) {
+        roots.push(body.services, body.data);
+        if (isRecord(body.data)) roots.push(body.data.services);
+    }
+
+    for (const root of roots) {
+        for (const service of normalizeServicesRoot(root)) {
+            servicesByCode.set(service.service_code, service);
+        }
+    }
+
+    return [...servicesByCode.values()].sort((a, b) => a.service_name.localeCompare(b.service_name));
+}
+
+function normalizeServicesRoot(root: unknown): ProviderService[] {
+    if (!root) return [];
+
+    if (Array.isArray(root)) {
+        return root
+            .map((item): ProviderService | null => {
+                if (Array.isArray(item)) return normalizeServiceEntry(item[0], item[1]);
+                if (isRecord(item)) return normalizeServiceEntry(item.code ?? item.service ?? item.id, item);
+                return null;
+            })
+            .filter((item: ProviderService | null): item is ProviderService => Boolean(item));
+    }
+
+    if (isRecord(root)) {
+        return Object.entries(root)
+            .map(([code, value]) => normalizeServiceEntry(code, value))
+            .filter((item: ProviderService | null): item is ProviderService => Boolean(item));
+    }
+
+    return [];
+}
+
+function normalizeServiceEntry(codeValue: unknown, value: unknown): ProviderService | null {
+    const serviceCode = toStringValue(codeValue);
+    if (!serviceCode || ['status', 'msg', 'message', 'error'].includes(serviceCode.toLowerCase())) return null;
+
+    const serviceName = isRecord(value)
+        ? toStringValue(value.name ?? value.title ?? value.label ?? value.service ?? serviceCode)
+        : toStringValue(value);
+
+    if (!serviceName) return null;
+
+    return {
+        service_code: serviceCode,
+        service_name: serviceName.trim(),
+    };
+}
