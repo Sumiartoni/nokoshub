@@ -7,8 +7,8 @@ import logger from '../src/utils/logger';
 import { formatRupiah } from '../src/utils/helpers';
 
 const BASE_URL = `http://127.0.0.1:${config.PORT}`;
-const TELEGRAM_POLLING_TIMEOUT_SECONDS = 50;
-const TELEGRAM_REQUEST_TIMEOUT_MS = 75000;
+const TELEGRAM_POLLING_TIMEOUT_SECONDS = Math.max(5, config.TELEGRAM_POLLING_TIMEOUT_SECONDS);
+const TELEGRAM_REQUEST_TIMEOUT_MS = Math.max(10000, config.TELEGRAM_REQUEST_TIMEOUT_MS);
 const TELEGRAM_NETWORK_WARNING_INTERVAL_MS = 60000;
 const TELEGRAM_COMMANDS_RETRY_MAX_MS = 300000;
 
@@ -63,6 +63,15 @@ function clearSession(chatId: number) {
 // ─── Bot Factory ──────────────────────────────────────────────────────────────
 
 export function createBot(): TelegramBot {
+    const requestOptions: any = {
+        timeout: TELEGRAM_REQUEST_TIMEOUT_MS,
+    };
+
+    if (config.TELEGRAM_FORCE_IPV4) {
+        requestOptions.family = 4;
+        requestOptions.agentOptions = { family: 4 };
+    }
+
     const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {
         polling: {
             interval: 3000,
@@ -71,10 +80,7 @@ export function createBot(): TelegramBot {
                 timeout: TELEGRAM_POLLING_TIMEOUT_SECONDS,
             },
         },
-        request: {
-            timeout: TELEGRAM_REQUEST_TIMEOUT_MS,
-            forever: true,
-        } as any,
+        request: requestOptions,
     });
 
     bot.on('polling_error', (err: any) => {

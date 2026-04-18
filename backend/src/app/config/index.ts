@@ -14,6 +14,11 @@ const envSchema = z.object({
     REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
     TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
+    TELEGRAM_FORCE_IPV4: z.string().default('true').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
+    TELEGRAM_POLLING_TIMEOUT_SECONDS: z.string().default('25').transform(Number),
+    TELEGRAM_REQUEST_TIMEOUT_MS: z.string().default('35000').transform(Number),
 
     HERO_SMS_API_KEY: z.string().min(1, 'HERO_SMS_API_KEY is required'),
     HERO_SMS_BASE_URL: z.string().url().default('https://hero-sms.com/stubs/handler_api.php'),
