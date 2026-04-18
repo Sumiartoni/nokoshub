@@ -47,7 +47,29 @@ function clearSession(chatId: number) {
 // ─── Bot Factory ──────────────────────────────────────────────────────────────
 
 export function createBot(): TelegramBot {
-    const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, { polling: true });
+    const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {
+        polling: {
+            interval: 1000,
+            autoStart: true,
+            params: {
+                timeout: 10,
+            },
+        },
+    });
+
+    bot.on('polling_error', (err: any) => {
+        logger.error(
+            {
+                code: err?.code,
+                message: err?.message,
+                response: err?.response?.body ?? err?.response?.data,
+                cause: err?.cause,
+                errors: err?.errors,
+                stack: err?.stack,
+            },
+            'Telegram polling error'
+        );
+    });
 
     // Set Telegram Bot Commands Menu (the blue Menu button in the chat input bar)
     bot.setMyCommands([
@@ -58,7 +80,14 @@ export function createBot(): TelegramBot {
         { command: '/balance', description: 'Cek sisa saldo' },
         { command: '/history', description: 'Riwayat transaksi' },
         { command: '/help', description: 'Bantuan & Panduan' }
-    ]).catch(err => logger.error({ err: err.message }, 'Failed to set bot commands'));
+    ]).catch((err: any) => logger.error({
+        code: err?.code,
+        message: err?.message,
+        response: err?.response?.body ?? err?.response?.data,
+        cause: err?.cause,
+        errors: err?.errors,
+        stack: err?.stack,
+    }, 'Failed to set bot commands'));
 
     // ─── OTP Notification handler (from worker) ───────────────────────────────
     setNotifyHandler(async (data: any) => {
