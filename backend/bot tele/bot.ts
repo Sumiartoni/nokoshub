@@ -7,6 +7,8 @@ import logger from '../src/utils/logger';
 import { formatRupiah } from '../src/utils/helpers';
 
 const BASE_URL = `http://127.0.0.1:${config.PORT}`;
+const TELEGRAM_POLLING_TIMEOUT_SECONDS = 50;
+const TELEGRAM_REQUEST_TIMEOUT_MS = 75000;
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
@@ -49,26 +51,25 @@ function clearSession(chatId: number) {
 export function createBot(): TelegramBot {
     const bot = new TelegramBot(config.TELEGRAM_BOT_TOKEN, {
         polling: {
-            interval: 1000,
+            interval: 3000,
             autoStart: true,
             params: {
-                timeout: 10,
+                timeout: TELEGRAM_POLLING_TIMEOUT_SECONDS,
             },
         },
+        request: {
+            timeout: TELEGRAM_REQUEST_TIMEOUT_MS,
+            forever: true,
+        } as any,
     });
 
     bot.on('polling_error', (err: any) => {
-        logger.error(
-            {
-                code: err?.code,
-                message: err?.message,
-                response: err?.response?.body ?? err?.response?.data,
-                cause: err?.cause,
-                errors: err?.errors,
-                stack: err?.stack,
-            },
-            'Telegram polling error'
-        );
+        const summary = summarizeTelegramError(err);
+        const log = summary.code === 'ETIMEDOUT' || summary.code === 'ESOCKETTIMEDOUT'
+            ? logger.warn.bind(logger)
+            : logger.error.bind(logger);
+
+        log(summary, 'Telegram polling error');
     });
 
     // Set Telegram Bot Commands Menu (the blue Menu button in the chat input bar)
@@ -80,14 +81,7 @@ export function createBot(): TelegramBot {
         { command: '/balance', description: 'Cek sisa saldo' },
         { command: '/history', description: 'Riwayat transaksi' },
         { command: '/help', description: 'Bantuan & Panduan' }
-    ]).catch((err: any) => logger.error({
-        code: err?.code,
-        message: err?.message,
-        response: err?.response?.body ?? err?.response?.data,
-        cause: err?.cause,
-        errors: err?.errors,
-        stack: err?.stack,
-    }, 'Failed to set bot commands'));
+    ]).catch((err: any) => logger.error(summarizeTelegramError(err), 'Failed to set bot commands'));
 
     // ─── OTP Notification handler (from worker) ───────────────────────────────
     setNotifyHandler(async (data: any) => {
@@ -316,6 +310,40 @@ export function createBot(): TelegramBot {
 
     logger.info('🤖 Telegram bot started');
     return bot;
+}
+
+function summarizeTelegramError(err: any) {
+    return {
+        code: err?.code,
+        message: redactTelegramToken(err?.message),
+        response: redactTelegramToken(err?.response?.body ?? err?.response?.data),
+        cause: err?.cause
+            ? {
+                code: err.cause.code,
+                message: redactTelegramToken(err.cause.message),
+            }
+            : undefined,
+        stack: redactTelegramToken(err?.stack),
+    };
+}
+
+function redactTelegramToken(value: unknown): unknown {
+    if (typeof value === 'string') {
+        return value.replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot<redacted>');
+    }
+
+    if (Array.isArray(value)) return value.map(redactTelegramToken);
+
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+                key,
+                redactTelegramToken(item),
+            ])
+        );
+    }
+
+    return value;
 }
 
 // ─── Helper UI Functions ──────────────────────────────────────────────────────
