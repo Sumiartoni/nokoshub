@@ -194,13 +194,37 @@ class HeroSMSProvider {
         try {
             const res = await this.request('getServicesList');
             const services = normalizeServicesResponse(res.data);
+            const servicesByCode = new Map(services.map((service) => [service.service_code, service]));
 
-            if (!services.length) {
+            try {
+                const topCountriesRes = await this.request('getTopCountriesByService');
+                const serviceCodes = extractServiceCodesFromAvailability(topCountriesRes.data);
+                for (const serviceCode of serviceCodes) {
+                    if (!servicesByCode.has(serviceCode)) {
+                        servicesByCode.set(serviceCode, {
+                            service_code: serviceCode,
+                            service_name: formatFallbackServiceName(serviceCode),
+                        });
+                    }
+                }
+                logger.info(
+                    { listCount: services.length, availabilityCount: serviceCodes.length, totalCount: servicesByCode.size },
+                    'HeroSMS services merged from list and availability'
+                );
+            } catch (err: any) {
+                logger.warn({ err: this.errorSummary(err) }, 'HeroSMS service availability fallback failed');
+            }
+
+            const mergedServices = [...servicesByCode.values()].sort((a, b) =>
+                a.service_name.localeCompare(b.service_name)
+            );
+
+            if (!mergedServices.length) {
                 logger.warn({ body: res.data }, 'No HeroSMS services returned');
             }
 
-            logger.info({ count: services.length }, 'HeroSMS services loaded');
-            return services;
+            logger.info({ count: mergedServices.length }, 'HeroSMS services loaded');
+            return mergedServices;
         } catch (err: any) {
             logger.error({ err: this.errorSummary(err) }, 'HeroSMS getServices failed');
             return [];
@@ -508,4 +532,80 @@ function normalizeServiceEntry(codeValue: unknown, value: unknown): ProviderServ
         service_code: serviceCode,
         service_name: serviceName.trim(),
     };
+}
+
+function extractServiceCodesFromAvailability(body: unknown): string[] {
+    const serviceCodes = new Set<string>();
+
+    function visit(node: unknown) {
+        if (!node) return;
+
+        if (Array.isArray(node)) {
+            for (const item of node) visit(item);
+            return;
+        }
+
+        if (!isRecord(node)) return;
+
+        for (const [key, value] of Object.entries(node)) {
+            if (isLikelyServiceCode(key) && isAvailabilityValue(value)) {
+                serviceCodes.add(key);
+                continue;
+            }
+
+            if (['data', 'services', 'result', 'results'].includes(key.toLowerCase())) {
+                visit(value);
+            } else if (isRecord(value) || Array.isArray(value)) {
+                visit(value);
+            }
+        }
+    }
+
+    visit(body);
+    return [...serviceCodes].sort();
+}
+
+function isAvailabilityValue(value: unknown): boolean {
+    if (Array.isArray(value)) return true;
+    if (!isRecord(value)) return false;
+
+    return [
+        'cost',
+        'count',
+        'price',
+        'amount',
+        'retail_price',
+        'physicalCount',
+        'physicalTotalCount',
+        'physicalPriceMap',
+        'quantity',
+        'available',
+    ].some((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function isLikelyServiceCode(value: string): boolean {
+    const lowered = value.toLowerCase();
+    if ([
+        'status',
+        'msg',
+        'message',
+        'error',
+        'data',
+        'services',
+        'result',
+        'results',
+        'country',
+        'price',
+        'cost',
+        'count',
+        'amount',
+        'quantity',
+        'available',
+    ].includes(lowered)) return false;
+
+    return /^[a-z][a-z0-9_]{1,15}$/i.test(value);
+}
+
+function formatFallbackServiceName(serviceCode: string): string {
+    return serviceCode.toUpperCase();
 }
