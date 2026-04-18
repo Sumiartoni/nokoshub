@@ -634,6 +634,19 @@ input, textarea, select { user-select: text; }
 .fc.active { background:var(--primary); color:#fff; }
 
 /* Country selection */
+.country-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.country-search {
+  flex: 1;
+  min-width: min(260px, 100%);
+  max-width: 420px;
+}
 .country-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -656,6 +669,23 @@ input, textarea, select { user-select: text; }
 .country-flag { font-size: 1.5rem; }
 .country-name { font-weight: 800; font-size: 0.85rem; }
 .country-qty  { font-size: 0.68rem; color: var(--muted); font-weight: 600; }
+.country-price {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-full);
+  background: #EBF4FF;
+  color: var(--primary);
+  font-family: var(--font-h);
+  font-size: 0.76rem;
+  box-shadow: var(--shadow-xs);
+}
+.country-meta {
+  min-width: 0;
+}
 
 /* OTP Waiting */
 .otp-waiting-card {

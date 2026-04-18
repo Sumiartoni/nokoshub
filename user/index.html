@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260419-3" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260419-4" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -356,7 +356,13 @@
                 <span id="selSvcPrice" style="font-family:var(--font-h);color:var(--primary);">Rp 1.200</span>
               </div>
             </div>
-            <div style="font-family:var(--font-h);font-size:1.1rem;margin-bottom:14px;">🌍 Pilih Negara</div>
+            <div class="country-toolbar">
+              <div style="font-family:var(--font-h);font-size:1.1rem;">🌍 Pilih Negara</div>
+              <div class="search-wrap country-search">
+                <span>🔍</span>
+                <input type="text" id="countrySearch" placeholder="Cari negara..." oninput="filterCountries()" />
+              </div>
+            </div>
             <div class="country-grid" id="countryGrid"><!-- JS --></div>
           </div>
 
@@ -845,6 +851,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260419-3"></script>
+  <script src="assets/js/dashboard.js?v=20260419-4"></script>
 </body>
 </html>

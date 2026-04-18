@@ -292,7 +292,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const query = req.query as { serviceId?: string };
         let countries;
         if (query.serviceId) {
-            countries = await serviceService.getCountriesByService(query.serviceId);
+            countries = await serviceService.getCountriesWithPriceByService(query.serviceId);
         } else {
             countries = await serviceService.getCountries();
         }

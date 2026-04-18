@@ -542,10 +542,14 @@ async function selectSvc(id) {
   if (!s) return;
   S.buy.svc = s;
   S.buy.countries = [];
+  S.buy.country = null;
+  S.buy.price = null;
 
   set('selSvcIcon', s.e);
   set('selSvcName', s.n);
   set('selSvcPrice', s.p ? `Mulai ${FMT(s.p)}` : 'Cek harga');
+  const countrySearch = document.getElementById('countrySearch');
+  if (countrySearch) countrySearch.value = '';
 
   const grid = document.getElementById('countryGrid');
   if (grid) grid.innerHTML = loadingBlock('Mengambil negara dari backend...');
@@ -568,19 +572,32 @@ async function selectSvc(id) {
 function renderCountries() {
   const grid = document.getElementById('countryGrid');
   if (!grid) return;
-  if (!S.buy.countries.length) {
+  const q = (document.getElementById('countrySearch')?.value || '').trim().toLowerCase();
+  const countries = S.buy.countries.filter(c => {
+    if (!q) return true;
+    return [c.n, c.code, c.countryCode, c.minSellPrice ? String(c.minSellPrice) : '']
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(q));
+  });
+
+  if (!countries.length) {
     grid.innerHTML = emptyBlock('🌍', 'Negara belum tersedia', 'Coba sync provider dari backoffice lalu refresh dashboard.');
     return;
   }
-  grid.innerHTML = S.buy.countries.map(c => `
-    <div class="country-card" onclick="selectCountry(${jsArg(c.id)}, this)">
+  grid.innerHTML = countries.map(c => `
+    <div class="country-card ${S.buy.country?.id === c.id ? 'selected' : ''}" onclick="selectCountry(${jsArg(c.id)}, this)">
       <div class="country-flag">${c.f}</div>
-      <div>
+      <div class="country-meta">
         <div class="country-name">${esc(c.n)}</div>
         <div class="country-qty">${esc(c.code || c.countryCode || '-')}</div>
+        <div class="country-price">${c.minSellPrice ? FMT(c.minSellPrice) : 'Cek harga'}</div>
       </div>
     </div>
   `).join('');
+}
+
+function filterCountries() {
+  renderCountries();
 }
 
 async function selectCountry(countryId, el) {
@@ -600,10 +617,16 @@ async function selectCountry(countryId, el) {
   el?.classList.add('loading');
 
   try {
-    const prices = await apiFetch('/prices', { params: { serviceId: svc.id, countryId: country.id } });
-    const price = (Array.isArray(prices) ? prices : [])
-      .filter(p => p.isActive !== false)
-      .sort((a, b) => Number(a.sellPrice) - Number(b.sellPrice))[0];
+    let price = country.priceId && country.minSellPrice
+      ? { id: country.priceId, sellPrice: country.minSellPrice, isActive: true }
+      : null;
+
+    if (!price) {
+      const prices = await apiFetch('/prices', { params: { serviceId: svc.id, countryId: country.id } });
+      price = (Array.isArray(prices) ? prices : [])
+        .filter(p => p.isActive !== false)
+        .sort((a, b) => Number(a.sellPrice) - Number(b.sellPrice))[0];
+    }
 
     if (!price) throw new Error('Harga untuk negara ini belum tersedia');
     S.buy.price = { id: price.id, sellPrice: Number(price.sellPrice || 0) };
@@ -1162,6 +1185,9 @@ function mapCountries(countries) {
       f: flagForCountry(country.name, country.countryCode),
       n: country.name || country.countryCode || 'Negara',
       code: country.countryCode || '-',
+      minSellPrice: Number(country.minSellPrice || 0),
+      priceId: country.priceId || '',
+      priceCount: Number(country.priceCount || 0),
     }))
     .sort((a, b) => a.n.localeCompare(b.n));
 }

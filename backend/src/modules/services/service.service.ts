@@ -136,6 +136,52 @@ export const serviceService = {
         return prices.map((p) => p.country).filter((c) => c.isActive).sort((a, b) => a.id.localeCompare(b.id));
     },
 
+    /** List countries that have prices for a given service, including cheapest sell price */
+    async getCountriesWithPriceByService(serviceId: string) {
+        const prices = await prisma.price.findMany({
+            where: {
+                serviceId,
+                isActive: true,
+                country: { isActive: true },
+            },
+            include: { country: true },
+            orderBy: [{ countryId: 'asc' }, { sellPrice: 'asc' }],
+        });
+
+        const countries = new Map<string, {
+            id: string;
+            name: string;
+            countryCode: string;
+            isActive: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            minSellPrice: number;
+            priceId: string;
+            priceCount: number;
+        }>();
+
+        for (const price of prices) {
+            const existing = countries.get(price.countryId);
+            if (!existing) {
+                countries.set(price.countryId, {
+                    ...price.country,
+                    minSellPrice: price.sellPrice,
+                    priceId: price.id,
+                    priceCount: 1,
+                });
+                continue;
+            }
+
+            existing.priceCount += 1;
+            if (price.sellPrice < existing.minSellPrice) {
+                existing.minSellPrice = price.sellPrice;
+                existing.priceId = price.id;
+            }
+        }
+
+        return [...countries.values()].sort((a, b) => a.name.localeCompare(b.name));
+    },
+
     /** List all active countries */
     async getCountries() {
         return prisma.country.findMany({
