@@ -57,7 +57,7 @@ services:
       REDIS_URL: redis://redis:6379
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
-      HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/api/v1}
+      HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/stubs/handler_api.php}
       HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       QRIS_STATIC_STRING: ${QRIS_STATIC_STRING}
       PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET}
@@ -95,7 +95,7 @@ services:
       DATABASE_URL: postgresql://nokos:nokos_password@postgres:5432/nokos_db
       REDIS_URL: redis://redis:6379
       HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
-      HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/api/v1}
+      HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/stubs/handler_api.php}
       HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
       OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}

@@ -4,10 +4,10 @@ import { config } from './src/app/config';
 async function probe() {
     const key = config.HERO_SMS_API_KEY;
     const targets = [
-        { name: 'Bearer Auth, /services', url: `${config.HERO_SMS_BASE_URL}/services`, headers: { Authorization: `Bearer ${key}` } },
-        { name: 'X-API-Key Auth, /services', url: `${config.HERO_SMS_BASE_URL}/services`, headers: { 'X-API-Key': key } },
-        { name: 'Query Auth, /services', url: `${config.HERO_SMS_BASE_URL}/services?api_key=${key}`, headers: {} },
-        { name: 'Query Auth, /balance', url: `${config.HERO_SMS_BASE_URL}/balance?api_key=${key}`, headers: {} }
+        { name: 'Services list', url: `${config.HERO_SMS_BASE_URL}?api_key=${key}&action=getServicesList`, headers: {} },
+        { name: 'Countries', url: `${config.HERO_SMS_BASE_URL}?api_key=${key}&action=getCountries`, headers: {} },
+        { name: 'Balance', url: `${config.HERO_SMS_BASE_URL}?api_key=${key}&action=getBalance`, headers: {} },
+        { name: 'WhatsApp prices', url: `${config.HERO_SMS_BASE_URL}?api_key=${key}&action=getPrices&service=wa`, headers: {} }
     ];
 
     for (const t of targets) {

@@ -5,7 +5,7 @@ async function testV1() {
     console.log('Testing HeroSMS API format...');
 
     try {
-        const url = `${config.HERO_SMS_BASE_URL}/services?api_key=${config.HERO_SMS_API_KEY}`;
+        const url = `${config.HERO_SMS_BASE_URL}?api_key=${config.HERO_SMS_API_KEY}&action=getServicesList`;
         console.log(`Calling: ${url}`);
         const res = await axios.get(url);
 
