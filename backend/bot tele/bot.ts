@@ -9,6 +9,20 @@ import { formatRupiah } from '../src/utils/helpers';
 const BASE_URL = `http://127.0.0.1:${config.PORT}`;
 const TELEGRAM_POLLING_TIMEOUT_SECONDS = 50;
 const TELEGRAM_REQUEST_TIMEOUT_MS = 75000;
+const TELEGRAM_NETWORK_WARNING_INTERVAL_MS = 60000;
+const TELEGRAM_COMMANDS_RETRY_MAX_MS = 300000;
+
+const BOT_COMMANDS = [
+    { command: '/start', description: 'Mulai bot NokosHUB' },
+    { command: '/menu', description: 'Buka menu utama' },
+    { command: '/buy', description: 'Beli nomor virtual' },
+    { command: '/deposit', description: 'Isi saldo' },
+    { command: '/balance', description: 'Cek sisa saldo' },
+    { command: '/history', description: 'Riwayat transaksi' },
+    { command: '/help', description: 'Bantuan & Panduan' },
+];
+
+let lastTelegramNetworkWarningAt = 0;
 
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
@@ -64,24 +78,16 @@ export function createBot(): TelegramBot {
     });
 
     bot.on('polling_error', (err: any) => {
-        const summary = summarizeTelegramError(err);
-        const log = summary.code === 'ETIMEDOUT' || summary.code === 'ESOCKETTIMEDOUT'
-            ? logger.warn.bind(logger)
-            : logger.error.bind(logger);
+        if (isTelegramNetworkIssue(err)) {
+            logTelegramNetworkWarning(err, 'Telegram polling timeout; retrying automatically');
+            return;
+        }
 
-        log(summary, 'Telegram polling error');
+        logger.error(summarizeTelegramError(err), 'Telegram polling error');
     });
 
     // Set Telegram Bot Commands Menu (the blue Menu button in the chat input bar)
-    bot.setMyCommands([
-        { command: '/start', description: 'Mulai bot NokosHUB' },
-        { command: '/menu', description: 'Buka menu utama' },
-        { command: '/buy', description: 'Beli nomor virtual' },
-        { command: '/deposit', description: 'Isi saldo' },
-        { command: '/balance', description: 'Cek sisa saldo' },
-        { command: '/history', description: 'Riwayat transaksi' },
-        { command: '/help', description: 'Bantuan & Panduan' }
-    ]).catch((err: any) => logger.error(summarizeTelegramError(err), 'Failed to set bot commands'));
+    scheduleBotCommandsSetup(bot);
 
     // ─── OTP Notification handler (from worker) ───────────────────────────────
     setNotifyHandler(async (data: any) => {
@@ -312,7 +318,37 @@ export function createBot(): TelegramBot {
     return bot;
 }
 
-function summarizeTelegramError(err: any) {
+function scheduleBotCommandsSetup(bot: TelegramBot, attempt = 1) {
+    bot.setMyCommands(BOT_COMMANDS)
+        .then(() => logger.info({ attempt }, 'Telegram bot commands set'))
+        .catch((err: any) => {
+            if (!isTelegramNetworkIssue(err)) {
+                logger.error(summarizeTelegramError(err), 'Failed to set bot commands');
+                return;
+            }
+
+            const retryMs = Math.min(TELEGRAM_COMMANDS_RETRY_MAX_MS, attempt * 15000);
+            logger.warn(
+                {
+                    ...summarizeTelegramError(err, false),
+                    attempt,
+                    retryMs,
+                },
+                'Telegram bot commands setup delayed; retrying automatically'
+            );
+            setTimeout(() => scheduleBotCommandsSetup(bot, attempt + 1), retryMs);
+        });
+}
+
+function logTelegramNetworkWarning(err: any, message: string) {
+    const now = Date.now();
+    if (now - lastTelegramNetworkWarningAt < TELEGRAM_NETWORK_WARNING_INTERVAL_MS) return;
+
+    lastTelegramNetworkWarningAt = now;
+    logger.warn(summarizeTelegramError(err, false), message);
+}
+
+function summarizeTelegramError(err: any, includeStack = true) {
     return {
         code: err?.code,
         message: redactTelegramToken(err?.message),
@@ -323,8 +359,57 @@ function summarizeTelegramError(err: any) {
                 message: redactTelegramToken(err.cause.message),
             }
             : undefined,
-        stack: redactTelegramToken(err?.stack),
+        errors: redactTelegramToken(err?.errors),
+        stack: includeStack ? redactTelegramToken(err?.stack) : undefined,
     };
+}
+
+function isTelegramNetworkIssue(err: any): boolean {
+    const text = collectTelegramErrorText(err).toUpperCase();
+    return [
+        'ETIMEDOUT',
+        'ESOCKETTIMEDOUT',
+        'ECONNRESET',
+        'ECONNREFUSED',
+        'ENOTFOUND',
+        'EAI_AGAIN',
+        'AGGREGATEERROR',
+        'TLSWRAP',
+        'SOCKET',
+    ].some((needle) => text.includes(needle));
+}
+
+function collectTelegramErrorText(err: any): string {
+    const parts: string[] = [];
+
+    function visit(value: any, depth = 0) {
+        if (!value || depth > 3) return;
+
+        if (typeof value === 'string') {
+            parts.push(value);
+            return;
+        }
+
+        if (Array.isArray(value)) {
+            value.forEach((item) => visit(item, depth + 1));
+            return;
+        }
+
+        if (typeof value !== 'object') return;
+
+        parts.push(
+            String(value.code ?? ''),
+            String(value.message ?? ''),
+            String(value.stack ?? '')
+        );
+
+        visit(value.cause, depth + 1);
+        visit(value.errors, depth + 1);
+        visit(value.response?.body ?? value.response?.data, depth + 1);
+    }
+
+    visit(err);
+    return parts.filter(Boolean).join(' ');
 }
 
 function redactTelegramToken(value: unknown): unknown {
