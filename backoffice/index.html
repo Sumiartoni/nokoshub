@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>NokosHUB Super Admin</title>
+    <link rel="stylesheet" href="/backoffice/assets/styles.css?v=20260418">
+</head>
+<body class="dashboard-page">
+    <main class="shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">NokosHUB</p>
+                <h1>Super Admin Backoffice</h1>
+                <p class="lead">Login sebagai <strong id="adminName">admin</strong></p>
+            </div>
+            <div class="actions">
+                <button class="button primary" type="button" data-action="sync">Sync Provider</button>
+                <button class="button" type="button" data-action="refresh">Refresh</button>
+                <button class="button danger" type="button" data-action="logout">Logout</button>
+            </div>
+        </header>
+
+        <section class="summary-grid" aria-label="Ringkasan backoffice">
+            <article class="summary-card balance-card">
+                <span>Provider Balance</span>
+                <strong id="providerBalance">-</strong>
+            </article>
+            <article class="summary-card">
+                <span>Orders Loaded</span>
+                <strong id="ordersCount">-</strong>
+            </article>
+            <article class="summary-card">
+                <span>Invoices Loaded</span>
+                <strong id="invoicesCount">-</strong>
+            </article>
+            <article class="summary-card">
+                <span>Transactions Loaded</span>
+                <strong id="transactionsCount">-</strong>
+            </article>
+        </section>
+
+        <nav class="tabs" aria-label="Menu backoffice">
+            <button class="tab active" type="button" data-tab="orders">Orders</button>
+            <button class="tab" type="button" data-tab="invoices">Invoices</button>
+            <button class="tab" type="button" data-tab="transactions">Transactions</button>
+            <button class="tab" type="button" data-tab="balance">User Balance</button>
+        </nav>
+
+        <section class="data-panel" aria-live="polite">
+            <div class="panel-bar">
+                <h2 id="panelTitle">Orders</h2>
+                <span id="message" class="message"></span>
+            </div>
+
+            <form id="balanceForm" class="balance-form" hidden>
+                <input id="telegramId" name="telegramId" placeholder="Telegram ID" autocomplete="off">
+                <input id="amount" name="amount" type="number" min="1" placeholder="Amount">
+                <select id="balanceType" name="balanceType">
+                    <option value="DEPOSIT">DEPOSIT</option>
+                    <option value="REFUND">REFUND</option>
+                </select>
+                <input id="description" name="description" placeholder="Description" autocomplete="off">
+                <button class="button primary" type="submit">Apply</button>
+            </form>
+
+            <div id="content" class="content">
+                <div class="empty-state">Loading...</div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/backoffice/assets/app.js?v=20260418" defer></script>
+</body>
+</html>

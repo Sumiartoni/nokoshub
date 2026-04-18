@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>NokosHUB Backoffice Login</title>
+    <link rel="stylesheet" href="/backoffice/assets/styles.css?v=20260418">
+</head>
+<body class="login-page">
+    <main class="login-card" aria-labelledby="loginTitle">
+        <div class="brand-mark" aria-hidden="true">N</div>
+        <p class="eyebrow">Super Admin</p>
+        <h1 id="loginTitle">NokosHUB Backoffice</h1>
+        <p class="lead">Masuk untuk memantau order, invoice, transaksi, saldo provider, dan penyesuaian saldo user.</p>
+
+        <form id="loginForm" class="login-form">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" required>
+
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+            <button class="button primary full" type="submit">Masuk</button>
+            <div id="loginError" class="form-error" role="alert"></div>
+        </form>
+    </main>
+
+    <script src="/backoffice/assets/app.js?v=20260418" defer></script>
+</body>
+</html>

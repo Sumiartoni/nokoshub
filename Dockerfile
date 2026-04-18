@@ -42,6 +42,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy compiled JS
 COPY --from=builder /app/dist ./dist
+COPY backoffice ./backoffice
 
 EXPOSE 8000
 
