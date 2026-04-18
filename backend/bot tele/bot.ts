@@ -11,6 +11,7 @@ const TELEGRAM_POLLING_TIMEOUT_SECONDS = Math.max(5, config.TELEGRAM_POLLING_TIM
 const TELEGRAM_REQUEST_TIMEOUT_MS = Math.max(10000, config.TELEGRAM_REQUEST_TIMEOUT_MS);
 const TELEGRAM_NETWORK_WARNING_INTERVAL_MS = 60000;
 const TELEGRAM_COMMANDS_RETRY_MAX_MS = 300000;
+const TELEGRAM_ADMIN_IDS = parseTelegramAdminIds(config.TELEGRAM_ADMIN_IDS);
 
 const BOT_COMMANDS = [
     { command: '/start', description: 'Mulai bot NokosHUB' },
@@ -19,6 +20,7 @@ const BOT_COMMANDS = [
     { command: '/deposit', description: 'Isi saldo' },
     { command: '/balance', description: 'Cek sisa saldo' },
     { command: '/history', description: 'Riwayat transaksi' },
+    { command: '/myid', description: 'Lihat Telegram ID' },
     { command: '/help', description: 'Bantuan & Panduan' },
 ];
 
@@ -47,6 +49,20 @@ interface Session {
     selectedCountryName?: string;
     prices?: Array<{ id: string; sellPrice: number }>;
     depositAmount?: number;
+    pendingDeposit?: PendingDeposit;
+}
+
+interface PendingDeposit {
+    invoiceId: string;
+    telegramId: string;
+    requestedAmount: number;
+    payableAmount: number;
+    expiredAt: string | Date;
+}
+
+interface PaymentProof {
+    fileId: string;
+    type: 'photo' | 'document';
 }
 
 const sessions = new Map<number, Session>();
@@ -58,6 +74,17 @@ function getSession(chatId: number): Session {
 
 function clearSession(chatId: number) {
     sessions.set(chatId, {});
+}
+
+function parseTelegramAdminIds(value: string): string[] {
+    return value
+        .split(/[,\s]+/)
+        .map((item) => item.trim())
+        .filter((item) => /^\d+$/.test(item));
+}
+
+function isAdminTelegramId(telegramId: string): boolean {
+    return TELEGRAM_ADMIN_IDS.includes(telegramId);
 }
 
 // ─── Bot Factory ──────────────────────────────────────────────────────────────
@@ -158,6 +185,16 @@ export function createBot(): TelegramBot {
         await handleHistory(bot, msg.chat.id, String(msg.from?.id));
     });
 
+    // ─── /myid ────────────────────────────────────────────────────────────────
+    bot.onText(/\/myid/, async (msg) => {
+        const telegramId = String(msg.from?.id ?? msg.chat.id);
+        await bot.sendMessage(
+            msg.chat.id,
+            `Telegram ID Anda:\n\`${telegramId}\``,
+            { parse_mode: 'Markdown' }
+        );
+    });
+
     // ─── /buy ─────────────────────────────────────────────────────────────────
     bot.onText(/\/buy/, async (msg) => {
         await handleBuyStart(bot, msg.chat.id);
@@ -191,7 +228,8 @@ export function createBot(): TelegramBot {
             `• Wajib dilakukan sebelum membeli nomor.\n` +
             `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
             `• Scan QR QRIS yang tampil\n` +
-            `• Saldo masuk otomatis setelah pembayaran\n\n` +
+            `• Upload bukti transfer di chat ini\n` +
+            `• Saldo masuk setelah admin mengonfirmasi pembayaran\n\n` +
             `2️⃣ *Beli Nomor*\n` +
             `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
             `• Sistem akan memberikan nomor virtual siap pakai\n` +
@@ -203,6 +241,7 @@ export function createBot(): TelegramBot {
             `/deposit [jumlah] - Deposit saldo\n` +
             `/balance - Lihat saldo\n` +
             `/history - Riwayat order\n` +
+            `/myid - Lihat Telegram ID\n` +
             `/status [orderId] - Status order\n\n` +
             `📞 *Butuh bantuan?*\n` +
             `Hubungi admin @nokosadmin`,
@@ -210,12 +249,52 @@ export function createBot(): TelegramBot {
         );
     });
 
-    // ─── Text message handler (for deposit amount input) ──────────────────────
+    // ─── Text/media message handler (deposit amount + payment proof) ──────────
     bot.on('message', async (msg) => {
-        if (!msg.text || msg.text.startsWith('/')) return;
         const chatId = msg.chat.id;
         const telegramId = String(msg.from?.id);
         const session = getSession(chatId);
+
+        if (session.step === 'AWAIT_PAYMENT_PROOF') {
+            const proof = getPaymentProofFromMessage(msg);
+
+            if (!proof) {
+                await bot.sendMessage(
+                    chatId,
+                    '❗ Upload bukti transfer berupa foto/screenshot di chat ini. Jangan kirim teks saja.'
+                );
+                return;
+            }
+
+            if (!session.pendingDeposit) {
+                session.step = undefined;
+                await bot.sendMessage(chatId, '❌ Data invoice tidak ditemukan. Silakan buat deposit baru dengan /deposit.');
+                return;
+            }
+
+            const pendingDeposit = session.pendingDeposit;
+            const adminNotified = await notifyAdminsManualDeposit(bot, pendingDeposit, proof);
+            session.step = undefined;
+            session.pendingDeposit = undefined;
+
+            if (adminNotified) {
+                await bot.sendMessage(
+                    chatId,
+                    `✅ Bukti transfer diterima.\n\n` +
+                    `Invoice ID: \`${pendingDeposit.invoiceId}\`\n` +
+                    `Admin akan mengecek mutasi dan mengonfirmasi saldo secara manual.`,
+                    { parse_mode: 'Markdown' }
+                );
+            } else {
+                await bot.sendMessage(
+                    chatId,
+                    '⚠️ Bukti diterima, tetapi akun admin Telegram belum berhasil dikirimi notifikasi. Hubungi admin untuk pengecekan manual.'
+                );
+            }
+            return;
+        }
+
+        if (!msg.text || msg.text.startsWith('/')) return;
 
         if (session.step === 'AWAIT_DEPOSIT_AMOUNT') {
             const amount = parseInt(msg.text.replace(/[^\d]/g, ''));
@@ -236,6 +315,30 @@ export function createBot(): TelegramBot {
 
         if (!chatId) return;
         await bot.answerCallbackQuery(query.id);
+
+        if (data.startsWith('pay_ok:')) {
+            const [, invoiceId, userTelegramId] = data.split(':');
+            return handleManualPaymentApproval(
+                bot,
+                chatId,
+                telegramId,
+                invoiceId,
+                userTelegramId,
+                query.message?.message_id
+            );
+        }
+
+        if (data.startsWith('pay_no:')) {
+            const [, invoiceId, userTelegramId] = data.split(':');
+            return handleManualPaymentReject(
+                bot,
+                chatId,
+                telegramId,
+                invoiceId,
+                userTelegramId,
+                query.message?.message_id
+            );
+        }
 
         if (data === 'menu') {
             clearSession(chatId);
@@ -864,15 +967,179 @@ async function handleDepositWithAmount(
                 `Nominal bayar: *${formatRupiah(payableAmount)}*\n` +
                 `Invoice ID: \`${invoiceId}\`\n` +
                 `Expires: ${new Date(expiredAt).toLocaleString('id-ID')}\n\n` +
-                `📌 Scan QR di atas, lalu bayar sesuai nominal bayar persis.\n\n` +
-                `_Saldo akan masuk otomatis setelah pembayaran dikonfirmasi._`,
+                `📌 Scan QR di atas, lalu bayar sesuai nominal bayar persis.\n` +
+                `📎 Setelah transfer, upload foto/screenshot bukti transfer di chat ini.\n\n` +
+                `_Saldo akan ditambahkan setelah admin mengecek dan menekan konfirmasi manual._`,
             parse_mode: 'Markdown',
         });
+
+        const session = getSession(chatId);
+        session.step = 'AWAIT_PAYMENT_PROOF';
+        session.pendingDeposit = {
+            invoiceId,
+            telegramId,
+            requestedAmount: amount,
+            payableAmount,
+            expiredAt,
+        };
     } catch (err: any) {
         await bot.deleteMessage(chatId, loadingMsg.message_id);
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Error';
         await bot.sendMessage(chatId, `❌ Gagal: ${errMsg}`);
     }
+}
+
+function getPaymentProofFromMessage(msg: TelegramBot.Message): PaymentProof | null {
+    const photo = msg.photo?.[msg.photo.length - 1];
+    if (photo?.file_id) {
+        return { fileId: photo.file_id, type: 'photo' };
+    }
+
+    const document = msg.document;
+    if (document?.file_id && document.mime_type?.startsWith('image/')) {
+        return { fileId: document.file_id, type: 'document' };
+    }
+
+    return null;
+}
+
+async function notifyAdminsManualDeposit(
+    bot: TelegramBot,
+    deposit: PendingDeposit,
+    proof: PaymentProof
+): Promise<boolean> {
+    if (!TELEGRAM_ADMIN_IDS.length) {
+        logger.warn({ invoiceId: deposit.invoiceId }, 'Manual payment proof received but TELEGRAM_ADMIN_IDS is empty');
+        return false;
+    }
+
+    const caption =
+        `🔔 Deposit baru menunggu konfirmasi manual\n\n` +
+        `Invoice ID: ${deposit.invoiceId}\n` +
+        `Telegram ID user: ${deposit.telegramId}\n` +
+        `Jumlah saldo: ${formatRupiah(deposit.requestedAmount)}\n` +
+        `Nominal QRIS: ${formatRupiah(deposit.payableAmount)}\n` +
+        `Kadaluarsa: ${formatIndonesianDateTime(deposit.expiredAt)}\n\n` +
+        `Bukti transfer terlampir. Cek mutasi/payment dulu. Jika uang sudah masuk sesuai nominal QRIS, tekan Konfirmasi.`;
+
+    const reply_markup = {
+        inline_keyboard: [
+            [{ text: '✅ Konfirmasi saldo masuk', callback_data: `pay_ok:${deposit.invoiceId}:${deposit.telegramId}` }],
+            [{ text: '❌ Belum masuk', callback_data: `pay_no:${deposit.invoiceId}:${deposit.telegramId}` }],
+        ],
+    };
+
+    let sentCount = 0;
+
+    for (const adminId of TELEGRAM_ADMIN_IDS) {
+        try {
+            if (proof.type === 'document') {
+                await bot.sendDocument(Number(adminId), proof.fileId, { caption, reply_markup });
+            } else {
+                await bot.sendPhoto(Number(adminId), proof.fileId, { caption, reply_markup });
+            }
+            sentCount += 1;
+        } catch (err) {
+            logger.warn({ err, adminId, invoiceId: deposit.invoiceId }, 'Failed to notify Telegram admin for manual payment');
+        }
+    }
+
+    return sentCount > 0;
+}
+
+async function handleManualPaymentApproval(
+    bot: TelegramBot,
+    adminChatId: number,
+    adminTelegramId: string,
+    invoiceId?: string,
+    userTelegramId?: string,
+    adminMessageId?: number
+) {
+    if (!isAdminTelegramId(adminTelegramId)) {
+        logger.warn({ adminTelegramId, invoiceId }, 'Unauthorized manual payment approval attempt');
+        return bot.sendMessage(adminChatId, '❌ Akun Telegram ini tidak berhak mengonfirmasi pembayaran.');
+    }
+
+    if (!invoiceId || !userTelegramId) {
+        return bot.sendMessage(adminChatId, '❌ Data invoice tidak valid.');
+    }
+
+    try {
+        const result = await apiPost<{ success: boolean; message?: string }>('/api/payment/webhook', {
+            invoiceId,
+            secret: config.PAYMENT_WEBHOOK_SECRET,
+        });
+
+        await clearManualPaymentButtons(bot, adminChatId, adminMessageId);
+
+        await bot.sendMessage(
+            adminChatId,
+            `✅ Invoice ${invoiceId} sudah dikonfirmasi.\nStatus: ${result.message ?? 'Payment confirmed'}`
+        );
+
+        await bot.sendMessage(
+            Number(userTelegramId),
+            `✅ Pembayaran deposit Anda sudah dikonfirmasi admin.\n\n` +
+            `Invoice ID: \`${invoiceId}\`\n` +
+            `Saldo sudah ditambahkan ke akun Anda. Cek saldo dengan /balance.`,
+            { parse_mode: 'Markdown' }
+        );
+    } catch (err: any) {
+        const errMsg = err?.response?.data?.message ?? err?.response?.data?.error ?? err.message ?? 'Error';
+        await bot.sendMessage(adminChatId, `❌ Gagal konfirmasi invoice ${invoiceId}: ${errMsg}`);
+    }
+}
+
+async function handleManualPaymentReject(
+    bot: TelegramBot,
+    adminChatId: number,
+    adminTelegramId: string,
+    invoiceId?: string,
+    userTelegramId?: string,
+    adminMessageId?: number
+) {
+    if (!isAdminTelegramId(adminTelegramId)) {
+        logger.warn({ adminTelegramId, invoiceId }, 'Unauthorized manual payment reject attempt');
+        return bot.sendMessage(adminChatId, '❌ Akun Telegram ini tidak berhak memproses pembayaran.');
+    }
+
+    if (!invoiceId || !userTelegramId) {
+        return bot.sendMessage(adminChatId, '❌ Data invoice tidak valid.');
+    }
+
+    await clearManualPaymentButtons(bot, adminChatId, adminMessageId);
+    await bot.sendMessage(
+        adminChatId,
+        `Invoice ${invoiceId} ditandai belum masuk. Invoice tetap pending dan saldo belum ditambahkan.`
+    );
+
+    try {
+        await bot.sendMessage(
+            Number(userTelegramId),
+            `⚠️ Pembayaran untuk invoice \`${invoiceId}\` belum bisa dikonfirmasi admin.\n\n` +
+            `Pastikan nominal transfer sesuai QRIS dan bukti transfer jelas. Jika sudah benar, hubungi admin.`,
+            { parse_mode: 'Markdown' }
+        );
+    } catch (err) {
+        logger.warn({ err, invoiceId, userTelegramId }, 'Failed to notify user about rejected manual payment');
+    }
+}
+
+async function clearManualPaymentButtons(bot: TelegramBot, chatId: number, messageId?: number) {
+    if (!messageId) return;
+
+    try {
+        await bot.editMessageReplyMarkup(
+            { inline_keyboard: [] },
+            { chat_id: chatId, message_id: messageId }
+        );
+    } catch (err) {
+        logger.warn({ err, chatId, messageId }, 'Failed to clear manual payment buttons');
+    }
+}
+
+function formatIndonesianDateTime(value: string | Date): string {
+    return new Date(value).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 }
 
 async function handleOrderStatus(bot: TelegramBot, chatId: number, orderId: string) {

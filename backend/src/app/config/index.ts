@@ -14,6 +14,7 @@ const envSchema = z.object({
     REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
     TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
+    TELEGRAM_ADMIN_IDS: z.string().default(''),
     TELEGRAM_FORCE_IPV4: z.string().default('true').transform((value) => {
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),
