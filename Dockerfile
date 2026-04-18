@@ -7,11 +7,14 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
-# Install ALL deps (including dev for build)
-RUN npm ci
+# Install ALL deps (including dev for build). Prisma is generated explicitly
+# after install so Docker builds do not depend on npm postinstall ordering.
+RUN npm ci --ignore-scripts
 
 # Generate Prisma client
+ENV DATABASE_URL=postgresql://nokos:nokos_password@localhost:5432/nokos_db
 RUN npx prisma generate
 
 # Copy source
@@ -30,10 +33,11 @@ ENV NODE_ENV=production
 
 # Install production deps only
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy Prisma schema and generated client
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy compiled JS
