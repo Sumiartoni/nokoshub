@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
+import { pricingService } from '../pricing/pricing.service';
 
 type AnyRecord = Record<string, any>;
 
@@ -13,6 +14,7 @@ export interface ProviderService {
 export interface ProviderPrice {
     price: number;
     provider_id: string;
+    provider_price_usd?: number | null;
 }
 
 export interface ProviderCountry {
@@ -229,8 +231,9 @@ class HeroSMSProvider {
                 this.getCountriesMap(),
                 this.request('getPrices', { service: serviceCode }),
             ]);
+            const rateInfo = await pricingService.getUsdIdrRate();
 
-            return this.normalizePricesByCountry(pricesRes.data, serviceCode, countriesById);
+            return this.normalizePricesByCountry(pricesRes.data, serviceCode, countriesById, rateInfo.effectiveRate);
         } catch (err: any) {
             logger.warn({ err: this.errorSummary(err), serviceCode }, 'HeroSMS getCountries failed');
             return [];
@@ -244,7 +247,8 @@ class HeroSMSProvider {
                 country: params.countryCode,
             };
 
-            const maxPrice = this.toProviderPrice(params.maxPrice);
+            const rateInfo = await pricingService.getUsdIdrRate();
+            const maxPrice = this.toProviderPrice(params.maxPrice, rateInfo.effectiveRate);
             if (maxPrice) {
                 requestParams.maxPrice = maxPrice;
             }
@@ -359,11 +363,12 @@ class HeroSMSProvider {
     private normalizePricesByCountry(
         body: unknown,
         serviceCode: string,
-        countriesById: Map<string, string>
+        countriesById: Map<string, string>,
+        usdIdrRate: number
     ): ProviderCountry[] {
         const priceRoot = isRecord(body) && isRecord(body.data) ? body.data : body;
         if (Array.isArray(priceRoot)) {
-            return this.normalizePriceArray(priceRoot, serviceCode, countriesById);
+            return this.normalizePriceArray(priceRoot, serviceCode, countriesById, usdIdrRate);
         }
         if (!isRecord(priceRoot)) return [];
 
@@ -386,8 +391,9 @@ class HeroSMSProvider {
                 name: countriesById.get(countryCode) ?? countryCode,
                 pricelist: [
                     {
-                        price: this.toIdrPrice(rawPrice),
+                        price: this.toIdrPrice(rawPrice, usdIdrRate),
                         provider_id: 'default',
+                        provider_price_usd: rawPrice < 1000 ? rawPrice : null,
                     },
                 ],
             });
@@ -399,7 +405,8 @@ class HeroSMSProvider {
     private normalizePriceArray(
         priceRoot: unknown[],
         serviceCode: string,
-        countriesById: Map<string, string>
+        countriesById: Map<string, string>,
+        usdIdrRate: number
     ): ProviderCountry[] {
         return priceRoot
             .map((entry, index): ProviderCountry | null => {
@@ -417,7 +424,13 @@ class HeroSMSProvider {
                 return {
                     number_id: countryCode,
                     name: countriesById.get(countryCode) ?? countryCode,
-                    pricelist: [{ price: this.toIdrPrice(rawPrice), provider_id: 'default' }],
+                    pricelist: [
+                        {
+                            price: this.toIdrPrice(rawPrice, usdIdrRate),
+                            provider_id: 'default',
+                            provider_price_usd: rawPrice < 1000 ? rawPrice : null,
+                        },
+                    ],
                 };
             })
             .filter((item: ProviderCountry | null): item is ProviderCountry => Boolean(item));
@@ -433,15 +446,15 @@ class HeroSMSProvider {
         });
     }
 
-    private toIdrPrice(price: number): number {
+    private toIdrPrice(price: number, usdIdrRate: number): number {
         if (price >= 1000) return Math.ceil(price);
-        return Math.ceil(price * config.HERO_SMS_PRICE_TO_IDR_RATE);
+        return Math.ceil(price * usdIdrRate);
     }
 
-    private toProviderPrice(price?: number): number | undefined {
+    private toProviderPrice(price: number | undefined, usdIdrRate: number): number | undefined {
         if (!price || price <= 0) return undefined;
         if (price >= 1000) {
-            return Number((price / config.HERO_SMS_PRICE_TO_IDR_RATE).toFixed(4));
+            return Number((price / usdIdrRate).toFixed(4));
         }
         return price;
     }

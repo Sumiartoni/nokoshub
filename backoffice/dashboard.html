@@ -362,6 +362,43 @@
                         Refresh
                     </button>
                 </div>
+                <div class="panel pricing-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                            Pricing & Kurs
+                        </div>
+                        <button class="btn btn-sm btn-outline" onclick="loadPricingSettings(true)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                            Refresh Kurs
+                        </button>
+                    </div>
+                    <div class="panel-body">
+                        <div class="pricing-grid">
+                            <div class="pricing-control">
+                                <label class="form-label" for="sellMultiplierInput">Margin Multiplier</label>
+                                <div class="pricing-input-row">
+                                    <input class="form-input" id="sellMultiplierInput" type="number" min="1" max="20" step="0.1" placeholder="3.5">
+                                    <button class="btn btn-sm btn-primary" id="savePricingBtn" onclick="savePricingSettings()">Simpan</button>
+                                </div>
+                            </div>
+                            <div class="pricing-rate-card">
+                                <div class="mini-stat-label">Kurs Otomatis</div>
+                                <div class="mini-stat-value" id="pricingEffectiveRate">—</div>
+                                <div class="pricing-meta" id="pricingRateMeta">—</div>
+                            </div>
+                            <div class="pricing-rate-card">
+                                <div class="mini-stat-label">Buffer Kurs</div>
+                                <div class="mini-stat-value" id="pricingBuffer">3%</div>
+                                <div class="pricing-meta" id="pricingRateSource">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="mini-stats" id="serviceStats" style="margin-bottom:16px;display:none">
                     <div class="mini-stat indigo">
                         <div class="mini-stat-label">Total Layanan</div>

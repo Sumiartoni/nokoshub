@@ -38,3 +38,17 @@ Saat sudah memakai HTTPS untuk backoffice, ubah:
 ```env
 BACKOFFICE_COOKIE_SECURE=true
 ```
+
+## Pricing
+
+Harga modal HeroSMS tetap dihitung dari USD, lalu dikonversi ke Rupiah memakai kurs otomatis USD/IDR. Sistem menambahkan buffer kurs 3% sebagai kurs aman.
+
+```env
+USD_IDR_RATE_AUTO_ENABLED=true
+USD_IDR_RATE_API_URL=https://api.frankfurter.dev/v2/rate/USD/IDR
+USD_IDR_RATE_BUFFER_PERCENT=3
+USD_IDR_RATE_REFRESH_MINUTES=360
+HERO_SMS_PRICE_TO_IDR_RATE=17000
+```
+
+`HERO_SMS_PRICE_TO_IDR_RATE` dipakai sebagai fallback kalau API kurs sedang gagal. Margin keuntungan bisa diubah dari halaman super admin bagian `Layanan > Pricing & Kurs`.

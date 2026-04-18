@@ -6,6 +6,12 @@ import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { prisma } from '../../database/prisma.client';
 import { hasBackofficeSession } from '../../utils/backoffice-auth';
+import { pricingService } from '../pricing/pricing.service';
+import { z } from 'zod';
+
+const pricingSettingsSchema = z.object({
+    sellPriceMultiplier: z.number().min(1).max(20),
+});
 
 function requireAdmin(req: any, reply: any): boolean {
     const key = req.headers['x-admin-key'] || (req.query && req.query.key);
@@ -88,8 +94,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         if (!requireAdmin(req, reply)) return;
         const { heroSMSProvider } = await import('../../modules/providers/herosms.provider');
         const providerBalanceUsd = await heroSMSProvider.getBalance();
-        const exchangeRate = config.HERO_SMS_PRICE_TO_IDR_RATE;
-        const providerBalanceIdr = Math.round(providerBalanceUsd * exchangeRate);
+        const rate = await pricingService.getUsdIdrRate();
+        const providerBalanceIdr = Math.round(providerBalanceUsd * rate.effectiveRate);
+        const providerBalanceIdrBase = Math.round(providerBalanceUsd * rate.baseRate);
 
         return {
             success: true,
@@ -97,10 +104,62 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 providerBalance: providerBalanceUsd,
                 providerBalanceUsd,
                 providerBalanceIdr,
-                exchangeRate,
+                providerBalanceIdrBase,
+                exchangeRate: rate.effectiveRate,
+                exchangeRateBase: rate.baseRate,
+                exchangeRateBufferPercent: rate.bufferPercent,
+                exchangeRateAutoEnabled: rate.autoEnabled,
+                exchangeRateSource: rate.source,
+                exchangeRateFetchedAt: rate.fetchedAt,
+                exchangeRateFallback: rate.fallbackRate,
+                exchangeRateError: rate.error,
                 sourceCurrency: 'USD',
                 currency: 'IDR',
             },
+        };
+    });
+
+    // GET /api/admin/settings/pricing - pricing, margin, and USD/IDR rate settings
+    fastify.get('/settings/pricing', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const query = req.query as { refresh?: string };
+        const settings = await pricingService.getPricingSnapshot(query.refresh === '1' || query.refresh === 'true');
+        return { success: true, data: settings };
+    });
+
+    // POST /api/admin/settings/pricing/refresh-rate - refresh USD/IDR rate and reprice stored USD prices
+    fastify.post('/settings/pricing/refresh-rate', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await pricingService.getPricingSnapshot(true);
+        await serviceService.recalculateSellPrices(
+            settings.sellPriceMultiplier,
+            settings.usdIdrRate.effectiveRate
+        );
+
+        return {
+            success: true,
+            message: 'Kurs berhasil diperbarui dan harga tersimpan sudah dihitung ulang',
+            data: settings,
+        };
+    });
+
+    // PATCH /api/admin/settings/pricing - update sell price multiplier and reprice stored prices
+    fastify.patch('/settings/pricing', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = pricingSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: 'Multiplier harus di antara 1 sampai 20' });
+        }
+
+        const sellPriceMultiplier = await pricingService.setSellPriceMultiplier(parsed.data.sellPriceMultiplier);
+        const usdIdrRate = await pricingService.getUsdIdrRate(true);
+        await serviceService.recalculateSellPrices(sellPriceMultiplier, usdIdrRate.effectiveRate);
+
+        return {
+            success: true,
+            message: 'Margin berhasil disimpan dan harga sudah dihitung ulang',
+            data: { sellPriceMultiplier, usdIdrRate },
         };
     });
 

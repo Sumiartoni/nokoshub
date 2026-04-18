@@ -18,6 +18,12 @@ const envSchema = z.object({
     HERO_SMS_API_KEY: z.string().min(1, 'HERO_SMS_API_KEY is required'),
     HERO_SMS_BASE_URL: z.string().url().default('https://hero-sms.com/stubs/handler_api.php'),
     HERO_SMS_PRICE_TO_IDR_RATE: z.string().default('17000').transform(Number),
+    USD_IDR_RATE_AUTO_ENABLED: z.string().default('true').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
+    USD_IDR_RATE_API_URL: z.string().url().default('https://api.frankfurter.dev/v2/rate/USD/IDR'),
+    USD_IDR_RATE_BUFFER_PERCENT: z.string().default('3').transform(Number),
+    USD_IDR_RATE_REFRESH_MINUTES: z.string().default('360').transform(Number),
 
     QRIS_STATIC_STRING: z.string().min(1, 'QRIS_STATIC_STRING is required'),
     QRIS_DYNAMIC_ENABLED: z.string().default('true').transform((value) => {

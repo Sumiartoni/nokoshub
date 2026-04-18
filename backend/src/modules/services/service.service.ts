@@ -1,8 +1,8 @@
 import { prisma } from '../../database/prisma.client';
 import { buildHeroSMSPriceId, heroSMSProvider } from '../providers/herosms.provider';
 import { calculateSellPrice } from '../../utils/helpers';
-import { config } from '../../app/config';
 import logger from '../../utils/logger';
+import { pricingService } from '../pricing/pricing.service';
 
 export const serviceService = {
     /**
@@ -25,6 +25,7 @@ export const serviceService = {
 
         let servicesCount = 0;
         let pricesCount = 0;
+        const sellPriceMultiplier = await pricingService.getSellPriceMultiplier();
 
         for (const svc of services) {
             if (!svc.service_code || !svc.service_name) continue;
@@ -66,13 +67,17 @@ export const serviceService = {
                             String(ctr.number_id),
                             String(price.provider_id)
                         );
-                        const sellPrice = calculateSellPrice(price.price, config.SELL_PRICE_MULTIPLIER);
+                        const sellPrice = calculateSellPrice(price.price, sellPriceMultiplier);
+                        const providerPriceUsd = typeof price.provider_price_usd === 'number'
+                            ? price.provider_price_usd.toFixed(6)
+                            : null;
                         return `(
                             gen_random_uuid(),
                             ${sqlString(service.id)},
                             ${sqlString(country.id)},
                             ${sqlString(priceId)},
                             ${Math.ceil(price.price)},
+                            ${providerPriceUsd ?? 'NULL'},
                             ${sellPrice},
                             true,
                             current_timestamp(3)
@@ -80,10 +85,11 @@ export const serviceService = {
                     }).join(', ');
 
                     const query = `
-                        INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "sellPrice", "isActive", "updatedAt")
+                        INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "providerPriceUsd", "sellPrice", "isActive", "updatedAt")
                         VALUES ${values}
                         ON CONFLICT ("priceId") DO UPDATE SET
                         "providerPrice" = EXCLUDED."providerPrice",
+                        "providerPriceUsd" = EXCLUDED."providerPriceUsd",
                         "sellPrice" = EXCLUDED."sellPrice",
                         "isActive" = true,
                         "updatedAt" = EXCLUDED."updatedAt";
@@ -144,6 +150,30 @@ export const serviceService = {
             where: { id },
             include: { service: true, country: true },
         });
+    },
+
+    async recalculateSellPrices(multiplier: number, usdIdrRate?: number) {
+        if (usdIdrRate && Number.isFinite(usdIdrRate) && usdIdrRate > 0) {
+            await prisma.$executeRaw`
+                UPDATE "Price"
+                SET "providerPrice" = CASE
+                        WHEN "providerPriceUsd" IS NOT NULL THEN CEIL("providerPriceUsd" * ${usdIdrRate})::integer
+                        ELSE "providerPrice"
+                    END,
+                    "sellPrice" = CASE
+                        WHEN "providerPriceUsd" IS NOT NULL THEN CEIL(CEIL("providerPriceUsd" * ${usdIdrRate}) * ${multiplier})::integer
+                        ELSE CEIL("providerPrice" * ${multiplier})::integer
+                    END,
+                    "updatedAt" = current_timestamp(3);
+            `;
+            return;
+        }
+
+        await prisma.$executeRaw`
+            UPDATE "Price"
+            SET "sellPrice" = CEIL("providerPrice" * ${multiplier})::integer,
+                "updatedAt" = current_timestamp(3);
+        `;
     },
 };
 

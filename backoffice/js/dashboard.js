@@ -70,7 +70,10 @@
         else if (pageId === 'orders') loadOrders();
         else if (pageId === 'invoices') loadInvoices();
         else if (pageId === 'transactions') loadTransactions();
-        else if (pageId === 'services') loadServices();
+        else if (pageId === 'services') {
+            loadPricingSettings();
+            loadServices();
+        }
         else if (pageId === 'users') loadUsers();
     }
 
@@ -103,7 +106,10 @@
         if (page === 'orders') loadOrders();
         else if (page === 'invoices') loadInvoices();
         else if (page === 'transactions') loadTransactions();
-        else if (page === 'services') loadServices();
+        else if (page === 'services') {
+            loadPricingSettings();
+            loadServices();
+        }
         else if (page === 'users') loadUsers();
     };
 
@@ -264,11 +270,13 @@
             const balance = balanceRes.value.data;
             const providerUsd = Number(balance.providerBalanceUsd ?? balance.providerBalance);
             const exchangeRate = Number(balance.exchangeRate || 0);
+            const baseRate = Number(balance.exchangeRateBase || exchangeRate);
+            const bufferPercent = Number(balance.exchangeRateBufferPercent || 0);
             const providerIdr = Number(balance.providerBalanceIdr ?? (providerUsd * exchangeRate));
 
             providerBal = Number.isFinite(providerIdr) ? formatRupiahFull(providerIdr) : '—';
             providerMeta = Number.isFinite(providerUsd) && Number.isFinite(exchangeRate) && exchangeRate > 0
-                ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}`
+                ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}${bufferPercent ? ` (kurs asli ${formatRupiahFull(baseRate)} + ${bufferPercent}%)` : ''}`
                 : '';
             providerStatus = (Number.isFinite(providerUsd) && providerUsd > 0) ? 'online' : 'offline';
         }
@@ -651,6 +659,71 @@
     //  SERVICES PAGE
     // ═══════════════════════════════════════════════════════════════════════════
     let _servicesData = [];
+
+    window.loadPricingSettings = async function (forceRefresh = false) {
+        const multiplierInput = document.getElementById('sellMultiplierInput');
+        const effectiveRateEl = document.getElementById('pricingEffectiveRate');
+        const rateMetaEl = document.getElementById('pricingRateMeta');
+        const bufferEl = document.getElementById('pricingBuffer');
+        const sourceEl = document.getElementById('pricingRateSource');
+
+        if (!multiplierInput || !effectiveRateEl || !rateMetaEl || !bufferEl || !sourceEl) return;
+
+        effectiveRateEl.textContent = '...';
+        rateMetaEl.textContent = 'Memuat kurs...';
+
+        try {
+            const res = forceRefresh
+                ? await api('/api/admin/settings/pricing/refresh-rate', { method: 'POST', body: '{}' })
+                : await api('/api/admin/settings/pricing');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat pricing');
+
+            const settings = res.data;
+            const rate = settings.usdIdrRate || {};
+            multiplierInput.value = settings.sellPriceMultiplier;
+            effectiveRateEl.textContent = formatRupiahFull(rate.effectiveRate);
+            rateMetaEl.textContent = `Kurs asli ${formatRupiahFull(rate.baseRate)} dari ${rate.autoEnabled ? 'otomatis' : 'fallback .env'}`;
+            bufferEl.textContent = `${rate.bufferPercent}%`;
+            sourceEl.textContent = rate.error
+                ? `Fallback aktif: ${rate.error}`
+                : `Sumber: ${rate.source}`;
+        } catch (err) {
+            effectiveRateEl.textContent = '—';
+            rateMetaEl.textContent = err.message;
+            sourceEl.textContent = 'Gagal memuat kurs';
+        }
+    };
+
+    window.savePricingSettings = async function () {
+        const input = document.getElementById('sellMultiplierInput');
+        const btn = document.getElementById('savePricingBtn');
+        const sellPriceMultiplier = Number(input.value);
+
+        if (!Number.isFinite(sellPriceMultiplier) || sellPriceMultiplier < 1 || sellPriceMultiplier > 20) {
+            showToast('Margin multiplier harus di antara 1 sampai 20', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/pricing', {
+                method: 'PATCH',
+                body: JSON.stringify({ sellPriceMultiplier }),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan margin');
+
+            showToast(res.message || 'Margin berhasil disimpan');
+            await loadPricingSettings();
+            await loadServices();
+        } catch (err) {
+            showToast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan';
+        }
+    };
 
     window.loadServices = async function () {
         const body = document.getElementById('servicesTableBody');

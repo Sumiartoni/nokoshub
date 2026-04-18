@@ -49,13 +49,20 @@ model Price {
   countryId     String
   priceId       String   @unique // provider's price_id
   providerPrice Int // in IDR
-  sellPrice     Int // providerPrice × 3.5
+  providerPriceUsd Decimal? @db.Decimal(12, 6)
+  sellPrice     Int // providerPrice x configured multiplier
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   orders        Order[]
 
   @@index([serviceId, countryId])
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
 
 model Order {
