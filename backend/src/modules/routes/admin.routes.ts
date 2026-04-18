@@ -87,8 +87,21 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.get('/balance', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         const { heroSMSProvider } = await import('../../modules/providers/herosms.provider');
-        const balance = await heroSMSProvider.getBalance();
-        return { success: true, data: { providerBalance: balance } };
+        const providerBalanceUsd = await heroSMSProvider.getBalance();
+        const exchangeRate = config.HERO_SMS_PRICE_TO_IDR_RATE;
+        const providerBalanceIdr = Math.round(providerBalanceUsd * exchangeRate);
+
+        return {
+            success: true,
+            data: {
+                providerBalance: providerBalanceUsd,
+                providerBalanceUsd,
+                providerBalanceIdr,
+                exchangeRate,
+                sourceCurrency: 'USD',
+                currency: 'IDR',
+            },
+        };
     });
 
     // PATCH /api/admin/user-balance - manually adjust user balance

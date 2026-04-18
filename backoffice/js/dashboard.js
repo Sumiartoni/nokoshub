@@ -258,11 +258,19 @@
 
         // Provider balance
         let providerBal = '—';
+        let providerMeta = '';
         let providerStatus = 'warning';
         if (balanceRes.status === 'fulfilled' && balanceRes.value.success) {
-            const bal = balanceRes.value.data.providerBalance;
-            providerBal = typeof bal === 'number' ? `$${bal.toFixed(2)}` : String(bal);
-            providerStatus = (typeof bal === 'number' && bal > 0) ? 'online' : 'offline';
+            const balance = balanceRes.value.data;
+            const providerUsd = Number(balance.providerBalanceUsd ?? balance.providerBalance);
+            const exchangeRate = Number(balance.exchangeRate || 0);
+            const providerIdr = Number(balance.providerBalanceIdr ?? (providerUsd * exchangeRate));
+
+            providerBal = Number.isFinite(providerIdr) ? formatRupiahFull(providerIdr) : '—';
+            providerMeta = Number.isFinite(providerUsd) && Number.isFinite(exchangeRate) && exchangeRate > 0
+                ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}`
+                : '';
+            providerStatus = (Number.isFinite(providerUsd) && providerUsd > 0) ? 'online' : 'offline';
         }
 
         // Services
@@ -277,7 +285,7 @@
             ${statCard('indigo', 'orders', 'Total Orders', totalOrders)}
             ${statCard('info', 'active', 'Order Aktif', activeOrders)}
             ${statCard('emerald', 'revenue', 'Total Revenue', invoiceRevenue)}
-            ${statCard('amber', 'provider', 'Saldo Provider', providerBal)}
+            ${statCard('amber', 'provider', 'Saldo Provider', providerBal, providerMeta)}
             ${statCard('rose', 'services', 'Layanan Aktif', totalServices)}
         `;
 
@@ -293,6 +301,7 @@
             </div>
             <span style="font-size:0.75rem;color:var(--text-muted)">
                 Saldo: <strong style="color:var(--amber)">${providerBal}</strong>
+                ${providerMeta ? `<span style="margin-left:6px">(${providerMeta})</span>` : ''}
             </span>
             <span style="font-size:0.75rem;color:var(--text-muted)">
                 Diperbarui: ${new Date().toLocaleTimeString('id-ID')}
@@ -313,7 +322,7 @@
         indigo: 'indigo', emerald: 'emerald', amber: 'amber', rose: 'rose', sky: 'sky', info: 'sky',
     };
 
-    function statCard(color, icon, label, value) {
+    function statCard(color, icon, label, value, meta = '') {
         const c = colorMap[color] || color;
         return `
             <div class="stat-card ${c}">
@@ -324,6 +333,7 @@
                 </div>
                 <div class="stat-label">${label}</div>
                 <div class="stat-value">${value}</div>
+                ${meta ? `<div class="stat-meta">${meta}</div>` : ''}
             </div>`;
     }
 

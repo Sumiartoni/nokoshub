@@ -395,8 +395,18 @@ html, body {
     font-variant-numeric: tabular-nums;
     position: relative; z-index: 1;
     transition: all 0.4s ease;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
 }
 .stat-value.loading { opacity: 0.4; }
+.stat-meta {
+    margin-top: 7px;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 500;
+    position: relative;
+    z-index: 1;
+}
 
 /* ─── Content Grid ─────────────────────────────────────────────────────────── */
 .content-grid {
