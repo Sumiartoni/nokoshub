@@ -45,6 +45,11 @@ const envSchema = z.object({
     JWT_EXPIRES_IN: z.string().default('7d'),
 
     SELL_PRICE_MULTIPLIER: z.string().default('3.5').transform(Number),
+    PROVIDER_SYNC_ON_STARTUP: z.string().default('true').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
+    PROVIDER_SYNC_INTERVAL_MINUTES: z.string().default('360').transform(Number),
+    PROVIDER_SYNC_STARTUP_DELAY_MS: z.string().default('10000').transform(Number),
     OTP_POLL_INTERVAL_MS: z.string().default('5000').transform(Number),
     OTP_POLL_MAX_MS: z.string().default('120000').transform(Number),
 });

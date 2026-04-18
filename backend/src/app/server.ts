@@ -12,6 +12,9 @@ import { webhookRoutes, internalRoutes } from '../modules/routes/webhook.routes'
 import { serviceService } from '../modules/services/service.service';
 import logger from '../utils/logger';
 
+let providerSyncInterval: NodeJS.Timeout | null = null;
+let providerSyncStartupTimer: NodeJS.Timeout | null = null;
+
 export async function buildServer() {
     const app = Fastify({
         logger: false, // we use our own pino logger
@@ -141,15 +144,12 @@ export async function startServer() {
         await app.listen({ port: config.PORT, host: '0.0.0.0' });
         logger.info(`🚀 Server running on port ${config.PORT}`);
 
-        // Auto-sync services from provider on startup (run in background, do not await!)
-        serviceService.syncFromProvider()
-            .then(result => logger.info(result, '✅ Provider sync complete'))
-            .catch(err => logger.warn({ err }, '⚠️ Provider sync failed on startup'));
-
+        startProviderSyncScheduler();
 
         // Graceful shutdown
         const shutdown = async () => {
             logger.info('Shutting down...');
+            stopProviderSyncScheduler();
             await app.close();
             await redisConnection.quit();
             process.exit(0);
@@ -165,4 +165,48 @@ export async function startServer() {
 
 if (require.main === module) {
     startServer();
+}
+
+function startProviderSyncScheduler() {
+    if (!config.PROVIDER_SYNC_ON_STARTUP) {
+        logger.info('Provider auto-sync disabled');
+        return;
+    }
+
+    const startupDelayMs = Math.max(0, config.PROVIDER_SYNC_STARTUP_DELAY_MS);
+    const intervalMinutes = Math.max(0, config.PROVIDER_SYNC_INTERVAL_MINUTES);
+
+    providerSyncStartupTimer = setTimeout(() => {
+        runProviderSync('startup');
+    }, startupDelayMs);
+
+    if (intervalMinutes > 0) {
+        providerSyncInterval = setInterval(() => {
+            runProviderSync('scheduled');
+        }, intervalMinutes * 60 * 1000);
+    }
+
+    logger.info(
+        { startupDelayMs, intervalMinutes },
+        'Provider auto-sync scheduler started'
+    );
+}
+
+function stopProviderSyncScheduler() {
+    if (providerSyncStartupTimer) {
+        clearTimeout(providerSyncStartupTimer);
+        providerSyncStartupTimer = null;
+    }
+
+    if (providerSyncInterval) {
+        clearInterval(providerSyncInterval);
+        providerSyncInterval = null;
+    }
+}
+
+function runProviderSync(reason: 'startup' | 'scheduled') {
+    logger.info({ reason }, 'Provider sync queued');
+    serviceService.syncFromProvider()
+        .then(result => logger.info({ reason, ...result }, 'Provider sync complete'))
+        .catch(err => logger.warn({ reason, err }, 'Provider sync failed'));
 }
