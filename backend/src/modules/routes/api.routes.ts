@@ -68,7 +68,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/auth/register
-    fastify.post('/auth/register', async (req, reply) => {
+    fastify.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = authRegisterSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
@@ -83,7 +83,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/auth/login
-    fastify.post('/auth/login', async (req, reply) => {
+    fastify.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = authLoginSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
@@ -108,7 +108,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/auth/telegram-link/code
-    fastify.post('/auth/telegram-link/code', async (req, reply) => {
+    fastify.post('/auth/telegram-link/code', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
         try {
             const webUser = await authService.requireUser(req.headers.authorization);
             const result = await authService.createTelegramLinkCode(webUser.id);
@@ -120,7 +120,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/auth/telegram-link/confirm
-    fastify.post('/auth/telegram-link/confirm', async (req, reply) => {
+    fastify.post('/auth/telegram-link/confirm', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = confirmTelegramLinkSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
@@ -162,7 +162,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/user/session
-    fastify.post('/user/session', async (req, reply) => {
+    fastify.post('/user/session', { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = userSessionSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
@@ -307,7 +307,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/order
-    fastify.post('/order', async (req, reply) => {
+    fastify.post('/order', { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = createOrderSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
@@ -368,7 +368,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // POST /api/deposit
-    fastify.post('/deposit', async (req, reply) => {
+    fastify.post('/deposit', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = depositSchema.safeParse(req.body);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });

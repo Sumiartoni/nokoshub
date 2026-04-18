@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U nokos -d nokos_db']
       interval: 10s
@@ -27,7 +27,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
@@ -49,6 +49,8 @@ services:
       NODE_OPTIONS: --dns-result-order=ipv4first
       PORT: 3000
       API_BASE_URL: http://backend:3000
+      BACKEND_DASHBOARD_ENABLED: ${BACKEND_DASHBOARD_ENABLED:-false}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       DATABASE_URL: '${DATABASE_URL:?DATABASE_URL is required. Set your Supabase PostgreSQL URL in .env}'
       REDIS_URL: redis://redis:6379
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
@@ -81,7 +83,7 @@ services:
       OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
       OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}
     ports:
-      - '${API_PORT:-3000}:3000'
+      - '127.0.0.1:${API_PORT:-3000}:3000'
     command: >
       sh -c "
         npx prisma migrate deploy &&
@@ -104,6 +106,7 @@ services:
       NODE_ENV: production
       NODE_OPTIONS: --dns-result-order=ipv4first
       API_BASE_URL: http://backend:3000
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
       DATABASE_URL: '${DATABASE_URL:?DATABASE_URL is required. Set your Supabase PostgreSQL URL in .env}'
       REDIS_URL: redis://redis:6379
       HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
@@ -138,7 +141,7 @@ services:
     depends_on:
       - backend
     ports:
-      - '${FRONTEND_PORT:-8081}:80'
+      - '127.0.0.1:${FRONTEND_PORT:-8081}:80'
 
   backoffice:
     build:
@@ -149,7 +152,7 @@ services:
     depends_on:
       - backend
     ports:
-      - '${BACKOFFICE_PORT:-8080}:80'
+      - '127.0.0.1:${BACKOFFICE_PORT:-8080}:80'
 
 volumes:
   postgres_data:

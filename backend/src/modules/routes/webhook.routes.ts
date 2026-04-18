@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { paymentService } from '../../modules/payments/payment.service';
+import { config } from '../../app/config';
 import logger from '../../utils/logger';
 
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
@@ -45,6 +46,11 @@ export function setNotifyHandler(fn: (data: any) => void) {
 export const internalRoutes: FastifyPluginAsync = async (fastify) => {
     // POST /api/internal/notify
     fastify.post('/notify', async (req, reply) => {
+        const secret = req.headers['x-internal-secret'];
+        if (secret !== config.INTERNAL_API_SECRET) {
+            return reply.status(404).send({ success: false, error: 'Not found' });
+        }
+
         const data = req.body as {
             telegramId: string;
             type: 'OTP_RECEIVED' | 'OTP_TIMEOUT';

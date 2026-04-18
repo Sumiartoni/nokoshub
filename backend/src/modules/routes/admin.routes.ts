@@ -71,7 +71,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // ALL /api/admin/sync - manual sync from provider (accepts GET/POST)
-    fastify.all('/sync', async (req, reply) => {
+    fastify.all('/sync', { config: { rateLimit: { max: 3, timeWindow: '10 minutes' } } }, async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         try {
             logger.info('Admin triggered manual provider sync. Running in background...');

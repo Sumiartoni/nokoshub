@@ -52,6 +52,10 @@ export async function buildServer() {
 
     // ─── Dashboard + Health check at root for Koyeb ──────────────────────────
     app.get('/', async (req, reply) => {
+        if (!config.BACKEND_DASHBOARD_ENABLED) {
+            return reply.status(404).send({ success: false, error: 'Not found' });
+        }
+
         const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NokosHUB - Backend Dashboard</title>

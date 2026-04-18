@@ -99,6 +99,8 @@ async function notifyOtpReceived(telegramId: string, orderId: string, otpCode: s
             type: 'OTP_RECEIVED',
             orderId,
             otpCode,
+        }, {
+            headers: { 'x-internal-secret': config.INTERNAL_API_SECRET },
         });
     } catch (err) {
         logger.error({ err, telegramId, orderId }, 'Failed to notify OTP received');
@@ -111,6 +113,8 @@ async function notifyOtpTimeout(telegramId: string, orderId: string) {
             telegramId,
             type: 'OTP_TIMEOUT',
             orderId,
+        }, {
+            headers: { 'x-internal-secret': config.INTERNAL_API_SECRET },
         });
     } catch (err) {
         logger.error({ err, telegramId, orderId }, 'Failed to notify OTP timeout');

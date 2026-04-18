@@ -19,23 +19,25 @@ docker compose up -d --build
 
 `COMPOSE_PROJECT_NAME=backend` dipakai agar VPS yang sebelumnya deploy dari folder `backend/` tetap memakai volume database lama.
 
-Backoffice test via IP:
+Service Docker hanya dipublish ke `127.0.0.1`, jadi akses langsung via IP:port tidak dibuka untuk publik. Gunakan Caddy/Nginx sebagai reverse proxy untuk domain.
+
+Backoffice test dari dalam VPS:
 
 ```text
-http://IP-VPS:8080
+curl http://127.0.0.1:8080
 ```
 
 Landing page dan dashboard user:
 
 ```text
-http://IP-VPS:8081
-http://IP-VPS:8081/user/
+curl http://127.0.0.1:8081
+curl http://127.0.0.1:8081/user/
 ```
 
-Backend API test via IP:
+Backend API test dari dalam VPS:
 
 ```text
-http://IP-VPS:3000/api/health
+curl http://127.0.0.1:3000/api/health
 ```
 
 Untuk domain production, arahkan:
@@ -49,6 +51,21 @@ Saat sudah memakai HTTPS untuk backoffice, ubah:
 ```env
 BACKOFFICE_COOKIE_SECURE=true
 ```
+
+## Security Checklist
+
+Sebelum domain dibuka ke publik:
+
+- Isi `INTERNAL_API_SECRET`, `JWT_SECRET`, `PAYMENT_WEBHOOK_SECRET`, `ADMIN_API_KEY`, dan `BACKOFFICE_SESSION_SECRET` dengan string acak panjang.
+- Jangan buka port `3000`, `8080`, `8081`, `5432`, atau `6379` ke publik. Publik cukup lewat port `80` dan `443` milik reverse proxy.
+- Set `BACKOFFICE_COOKIE_SECURE=true` setelah memakai HTTPS.
+- Isi `CORS_ALLOWED_ORIGINS` dengan domain resmi saja, contoh:
+
+```env
+CORS_ALLOWED_ORIGINS=https://domainanda.com,https://www.domainanda.com,https://admin.domainanda.com,https://api.domainanda.com
+```
+
+- Biarkan `BACKEND_DASHBOARD_ENABLED=false` di production agar halaman root backend tidak menampilkan daftar endpoint.
 
 ## Pricing
 
