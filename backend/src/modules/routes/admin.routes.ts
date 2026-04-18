@@ -22,7 +22,183 @@ function requireAdmin(req: any, reply: any): boolean {
     return true;
 }
 
+function maxDate(left?: Date | string | null, right?: Date | string | null) {
+    if (!left) return right ?? null;
+    if (!right) return left;
+    return new Date(left).getTime() >= new Date(right).getTime() ? left : right;
+}
+
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
+    // GET /api/admin/users - merged web and Telegram users for backoffice
+    fastify.get('/users', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const query = req.query as { limit?: string };
+        const rawLimit = Number.parseInt(query.limit ?? '500', 10);
+        const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 500;
+
+        const [telegramUsers, webUsers, txGroups, lastTxGroups] = await Promise.all([
+            prisma.user.findMany({
+                select: {
+                    id: true,
+                    telegramId: true,
+                    username: true,
+                    firstName: true,
+                    lastName: true,
+                    balance: true,
+                    isActive: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    _count: {
+                        select: {
+                            orders: true,
+                            transactions: true,
+                            invoices: true,
+                        },
+                    },
+                },
+                orderBy: { updatedAt: 'desc' },
+                take: limit,
+            }),
+            prisma.webUser.findMany({
+                select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    telegramId: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+                take: limit,
+            }),
+            prisma.transaction.groupBy({
+                by: ['userId', 'type'],
+                _count: { _all: true },
+                _sum: { amount: true },
+            }),
+            prisma.transaction.groupBy({
+                by: ['userId'],
+                _max: { createdAt: true },
+            }),
+        ]);
+
+        const txSummary = new Map<string, {
+            txCount: number;
+            totalDeposit: number;
+            totalRefund: number;
+            totalDeduct: number;
+            lastActivity: Date | null;
+        }>();
+
+        for (const group of txGroups) {
+            const summary = txSummary.get(group.userId) ?? {
+                txCount: 0,
+                totalDeposit: 0,
+                totalRefund: 0,
+                totalDeduct: 0,
+                lastActivity: null,
+            };
+            const amount = group._sum.amount ?? 0;
+            summary.txCount += group._count._all;
+            if (group.type === 'DEPOSIT') summary.totalDeposit += amount;
+            else if (group.type === 'REFUND') summary.totalRefund += amount;
+            else if (group.type === 'DEDUCT') summary.totalDeduct += Math.abs(amount);
+            txSummary.set(group.userId, summary);
+        }
+
+        for (const group of lastTxGroups) {
+            const summary = txSummary.get(group.userId) ?? {
+                txCount: 0,
+                totalDeposit: 0,
+                totalRefund: 0,
+                totalDeduct: 0,
+                lastActivity: null,
+            };
+            summary.lastActivity = group._max.createdAt;
+            txSummary.set(group.userId, summary);
+        }
+
+        const usersByTelegramId = new Map(telegramUsers.map((user) => [user.telegramId, user]));
+        const rows = new Map<string, any>();
+
+        for (const user of telegramUsers) {
+            const summary = txSummary.get(user.id);
+            rows.set(`telegram:${user.id}`, {
+                id: user.id,
+                telegramUserId: user.id,
+                webUserId: null,
+                accountType: 'TELEGRAM_ONLY',
+                email: null,
+                telegramId: user.telegramId,
+                username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                balance: user.balance,
+                isActive: user.isActive,
+                orderCount: user._count.orders,
+                invoiceCount: user._count.invoices,
+                txCount: summary?.txCount ?? user._count.transactions,
+                totalDeposit: summary?.totalDeposit ?? 0,
+                totalRefund: summary?.totalRefund ?? 0,
+                totalDeduct: summary?.totalDeduct ?? 0,
+                lastActivity: summary?.lastActivity ?? user.updatedAt,
+                createdAt: user.createdAt,
+                webCreatedAt: null,
+                telegramCreatedAt: user.createdAt,
+            });
+        }
+
+        for (const webUser of webUsers) {
+            const linkedTelegramUser = webUser.telegramId ? usersByTelegramId.get(webUser.telegramId) : null;
+            if (!linkedTelegramUser) {
+                rows.set(`web:${webUser.id}`, {
+                    id: webUser.id,
+                    telegramUserId: null,
+                    webUserId: webUser.id,
+                    accountType: 'WEB_ONLY',
+                    email: webUser.email,
+                    telegramId: webUser.telegramId,
+                    username: null,
+                    firstName: webUser.firstName,
+                    lastName: webUser.lastName,
+                    balance: 0,
+                    isActive: true,
+                    orderCount: 0,
+                    invoiceCount: 0,
+                    txCount: 0,
+                    totalDeposit: 0,
+                    totalRefund: 0,
+                    totalDeduct: 0,
+                    lastActivity: webUser.updatedAt,
+                    createdAt: webUser.createdAt,
+                    webCreatedAt: webUser.createdAt,
+                    telegramCreatedAt: null,
+                });
+                continue;
+            }
+
+            const key = `telegram:${linkedTelegramUser.id}`;
+            const existing = rows.get(key);
+            rows.set(key, {
+                ...existing,
+                webUserId: webUser.id,
+                accountType: 'WEB_LINKED',
+                email: webUser.email,
+                firstName: webUser.firstName ?? existing?.firstName,
+                lastName: webUser.lastName ?? existing?.lastName,
+                webCreatedAt: webUser.createdAt,
+                lastActivity: maxDate(existing?.lastActivity, webUser.updatedAt),
+            });
+        }
+
+        const data = [...rows.values()]
+            .sort((a, b) => new Date(b.lastActivity ?? b.createdAt).getTime() - new Date(a.lastActivity ?? a.createdAt).getTime())
+            .slice(0, limit);
+
+        return { success: true, data };
+    });
+
     // GET /api/admin/orders
     fastify.get('/orders', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;

@@ -904,29 +904,11 @@
         _usersMap = new Map();
 
         try {
-            const res = await api('/api/admin/transactions?limit=200');
+            const res = await api('/api/admin/users?limit=500');
             if (!res.success) throw new Error(res.error || 'Gagal memuat data user');
-            const txData = res.data || [];
-
-            // Build user map from transactions
-            for (const t of txData) {
-                if (!t.userId) continue;
-                if (!_usersMap.has(t.userId)) {
-                    _usersMap.set(t.userId, {
-                        id: t.userId,
-                        telegramId: t.user?.telegramId || '—',
-                        username: t.user?.username || '—',
-                        txCount: 0, totalDeposit: 0, totalDeduct: 0,
-                        lastActivity: t.createdAt,
-                    });
-                }
-                const u = _usersMap.get(t.userId);
-                u.txCount++;
-                if (t.amount > 0) u.totalDeposit += t.amount;
-                else u.totalDeduct += Math.abs(t.amount);
-                if (new Date(t.createdAt) > new Date(u.lastActivity)) u.lastActivity = t.createdAt;
+            for (const user of res.data || []) {
+                _usersMap.set(user.id, user);
             }
-
             renderUsersTable([..._usersMap.values()]);
         } catch (err) {
             body.innerHTML = errorHTML(err.message);
@@ -936,11 +918,23 @@
     window.filterUsersTable = function () {
         const q = document.getElementById('userSearchInput').value.toLowerCase();
         const data = [..._usersMap.values()].filter(u =>
-            u.telegramId.includes(q) ||
-            u.username.toLowerCase().includes(q)
+            (u.email || '').toLowerCase().includes(q) ||
+            (u.telegramId || '').includes(q) ||
+            (u.username || '').toLowerCase().includes(q) ||
+            (`${u.firstName || ''} ${u.lastName || ''}`).toLowerCase().includes(q)
         );
         renderUsersTable(data);
     };
+
+    function userTypeBadge(type) {
+        const labels = {
+            WEB_LINKED: ['success', 'Web + Telegram'],
+            WEB_ONLY: ['warning', 'Web only'],
+            TELEGRAM_ONLY: ['info', 'Telegram only'],
+        };
+        const [cls, label] = labels[type] || ['neutral', type || 'Unknown'];
+        return `<span class="badge ${cls}">${label}</span>`;
+    }
 
     function renderUsersTable(users) {
         const body = document.getElementById('usersTableBody');
@@ -949,26 +943,38 @@
         body.innerHTML = `
             <table class="data-table">
                 <thead><tr>
-                    <th>Telegram ID</th><th>Username</th><th>Total TX</th>
-                    <th>Total Deposit</th><th>Total Deduct</th><th>Aktivitas Terakhir</th><th>Aksi</th>
+                    <th>Akun</th><th>Email Web</th><th>Telegram</th><th>Saldo</th>
+                    <th>Total TX</th><th>Deposit</th><th>Deduct</th><th>Aktivitas</th><th>Aksi</th>
                 </tr></thead>
                 <tbody>
-                    ${users.map(u => `<tr>
-                        <td class="mono text-indigo fw-600">${u.telegramId}</td>
-                        <td>${u.username !== '—' ? '@' + u.username : '—'}</td>
-                        <td class="mono">${u.txCount}</td>
+                    ${users.map(u => {
+                        const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username || '—';
+                        const canAdjust = Boolean(u.telegramId);
+                        return `<tr>
+                        <td>
+                            ${userTypeBadge(u.accountType)}
+                            <div class="text-sm text-muted" style="margin-top:4px">${escText(displayName)}</div>
+                        </td>
+                        <td>${u.email ? `<span class="fw-600">${escText(u.email)}</span>` : '<span class="text-muted">—</span>'}</td>
+                        <td>
+                            <div class="mono text-indigo fw-600">${u.telegramId ? escText(u.telegramId) : '—'}</div>
+                            <div class="text-sm text-muted">${u.username ? '@' + escText(u.username) : (u.telegramId ? 'Belum ada username' : 'Belum linked')}</div>
+                        </td>
+                        <td class="mono fw-600">${formatRupiahFull(u.balance || 0)}</td>
+                        <td class="mono">${u.txCount || 0}</td>
                         <td class="mono text-emerald fw-600">${formatRupiahFull(u.totalDeposit)}</td>
                         <td class="mono text-rose fw-600">${formatRupiahFull(u.totalDeduct)}</td>
                         <td class="text-muted text-sm">${formatDateShort(u.lastActivity)}</td>
                         <td class="actions-cell">
-                            <button class="btn btn-sm btn-outline" onclick="prefillAdjust('${u.telegramId}')">
+                            <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjust(${escAttr(u.telegramId)})"` : 'disabled title="User web belum menautkan Telegram"'} >
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                                 </svg>
                                 Adjust
                             </button>
                         </td>
-                    </tr>`).join('')}
+                    </tr>`;
+                    }).join('')}
                 </tbody>
             </table>`;
     }
@@ -1052,6 +1058,15 @@
 
     function escAttr(str) {
         return JSON.stringify(str).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+    }
+
+    function escText(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
