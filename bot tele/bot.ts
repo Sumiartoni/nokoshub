@@ -679,31 +679,31 @@ async function handleDepositWithAmount(
         }
 
         const { invoiceId, qrisPayload, expiredAt } = res.data;
+        const payableAmount = res.data.amount ?? amount;
 
         // Generate QR code image
         const qrBuffer = await QRCode.toBuffer(qrisPayload, {
             type: 'png',
-            width: 400,
-            margin: 2,
+            width: 900,
+            margin: 4,
+            errorCorrectionLevel: 'H',
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF',
+            },
         });
 
         await bot.sendPhoto(chatId, qrBuffer as any, {
             caption:
                 `💳 *Invoice Deposit*\n\n` +
-                `Jumlah: *${formatRupiah(amount)}*\n` +
+                `Jumlah deposit: *${formatRupiah(amount)}*\n` +
+                `Nominal bayar: *${formatRupiah(payableAmount)}*\n` +
                 `Invoice ID: \`${invoiceId}\`\n` +
                 `Expires: ${new Date(expiredAt).toLocaleString('id-ID')}\n\n` +
-                `📌 Scan QR di atas dengan aplikasi dompet digital apapun yang mendukung QRIS.\n\n` +
+                `📌 Scan QR di atas, lalu bayar sesuai nominal bayar persis.\n\n` +
                 `_Saldo akan masuk otomatis setelah pembayaran dikonfirmasi._`,
             parse_mode: 'Markdown',
         });
-
-        // Also send QRIS string as text backup
-        await bot.sendMessage(
-            chatId,
-            `📋 *QRIS String (backup)*:\n\n\`${qrisPayload}\``,
-            { parse_mode: 'Markdown' }
-        );
     } catch (err: any) {
         await bot.deleteMessage(chatId, loadingMsg.message_id);
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Error';

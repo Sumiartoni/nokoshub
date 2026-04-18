@@ -42,12 +42,20 @@ export const paymentService = {
             },
         });
 
-        // Generate dynamic QRIS with invoice ID as reference
-        const qrisPayload = generateDynamicQRIS(
-            config.QRIS_STATIC_STRING,
-            finalAmount,
-            invoice.id.substring(0, 25)
-        );
+        const staticQris = normalizeQrisPayload(config.QRIS_STATIC_STRING);
+        let qrisPayload = staticQris;
+
+        if (config.QRIS_DYNAMIC_ENABLED) {
+            try {
+                qrisPayload = generateDynamicQRIS(
+                    staticQris,
+                    finalAmount,
+                    invoice.id.substring(0, 25)
+                );
+            } catch (err) {
+                logger.warn({ err, invoiceId: invoice.id }, 'Dynamic QRIS generation failed, using static QRIS');
+            }
+        }
 
         // Update invoice with QRIS payload
         const updatedInvoice = await prisma.invoice.update({
@@ -55,7 +63,7 @@ export const paymentService = {
             data: { qrisPayload },
         });
 
-        logger.info({ invoiceId: invoice.id, userId, amount }, 'Invoice created');
+        logger.info({ invoiceId: invoice.id, userId, amount, finalAmount, dynamicQris: config.QRIS_DYNAMIC_ENABLED }, 'Invoice created');
         return updatedInvoice;
     },
 
@@ -158,3 +166,7 @@ export const paymentService = {
         });
     },
 };
+
+function normalizeQrisPayload(payload: string): string {
+    return payload.replace(/\s+/g, '').trim();
+}

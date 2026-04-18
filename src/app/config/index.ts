@@ -20,6 +20,9 @@ const envSchema = z.object({
     HERO_SMS_PRICE_TO_IDR_RATE: z.string().default('17000').transform(Number),
 
     QRIS_STATIC_STRING: z.string().min(1, 'QRIS_STATIC_STRING is required'),
+    QRIS_DYNAMIC_ENABLED: z.string().default('false').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
     PAYMENT_WEBHOOK_SECRET: z.string().min(1, 'PAYMENT_WEBHOOK_SECRET is required'),
 
     ADMIN_API_KEY: z.string().min(1, 'ADMIN_API_KEY is required'),
