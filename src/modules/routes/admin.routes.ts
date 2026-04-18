@@ -90,8 +90,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/admin/balance - check provider balance
     fastify.get('/balance', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
-        const { rumahOTPProvider } = await import('../../modules/providers/rumahotp.provider');
-        const balance = await rumahOTPProvider.getBalance();
+        const { heroSMSProvider } = await import('../../modules/providers/herosms.provider');
+        const balance = await heroSMSProvider.getBalance();
         return { success: true, data: { providerBalance: balance } };
     });
 

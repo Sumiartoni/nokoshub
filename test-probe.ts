@@ -2,12 +2,12 @@ import axios from 'axios';
 import { config } from './src/app/config';
 
 async function probe() {
-    const key = config.RUMAHOTP_API_KEY;
+    const key = config.HERO_SMS_API_KEY;
     const targets = [
-        { name: 'Header Auth, /services', url: 'https://www.rumahotp.com/api/services', headers: { 'x-apikey': key } },
-        { name: 'Query Auth, /services', url: `https://www.rumahotp.com/api/services?api_key=${key}`, headers: {} },
-        { name: 'Header Auth, /service', url: 'https://www.rumahotp.com/api/service', headers: { 'x-apikey': key } },
-        { name: 'Query Auth, /service', url: `https://www.rumahotp.com/api/service?api_key=${key}`, headers: {} }
+        { name: 'Bearer Auth, /services', url: `${config.HERO_SMS_BASE_URL}/services`, headers: { Authorization: `Bearer ${key}` } },
+        { name: 'X-API-Key Auth, /services', url: `${config.HERO_SMS_BASE_URL}/services`, headers: { 'X-API-Key': key } },
+        { name: 'Query Auth, /services', url: `${config.HERO_SMS_BASE_URL}/services?api_key=${key}`, headers: {} },
+        { name: 'Query Auth, /balance', url: `${config.HERO_SMS_BASE_URL}/balance?api_key=${key}`, headers: {} }
     ];
 
     for (const t of targets) {

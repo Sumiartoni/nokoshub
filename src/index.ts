@@ -1,5 +1,5 @@
 import { startServer } from './app/server';
-import { createBot } from './app/bot';
+import { createBot } from '../bot tele/bot';
 import './worker'; // Import worker so it runs in the same process for free-tier deployments
 
 async function main() {

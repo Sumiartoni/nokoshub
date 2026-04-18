@@ -18,7 +18,7 @@ docker compose up -d
 
 ```bash
 npm run dev:server   # Start API server
-npm run dev:bot      # Start Telegram bot
+npm run dev:bot      # Start Telegram bot only
 npm run dev:worker   # Start OTP worker
 ```
 

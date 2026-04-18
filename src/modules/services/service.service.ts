@@ -1,19 +1,23 @@
 import { prisma } from '../../database/prisma.client';
-import { rumahOTPProvider } from '../providers/rumahotp.provider';
+import { buildHeroSMSPriceId, heroSMSProvider } from '../providers/herosms.provider';
 import { calculateSellPrice } from '../../utils/helpers';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
 
 export const serviceService = {
     /**
-     * Sync services and countries from RumahOTP V2 API.
+     * Sync services, countries, and prices from HeroSMS.
      * 1. Fetch all services → upsert into DB
      * 2. For each service, fetch countries → upsert countries + prices
      */
     async syncFromProvider(): Promise<{ services: number; prices: number }> {
         logger.info('Starting provider sync...');
 
-        const services = await rumahOTPProvider.getServices();
+        await prisma.price.updateMany({ data: { isActive: false } });
+        await prisma.service.updateMany({ data: { isActive: false } });
+        await prisma.country.updateMany({ data: { isActive: false } });
+
+        const services = await heroSMSProvider.getServices();
         if (!services.length) {
             logger.warn('No services returned from provider');
             return { services: 0, prices: 0 };
@@ -29,13 +33,13 @@ export const serviceService = {
             const serviceCode = String(svc.service_code);
             const service = await prisma.service.upsert({
                 where: { serviceCode },
-                update: { name: svc.service_name },
-                create: { name: svc.service_name, serviceCode },
+                update: { name: svc.service_name, isActive: true },
+                create: { name: svc.service_name, serviceCode, isActive: true },
             });
             servicesCount++;
 
             // Fetch countries for this service
-            const countries = await rumahOTPProvider.getCountries(svc.service_code);
+            const countries = await heroSMSProvider.getCountries(svc.service_code);
 
             for (const ctr of countries) {
                 if (!ctr.name || !ctr.number_id || !Array.isArray(ctr.pricelist)) continue;
@@ -43,8 +47,8 @@ export const serviceService = {
                 const countryCode = String(ctr.number_id);
                 const country = await prisma.country.upsert({
                     where: { countryCode },
-                    update: { name: ctr.name },
-                    create: { name: ctr.name, countryCode },
+                    update: { name: ctr.name, isActive: true },
+                    create: { name: ctr.name, countryCode, isActive: true },
                 });
 
                 // Filter valid prices and map them for raw bulk insert
@@ -57,17 +61,31 @@ export const serviceService = {
                 for (let i = 0; i < validPrices.length; i += CHUNK_SIZE) {
                     const chunk = validPrices.slice(i, i + CHUNK_SIZE);
                     const values = chunk.map(price => {
-                        const priceId = `${svc.service_code}_${ctr.number_id}_${price.provider_id}`;
+                        const priceId = buildHeroSMSPriceId(
+                            String(svc.service_code),
+                            String(ctr.number_id),
+                            String(price.provider_id)
+                        );
                         const sellPrice = calculateSellPrice(price.price, config.SELL_PRICE_MULTIPLIER);
-                        return `(gen_random_uuid(), '${service.id}', '${country.id}', '${priceId}', ${price.price}, ${sellPrice}, current_timestamp(3))`;
+                        return `(
+                            gen_random_uuid(),
+                            ${sqlString(service.id)},
+                            ${sqlString(country.id)},
+                            ${sqlString(priceId)},
+                            ${Math.ceil(price.price)},
+                            ${sellPrice},
+                            true,
+                            current_timestamp(3)
+                        )`;
                     }).join(', ');
 
                     const query = `
-                        INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "sellPrice", "updatedAt")
+                        INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "sellPrice", "isActive", "updatedAt")
                         VALUES ${values}
                         ON CONFLICT ("priceId") DO UPDATE SET
                         "providerPrice" = EXCLUDED."providerPrice",
                         "sellPrice" = EXCLUDED."sellPrice",
+                        "isActive" = true,
                         "updatedAt" = EXCLUDED."updatedAt";
                     `;
 
@@ -128,3 +146,7 @@ export const serviceService = {
         });
     },
 };
+
+function sqlString(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+}

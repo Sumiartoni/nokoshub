@@ -1,10 +1,10 @@
 import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 import QRCode from 'qrcode';
-import { config } from './config';
-import { setNotifyHandler } from '../modules/routes/webhook.routes';
-import logger from '../utils/logger';
-import { formatRupiah } from '../utils/helpers';
+import { config } from '../src/app/config';
+import { setNotifyHandler } from '../src/modules/routes/webhook.routes';
+import logger from '../src/utils/logger';
+import { formatRupiah } from '../src/utils/helpers';
 
 const BASE_URL = `http://127.0.0.1:${config.PORT}`;
 

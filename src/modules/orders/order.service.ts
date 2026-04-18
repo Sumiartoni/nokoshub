@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma.client';
-import { rumahOTPProvider } from '../providers/rumahotp.provider';
+import { heroSMSProvider, parseHeroSMSPriceId } from '../providers/herosms.provider';
 import { userService } from '../users/user.service';
 import { serviceService } from '../services/service.service';
 import { otpQueue } from '../../queue/queue';
@@ -10,12 +10,11 @@ export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELL
 
 export const orderService = {
     /**
-     * Create a new order (V2 API flow):
-     * 1. Parse priceId to get provider info
-     * 2. Get available operators/numbers
-     * 3. Call provider to order
-     * 4. Deduct balance & save to DB
-     * 5. Enqueue OTP polling
+     * Create a new order through HeroSMS:
+     * 1. Parse provider metadata from priceId
+     * 2. Call provider to order the number
+     * 3. Deduct balance & save to DB
+     * 4. Enqueue OTP polling
      */
     async createOrder(userId: string, priceId: string) {
         const price = await serviceService.getPriceById(priceId);
@@ -29,27 +28,18 @@ export const orderService = {
             );
         }
 
-        // Parse composite priceId: serviceCode_countryId_providerId
-        const parts = price.priceId.split('_');
-        if (parts.length < 3) throw new Error('Invalid price configuration');
-        const [, , providerIdStr] = parts;
-        const providerId = Number(providerIdStr);
-
-        // Get operators/numbers available
-        const operators = await rumahOTPProvider.getOperators(
-            price.country.name,
-            providerId
-        );
-
-        if (!operators.length) {
-            throw new Error('No numbers available for this service right now');
+        const providerPrice = parseHeroSMSPriceId(price.priceId);
+        if (!providerPrice) {
+            throw new Error('Invalid HeroSMS price configuration. Please sync provider data again.');
         }
 
-        // Pick first available operator
-        const op = operators[0];
-
         // Call provider to order the number
-        const result = await rumahOTPProvider.orderNumber(op.number_id, providerId, op.operator_id);
+        const result = await heroSMSProvider.orderNumber({
+            serviceCode: providerPrice.serviceCode,
+            countryCode: providerPrice.countryCode,
+            providerId: providerPrice.providerId,
+            maxPrice: price.providerPrice,
+        });
         if (!result.success || !result.phone_number || !result.order_id) {
             throw new Error(result.message || 'Failed to get number from provider');
         }

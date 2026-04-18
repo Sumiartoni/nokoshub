@@ -1,6 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import { prisma } from '../database/prisma.client';
-import { rumahOTPProvider } from '../modules/providers/rumahotp.provider';
+import { heroSMSProvider } from '../modules/providers/herosms.provider';
 import { config } from '../app/config';
 import logger from '../utils/logger';
 import { sleep } from '../utils/helpers';
@@ -33,7 +33,7 @@ const worker = new Worker<OtpJobData>(
                 return;
             }
 
-            const statusResult = await rumahOTPProvider.checkStatus(providerOrderId);
+            const statusResult = await heroSMSProvider.checkStatus(providerOrderId);
 
             if (statusResult.success && statusResult.sms_code) {
                 // OTP found! Update order

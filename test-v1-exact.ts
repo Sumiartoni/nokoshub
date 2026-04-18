@@ -2,12 +2,10 @@ import axios from 'axios';
 import { config } from './src/app/config';
 
 async function testV1() {
-    console.log('Testing V1 API format...');
-    // API Basic: https://www.rumahotp.com/api/
-    // Endpoint: /service?api_key=...
+    console.log('Testing HeroSMS API format...');
 
     try {
-        const url = `https://www.rumahotp.com/api/service?api_key=${config.RUMAHOTP_API_KEY}`;
+        const url = `${config.HERO_SMS_BASE_URL}/services?api_key=${config.HERO_SMS_API_KEY}`;
         console.log(`Calling: ${url}`);
         const res = await axios.get(url);
 

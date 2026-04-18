@@ -13,8 +13,9 @@ const envSchema = z.object({
 
     TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
 
-    RUMAHOTP_API_KEY: z.string().min(1, 'RUMAHOTP_API_KEY is required'),
-    RUMAHOTP_BASE_URL: z.string().url().default('https://www.rumahotp.com/api'),
+    HERO_SMS_API_KEY: z.string().min(1, 'HERO_SMS_API_KEY is required'),
+    HERO_SMS_BASE_URL: z.string().url().default('https://hero-sms.com/api/v1'),
+    HERO_SMS_PRICE_TO_IDR_RATE: z.string().default('17000').transform(Number),
 
     QRIS_STATIC_STRING: z.string().min(1, 'QRIS_STATIC_STRING is required'),
     PAYMENT_WEBHOOK_SECRET: z.string().min(1, 'PAYMENT_WEBHOOK_SECRET is required'),

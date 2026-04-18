@@ -16,6 +16,7 @@ RUN npx prisma generate
 
 # Copy source
 COPY src ./src
+COPY ["bot tele", "./bot tele"]
 
 # Compile TypeScript
 RUN npx tsc --project tsconfig.json
@@ -41,4 +42,4 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 8000
 
 # Default: run main server + bot
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]

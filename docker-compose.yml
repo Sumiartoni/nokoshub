@@ -56,8 +56,9 @@ services:
       DATABASE_URL: postgresql://nokos:nokos_password@postgres:5432/nokos_db
       REDIS_URL: redis://redis:6379
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      RUMAHOTP_API_KEY: ${RUMAHOTP_API_KEY}
-      RUMAHOTP_BASE_URL: ${RUMAHOTP_BASE_URL:-https://www.rumahotp.com/api}
+      HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
+      HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/api/v1}
+      HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       QRIS_STATIC_STRING: ${QRIS_STATIC_STRING}
       PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET}
       ADMIN_API_KEY: ${ADMIN_API_KEY}
@@ -70,7 +71,7 @@ services:
     command: >
       sh -c "
         npx prisma migrate deploy &&
-        node dist/index.js
+        node dist/src/index.js
       "
     volumes:
       - ./prisma:/app/prisma
@@ -93,8 +94,9 @@ services:
       API_BASE_URL: http://backend:3000
       DATABASE_URL: postgresql://nokos:nokos_password@postgres:5432/nokos_db
       REDIS_URL: redis://redis:6379
-      RUMAHOTP_API_KEY: ${RUMAHOTP_API_KEY}
-      RUMAHOTP_BASE_URL: ${RUMAHOTP_BASE_URL:-https://www.rumahotp.com/api}
+      HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
+      HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/api/v1}
+      HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       OTP_POLL_INTERVAL_MS: ${OTP_POLL_INTERVAL_MS:-5000}
       OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-120000}
       # Worker needs config to pass validation, provide dummy values for unused vars
@@ -103,7 +105,7 @@ services:
       PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET}
       ADMIN_API_KEY: ${ADMIN_API_KEY}
       JWT_SECRET: ${JWT_SECRET}
-    command: ['node', 'dist/worker.js']
+    command: ['node', 'dist/src/worker.js']
 
 volumes:
   postgres_data:
