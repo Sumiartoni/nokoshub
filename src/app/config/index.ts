@@ -26,6 +26,14 @@ const envSchema = z.object({
     PAYMENT_WEBHOOK_SECRET: z.string().min(1, 'PAYMENT_WEBHOOK_SECRET is required'),
 
     ADMIN_API_KEY: z.string().min(1, 'ADMIN_API_KEY is required'),
+    BACKOFFICE_USERNAME: z.string().default('admin'),
+    BACKOFFICE_PASSWORD_HASH: z.string().default(''),
+    BACKOFFICE_SESSION_SECRET: z.string().default(''),
+    BACKOFFICE_SESSION_HOURS: z.string().default('8').transform(Number),
+    BACKOFFICE_COOKIE_SECURE: z.string().default('false').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
+    CORS_ALLOWED_ORIGINS: z.string().default(''),
 
     JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters').default('change_this_secret_in_production'),
     JWT_EXPIRES_IN: z.string().default('7d'),

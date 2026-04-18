@@ -18,6 +18,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
+    "backoffice:hash": "ts-node src/scripts/hash-backoffice-password.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

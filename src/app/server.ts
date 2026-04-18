@@ -7,6 +7,7 @@ import { connectDatabase } from '../database/prisma.client';
 import { redisConnection } from '../queue/queue';
 import { apiRoutes } from '../modules/routes/api.routes';
 import { adminRoutes } from '../modules/routes/admin.routes';
+import { backofficeRoutes } from '../modules/routes/backoffice.routes';
 import { webhookRoutes, internalRoutes } from '../modules/routes/webhook.routes';
 import { serviceService } from '../modules/services/service.service';
 import logger from '../utils/logger';
@@ -18,8 +19,18 @@ export async function buildServer() {
     });
 
     // ─── Plugins ──────────────────────────────────────────────────────────────
+    const allowedOrigins = config.CORS_ALLOWED_ORIGINS
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+
     await app.register(cors, {
-        origin: config.NODE_ENV === 'production' ? false : true,
+        origin: (origin, cb) => {
+            if (!origin) return cb(null, true);
+            if (config.NODE_ENV !== 'production') return cb(null, true);
+            return cb(null, allowedOrigins.includes(origin));
+        },
+        credentials: true,
     });
 
     await app.register(helmet, {
@@ -104,6 +115,7 @@ async function tryApi(url){
     // ─── Routes ───────────────────────────────────────────────────────────────
     await app.register(apiRoutes, { prefix: '/api' });
     await app.register(adminRoutes, { prefix: '/api/admin' });
+    await app.register(backofficeRoutes);
     await app.register(webhookRoutes, { prefix: '/api/payment' });
     await app.register(internalRoutes, { prefix: '/api/internal' });
 

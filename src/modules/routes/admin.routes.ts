@@ -1,19 +1,15 @@
 import { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
 import { serviceService } from '../../modules/services/service.service';
 import { orderService } from '../../modules/orders/order.service';
 import { paymentService } from '../../modules/payments/payment.service';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { prisma } from '../../database/prisma.client';
-
-const adminKeySchema = z.object({
-    'x-admin-key': z.string(),
-});
+import { hasBackofficeSession } from '../../utils/backoffice-auth';
 
 function requireAdmin(req: any, reply: any): boolean {
     const key = req.headers['x-admin-key'] || (req.query && req.query.key);
-    if (key !== config.ADMIN_API_KEY) {
+    if (key !== config.ADMIN_API_KEY && !hasBackofficeSession(req)) {
         reply.status(401).send({ success: false, error: 'Unauthorized' });
         return false;
     }
