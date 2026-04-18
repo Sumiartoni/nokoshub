@@ -884,6 +884,53 @@ input, textarea, select { user-select: text; }
   font-size: 0.72rem;
   line-height: 1.6;
 }
+.invoice-qris-scan {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 14px 0;
+  padding: 12px;
+  background: #fff;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+}
+.invoice-qris-scan img {
+  width: min(280px, 100%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.proof-upload-box {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--bg);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+  text-align: left;
+}
+.proof-upload-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.proof-upload-input {
+  width: 100%;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.proof-file-name {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--muted);
+  word-break: break-word;
+}
 .invoice-countdown {
   display: inline-flex;
   align-items: center;

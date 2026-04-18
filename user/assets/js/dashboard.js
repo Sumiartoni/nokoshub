@@ -32,7 +32,7 @@ const S = {
     refundTotal: 0,
     invoicesCount: 0,
   },
-  topup: { amount: 0, method: 'Transfer Bank', fee: 0, invoice: null },
+  topup: { amount: 0, method: 'QRIS', fee: 0, invoice: null, proofFile: null },
   buy: {
     step: 1,
     svc: null,
@@ -808,7 +808,14 @@ async function doTopup() {
 
     set('topupOkMsg', `Invoice #${shortId(invoice.invoiceId)} berlaku sampai ${formatDate(invoice.expiredAt)}.`);
     set('topupOkBal', FMT(invoice.amount));
-    set('topupQrisPayload', invoice.qrisPayload || '-');
+    const qrisImage = document.getElementById('topupQrisImage');
+    if (qrisImage) {
+      qrisImage.src = apiUrl(`/deposit/${invoice.invoiceId}/qris.png`, { telegramId, t: Date.now() });
+    }
+    S.topup.proofFile = null;
+    const proofInput = document.getElementById('topupProofFile');
+    if (proofInput) proofInput.value = '';
+    set('topupProofName', 'Belum ada file dipilih');
     startTopupCountdown(invoice.expiredAt);
     openModal('modalTopupOk');
 
@@ -823,8 +830,93 @@ async function doTopup() {
 }
 
 function copyInvoicePayload() {
-  const payload = document.getElementById('topupQrisPayload')?.textContent || '';
+  const payload = S.topup.invoice?.qrisPayload || '';
   copyText(payload);
+}
+
+function handleTopupProofChange(event) {
+  const file = event.target.files?.[0] || null;
+  S.topup.proofFile = file;
+
+  if (!file) {
+    set('topupProofName', 'Belum ada file dipilih');
+    return;
+  }
+
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    S.topup.proofFile = null;
+    event.target.value = '';
+    set('topupProofName', 'Format harus JPG, PNG, atau WEBP');
+    showToast('Format bukti harus gambar JPG, PNG, atau WEBP', 'warning');
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    S.topup.proofFile = null;
+    event.target.value = '';
+    set('topupProofName', 'Ukuran file maksimal 5MB');
+    showToast('Ukuran bukti maksimal 5MB', 'warning');
+    return;
+  }
+
+  set('topupProofName', `${file.name} (${Math.ceil(file.size / 1024)} KB)`);
+}
+
+async function submitTopupProof() {
+  const invoice = S.topup.invoice;
+  const file = S.topup.proofFile;
+  const telegramId = getTelegramId({ promptUser: true });
+
+  if (!invoice?.invoiceId) {
+    showToast('Invoice belum dibuat atau sudah tidak tersedia', 'warning');
+    return;
+  }
+  if (!telegramId) return;
+  if (!file) {
+    showToast('Upload bukti pembayaran terlebih dahulu', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('topupProofSubmitBtn');
+  const original = btn?.innerHTML;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Mengirim bukti...';
+  }
+
+  try {
+    const dataBase64 = await fileToBase64(file);
+    await apiFetch('/deposit/proof', {
+      body: {
+        invoiceId: invoice.invoiceId,
+        telegramId,
+        fileName: file.name,
+        mimeType: file.type,
+        dataBase64,
+      },
+    });
+
+    showToast('Bukti pembayaran terkirim ke admin. Saldo akan masuk setelah dikonfirmasi.', 'success');
+    closeModal('modalTopupOk');
+    nav('transactions');
+    await loadDashboardData({ silent: true });
+  } catch (err) {
+    showToast(`Gagal kirim bukti: ${err.message}`, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = original || '📤 Kirim Bukti ke Admin';
+    }
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(new Error('Gagal membaca file bukti'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function startTopupCountdown(expiredAt) {

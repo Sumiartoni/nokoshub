@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import QRCode from 'qrcode';
 import { serviceService } from '../../modules/services/service.service';
 import { userService } from '../../modules/users/user.service';
 import { orderService } from '../../modules/orders/order.service';
@@ -25,6 +26,14 @@ const createOrderSchema = z.object({
 const depositSchema = z.object({
     amount: z.number().int().min(10000).max(10000000),
     telegramId: z.string().min(1),
+});
+
+const depositProofSchema = z.object({
+    invoiceId: z.string().min(1),
+    telegramId: z.string().min(1),
+    fileName: z.string().min(1).max(160),
+    mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+    dataBase64: z.string().min(100).max(7_000_000),
 });
 
 const userSessionSchema = z.object({
@@ -390,6 +399,58 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
     });
 
+    // GET /api/deposit/:invoiceId/qris.png?telegramId=
+    fastify.get('/deposit/:invoiceId/qris.png', async (req, reply) => {
+        const params = req.params as { invoiceId?: string };
+        const query = req.query as { telegramId?: string };
+        if (!params.invoiceId || !query.telegramId) {
+            return reply.status(400).send({ success: false, error: 'invoiceId and telegramId required' });
+        }
+
+        const user = await userService.getByTelegramId(query.telegramId);
+        if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
+
+        const invoice = await prisma.invoice.findFirst({
+            where: { id: params.invoiceId, userId: user.id },
+            select: { qrisPayload: true },
+        });
+        if (!invoice?.qrisPayload) return reply.status(404).send({ success: false, error: 'Invoice not found' });
+
+        const png = await QRCode.toBuffer(invoice.qrisPayload, {
+            type: 'png',
+            width: 900,
+            margin: 4,
+            errorCorrectionLevel: 'H',
+            color: { dark: '#000000', light: '#FFFFFF' },
+        });
+
+        reply.header('Cache-Control', 'no-store');
+        reply.type('image/png').send(png);
+    });
+
+    // POST /api/deposit/proof
+    fastify.post('/deposit/proof', {
+        bodyLimit: 8 * 1024 * 1024,
+        config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+    }, async (req, reply) => {
+        const parsed = depositProofSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            const webUser = await authService.requireUser(req.headers.authorization);
+            if (webUser.telegramId !== parsed.data.telegramId) {
+                return reply.status(403).send({ success: false, error: 'Akun Telegram belum tertaut ke akun web ini' });
+            }
+            const result = await handleWebDepositProof(parsed.data);
+            return { success: true, data: result };
+        } catch (err) {
+            const message = (err as Error).message;
+            return reply.status(message === 'Unauthorized' ? 401 : 400).send({ success: false, error: message });
+        }
+    });
+
     // GET /api/invoices?telegramId=
     fastify.get('/invoices', async (req, reply) => {
         const query = req.query as { telegramId?: string };
@@ -417,3 +478,124 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
     });
 };
+
+async function handleWebDepositProof(input: z.infer<typeof depositProofSchema>) {
+    await paymentService.expireOverdueInvoices();
+
+    const adminIds = parseTelegramAdminIds(config.TELEGRAM_ADMIN_IDS);
+    if (!adminIds.length) throw new Error('Admin Telegram belum dikonfigurasi');
+
+    const user = await userService.getByTelegramId(input.telegramId);
+    if (!user) throw new Error('User Telegram tidak ditemukan');
+
+    const invoice = await prisma.invoice.findFirst({
+        where: { id: input.invoiceId, userId: user.id },
+        select: {
+            id: true,
+            amount: true,
+            baseAmount: true,
+            status: true,
+            expiredAt: true,
+            createdAt: true,
+            user: { select: { telegramId: true, username: true, firstName: true, lastName: true } },
+        },
+    });
+
+    if (!invoice) throw new Error('Invoice tidak ditemukan');
+    if (invoice.status === 'PAID') throw new Error('Invoice sudah dibayar');
+    if (invoice.status === 'EXPIRED') throw new Error('Invoice sudah expired');
+    if (invoice.expiredAt && invoice.expiredAt.getTime() <= Date.now()) {
+        await paymentService.expireOverdueInvoices();
+        throw new Error('Invoice sudah expired');
+    }
+
+    const cleanBase64 = input.dataBase64.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    if (buffer.length < 100) throw new Error('File bukti tidak valid');
+    if (buffer.length > 5 * 1024 * 1024) throw new Error('Ukuran bukti maksimal 5MB');
+
+    const caption = [
+        'Deposit baru dari web menunggu konfirmasi manual',
+        '',
+        `Invoice ID: ${invoice.id}`,
+        `Telegram ID user: ${invoice.user.telegramId}`,
+        `Username: ${invoice.user.username ? `@${invoice.user.username}` : '-'}`,
+        `Jumlah saldo: ${formatRupiahPlain(invoice.baseAmount || invoice.amount)}`,
+        `Nominal QRIS: ${formatRupiahPlain(invoice.amount)}`,
+        `Kadaluarsa: ${invoice.expiredAt ? invoice.expiredAt.toLocaleString('id-ID') : '-'}`,
+        '',
+        'Bukti transfer terlampir. Cek mutasi/payment dulu. Jika uang sudah masuk sesuai nominal QRIS, tekan Konfirmasi.',
+    ].join('\n');
+
+    const replyMarkup = {
+        inline_keyboard: [
+            [{ text: '✅ Konfirmasi saldo masuk', callback_data: `pay_ok:${invoice.id}:${invoice.user.telegramId}` }],
+            [{ text: '❌ Belum masuk', callback_data: `pay_no:${invoice.id}:${invoice.user.telegramId}` }],
+        ],
+    };
+
+    let sentCount = 0;
+    for (const adminId of adminIds) {
+        const ok = await sendTelegramPhoto(adminId, buffer, input.mimeType, input.fileName, caption, replyMarkup);
+        if (ok) sentCount += 1;
+    }
+
+    if (!sentCount) throw new Error('Bukti belum berhasil dikirim ke Telegram admin');
+
+    logger.info({ invoiceId: invoice.id, sentCount }, 'Web deposit proof sent to Telegram admins');
+    return { sentCount };
+}
+
+async function sendTelegramPhoto(
+    chatId: string,
+    buffer: Buffer,
+    mimeType: string,
+    fileName: string,
+    caption: string,
+    replyMarkup: object
+) {
+    const Fetch = (globalThis as any).fetch;
+    const FormDataCtor = (globalThis as any).FormData;
+    const BlobCtor = (globalThis as any).Blob;
+
+    if (!Fetch || !FormDataCtor || !BlobCtor) {
+        throw new Error('Runtime tidak mendukung upload file Telegram');
+    }
+
+    const form = new FormDataCtor();
+    form.append('chat_id', chatId);
+    form.append('caption', caption);
+    form.append('reply_markup', JSON.stringify(replyMarkup));
+    form.append('photo', new BlobCtor([buffer], { type: mimeType }), sanitizeFileName(fileName));
+
+    try {
+        const res = await Fetch(`https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+            method: 'POST',
+            body: form,
+        });
+        const body = await res.json().catch(() => null);
+        if (!res.ok || body?.ok === false) {
+            logger.warn({ chatId, status: res.status, body }, 'Failed to send web deposit proof to Telegram');
+            return false;
+        }
+        return true;
+    } catch (err) {
+        logger.warn({ err, chatId }, 'Telegram proof upload request failed');
+        return false;
+    }
+}
+
+function parseTelegramAdminIds(value: string): string[] {
+    return value
+        .split(/[,\s]+/)
+        .map((id) => id.trim())
+        .filter((id) => /^\d+$/.test(id));
+}
+
+function sanitizeFileName(value: string) {
+    return value.replace(/[^\w.-]+/g, '_').slice(0, 120) || 'bukti-transfer.jpg';
+}
+
+function formatRupiahPlain(value: number) {
+    return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+}
