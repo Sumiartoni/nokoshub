@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import * as dotenv from 'dotenv';
+import dns from 'node:dns';
 
 dotenv.config();
+dns.setDefaultResultOrder('ipv4first');
 
 const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
