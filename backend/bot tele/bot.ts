@@ -109,7 +109,7 @@ export function createBot(): TelegramBot {
                 `⚠️ *OTP tidak diterima*\n\n` +
                 `SMS tidak masuk dalam 2 menit.\n` +
                 `📦 Order ID: \`${orderId}\`\n\n` +
-                `Silakan hubungi admin jika ada masalah.`,
+                `Order otomatis dibatalkan dan saldo sudah dikembalikan.`,
                 { parse_mode: 'Markdown' }
             );
         }

@@ -8,6 +8,20 @@ import { formatRupiah } from '../../utils/helpers';
 
 export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
 
+interface CancelAndRefundOptions {
+    userId?: string;
+    cancelProvider: boolean;
+    failReason: string;
+    refundDescription: string;
+}
+
+interface CancelAndRefundResult {
+    cancelled: boolean;
+    refunded: boolean;
+    status: string;
+    refundAmount: number;
+}
+
 export const orderService = {
     /**
      * Create a new order through HeroSMS:
@@ -126,35 +140,143 @@ export const orderService = {
 
     /** Cancel an ACTIVE order and refund user */
     async cancelOrder(orderId: string, userId: string) {
-        const order = await prisma.order.findUnique({ where: { id: orderId } });
-        if (!order) throw new Error('Order not found');
-        if (order.userId !== userId) throw new Error('Unauthorized');
-        if (order.status !== 'ACTIVE') throw new Error('Only ACTIVE orders can be cancelled');
+        const result = await orderService.cancelAndRefundActiveOrder(orderId, {
+            userId,
+            cancelProvider: true,
+            failReason: 'Cancelled by user',
+            refundDescription: 'Refund order cancelled',
+        });
 
-        if (order.providerOrderId) {
+        if (!result.cancelled) {
+            throw new Error(`Only ACTIVE orders can be cancelled. Current status: ${result.status}`);
+        }
+
+        return result;
+    },
+
+    /**
+     * Cancel an active order and refund exactly once.
+     * The conditional ACTIVE -> CANCELLED update is the idempotency guard,
+     * so manual cancel and timeout worker cannot double-credit the user.
+     */
+    async cancelAndRefundActiveOrder(
+        orderId: string,
+        options: CancelAndRefundOptions
+    ): Promise<CancelAndRefundResult> {
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            select: {
+                id: true,
+                userId: true,
+                status: true,
+                providerOrderId: true,
+            },
+        });
+
+        if (!order) throw new Error('Order not found');
+        if (options.userId && order.userId !== options.userId) throw new Error('Unauthorized');
+
+        if (order.status !== 'ACTIVE') {
+            return {
+                cancelled: false,
+                refunded: false,
+                status: order.status,
+                refundAmount: 0,
+            };
+        }
+
+        if (options.cancelProvider && order.providerOrderId) {
             await heroSMSProvider.cancelActivation(order.providerOrderId);
         }
 
-        // Update order status
-        await prisma.order.update({
-            where: { id: orderId },
-            data: { status: 'CANCELLED' },
+        const result = await prisma.$transaction(async (tx) => {
+            const updateResult = await tx.order.updateMany({
+                where: {
+                    id: orderId,
+                    status: 'ACTIVE',
+                    ...(options.userId ? { userId: options.userId } : {}),
+                },
+                data: {
+                    status: 'CANCELLED',
+                    failReason: options.failReason,
+                },
+            });
+
+            if (updateResult.count === 0) {
+                const currentOrder = await tx.order.findUnique({
+                    where: { id: orderId },
+                    select: { status: true },
+                });
+
+                return {
+                    cancelled: false,
+                    refunded: false,
+                    status: currentOrder?.status ?? 'UNKNOWN',
+                    refundAmount: 0,
+                };
+            }
+
+            const cancelledOrder = await tx.order.findUnique({
+                where: { id: orderId },
+                include: { price: true },
+            });
+
+            if (!cancelledOrder) {
+                throw new Error('Order not found after cancellation');
+            }
+
+            const existingRefund = await tx.transaction.findFirst({
+                where: {
+                    userId: cancelledOrder.userId,
+                    type: 'REFUND',
+                    reference: orderId,
+                },
+                select: { id: true },
+            });
+
+            if (existingRefund) {
+                return {
+                    cancelled: true,
+                    refunded: false,
+                    status: 'CANCELLED',
+                    refundAmount: 0,
+                };
+            }
+
+            await tx.user.update({
+                where: { id: cancelledOrder.userId },
+                data: { balance: { increment: cancelledOrder.price.sellPrice } },
+            });
+
+            await tx.transaction.create({
+                data: {
+                    userId: cancelledOrder.userId,
+                    type: 'REFUND',
+                    amount: cancelledOrder.price.sellPrice,
+                    description: options.refundDescription,
+                    reference: orderId,
+                },
+            });
+
+            return {
+                cancelled: true,
+                refunded: true,
+                status: 'CANCELLED',
+                refundAmount: cancelledOrder.price.sellPrice,
+            };
         });
 
-        // Get price for refund
-        const price = await serviceService.getPriceById(order.priceId);
-        if (price) {
-            await userService.addBalance(
-                userId,
-                price.sellPrice,
-                'REFUND',
-                `Refund order cancelled`,
-                orderId
-            );
-        }
+        logger.info(
+            {
+                orderId,
+                refunded: result.refunded,
+                refundAmount: result.refundAmount,
+                reason: options.failReason,
+            },
+            'Order cancelled and refund processed'
+        );
 
-        logger.info({ orderId }, 'Order cancelled and refunded');
-        return { cancelled: true };
+        return result;
     },
 
     /** Get all orders (admin) */

@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import { prisma } from '../database/prisma.client';
 import { heroSMSProvider } from '../modules/providers/herosms.provider';
+import { orderService } from '../modules/orders/order.service';
 import { config } from '../app/config';
 import logger from '../utils/logger';
 import { sleep } from '../utils/helpers';
@@ -26,24 +27,28 @@ const worker = new Worker<OtpJobData>(
         logger.info({ orderId, providerOrderId }, 'OTP polling started');
 
         while (Date.now() - startTime < maxDuration) {
-            // Check if order was already cancelled
+            // Stop if another process has already finalized this order.
             const order = await prisma.order.findUnique({ where: { id: orderId } });
-            if (!order || order.status === 'CANCELLED') {
-                logger.info({ orderId }, 'Order cancelled, stopping poll');
+            if (!order || order.status !== 'ACTIVE') {
+                logger.info({ orderId, status: order?.status }, 'Order no longer active, stopping poll');
                 return;
             }
 
             const statusResult = await heroSMSProvider.checkStatus(providerOrderId);
 
             if (statusResult.success && statusResult.sms_code) {
-                // OTP found! Update order
-                await prisma.order.update({
-                    where: { id: orderId },
+                const updateResult = await prisma.order.updateMany({
+                    where: { id: orderId, status: 'ACTIVE' },
                     data: {
                         otpCode: statusResult.sms_code,
                         status: 'SUCCESS',
                     },
                 });
+
+                if (updateResult.count === 0) {
+                    logger.info({ orderId }, 'OTP received after order was finalized, skipping success update');
+                    return;
+                }
 
                 logger.info({ orderId, otpCode: statusResult.sms_code }, 'OTP received');
 
@@ -55,11 +60,16 @@ const worker = new Worker<OtpJobData>(
 
             // If status is cancelled/expired by provider
             if (statusResult.status === 'cancelled' || statusResult.status === 'expiring') {
-                await prisma.order.update({
-                    where: { id: orderId },
-                    data: { status: 'FAILED', failReason: `Provider status: ${statusResult.status}` },
+                const result = await orderService.cancelAndRefundActiveOrder(orderId, {
+                    cancelProvider: statusResult.status !== 'cancelled',
+                    failReason: `Provider status: ${statusResult.status}`,
+                    refundDescription: `Refund order provider ${statusResult.status}`,
                 });
-                logger.warn({ orderId, status: statusResult.status }, 'Order expired/cancelled by provider');
+
+                logger.warn(
+                    { orderId, status: statusResult.status, refunded: result.refunded },
+                    'Order expired/cancelled by provider'
+                );
                 await notifyOtpTimeout(telegramId, orderId);
                 return;
             }
@@ -67,14 +77,13 @@ const worker = new Worker<OtpJobData>(
             await sleep(interval);
         }
 
-        // Timeout — mark as FAILED
-        await heroSMSProvider.cancelActivation(providerOrderId);
-        await prisma.order.update({
-            where: { id: orderId },
-            data: { status: 'FAILED', failReason: 'OTP not received within 120 seconds' },
+        const result = await orderService.cancelAndRefundActiveOrder(orderId, {
+            cancelProvider: true,
+            failReason: 'OTP not received within 120 seconds',
+            refundDescription: 'Refund OTP timeout',
         });
 
-        logger.warn({ orderId }, 'OTP polling timed out');
+        logger.warn({ orderId, refunded: result.refunded }, 'OTP polling timed out');
         await notifyOtpTimeout(telegramId, orderId);
     },
     {
