@@ -2,6 +2,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 import os from 'node:os';
 import { smtpSettingsService } from '../settings/smtp-settings.service';
+import logger from '../../utils/logger';
 
 interface EmailPayload {
     to: string;
@@ -66,7 +67,44 @@ export const emailService = {
 
     async sendEmail(payload: EmailPayload) {
         const settings = await smtpSettingsService.requireSettings();
-        await sendSmtpMail(settings, payload);
+        logger.info(
+            {
+                smtpHost: settings.host,
+                smtpPort: settings.port,
+                secure: settings.secure,
+                fromEmail: settings.fromEmail,
+                to: payload.to,
+                subject: payload.subject,
+            },
+            'Sending email via SMTP'
+        );
+
+        try {
+            await sendSmtpMail(settings, payload);
+            logger.info(
+                {
+                    smtpHost: settings.host,
+                    fromEmail: settings.fromEmail,
+                    to: payload.to,
+                    subject: payload.subject,
+                },
+                'SMTP accepted email'
+            );
+        } catch (err) {
+            logger.error(
+                {
+                    err,
+                    smtpHost: settings.host,
+                    smtpPort: settings.port,
+                    secure: settings.secure,
+                    fromEmail: settings.fromEmail,
+                    to: payload.to,
+                    subject: payload.subject,
+                },
+                'SMTP send failed'
+            );
+            throw err;
+        }
     },
 };
 
