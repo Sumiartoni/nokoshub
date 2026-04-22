@@ -13,6 +13,8 @@ interface EmailPayload {
 
 const SMTP_CONNECT_TIMEOUT_MS = 10000;
 const SMTP_RESPONSE_TIMEOUT_MS = 15000;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const BREVO_API_TIMEOUT_MS = 15000;
 
 export const emailService = {
     async sendRegistrationOtp(input: {
@@ -69,6 +71,7 @@ export const emailService = {
         const settings = await smtpSettingsService.requireSettings();
         logger.info(
             {
+                transport: settings.transport,
                 smtpHost: settings.host,
                 smtpPort: settings.port,
                 secure: settings.secure,
@@ -80,9 +83,14 @@ export const emailService = {
         );
 
         try {
-            await sendSmtpMail(settings, payload);
+            if (settings.transport === 'brevo_api') {
+                await sendBrevoApiMail(settings, payload);
+            } else {
+                await sendSmtpMail(settings, payload);
+            }
             logger.info(
                 {
+                    transport: settings.transport,
                     smtpHost: settings.host,
                     fromEmail: settings.fromEmail,
                     to: payload.to,
@@ -94,6 +102,7 @@ export const emailService = {
             logger.error(
                 {
                     err,
+                    transport: settings.transport,
                     smtpHost: settings.host,
                     smtpPort: settings.port,
                     secure: settings.secure,
@@ -107,6 +116,50 @@ export const emailService = {
         }
     },
 };
+
+async function sendBrevoApiMail(
+    settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>,
+    payload: EmailPayload
+) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), BREVO_API_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(BREVO_API_URL, {
+            method: 'POST',
+            headers: {
+                accept: 'application/json',
+                'content-type': 'application/json',
+                'api-key': settings.apiKey,
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: settings.fromName,
+                    email: settings.fromEmail,
+                },
+                to: [{ email: payload.to }],
+                subject: payload.subject,
+                htmlContent: payload.html,
+                textContent: payload.text || stripHtml(payload.html),
+            }),
+            signal: controller.signal,
+        });
+
+        const rawBody = await response.text();
+        const body = parseJsonSafely(rawBody);
+
+        if (!response.ok) {
+            throw new Error(extractBrevoError(body, response.status));
+        }
+    } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+            throw new Error('Timeout koneksi ke Brevo API. Periksa firewall server atau coba lagi.');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 async function sendSmtpMail(
     settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>,
@@ -370,6 +423,23 @@ function dotStuff(value: string) {
 
 function stripHtml(value: string) {
     return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function parseJsonSafely(value: string) {
+    if (!value) return null;
+    try {
+        return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+        return null;
+    }
+}
+
+function extractBrevoError(body: Record<string, unknown> | null, status: number) {
+    const message = typeof body?.message === 'string' ? body.message : null;
+    const code = typeof body?.code === 'string' ? body.code : null;
+    if (message && code) return `Brevo API error ${status} (${code}): ${message}`;
+    if (message) return `Brevo API error ${status}: ${message}`;
+    return `Brevo API error ${status}`;
 }
 
 function sanitizeHostname(value: string) {

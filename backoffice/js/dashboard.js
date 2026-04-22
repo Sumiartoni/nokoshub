@@ -771,46 +771,75 @@
     };
 
     window.loadSmtpSettings = async function () {
+        const transportInput = document.getElementById('emailTransportInput');
         const hostInput = document.getElementById('smtpHostInput');
         const portInput = document.getElementById('smtpPortInput');
         const secureInput = document.getElementById('smtpSecureInput');
         const usernameInput = document.getElementById('smtpUsernameInput');
         const passwordInput = document.getElementById('smtpPasswordInput');
+        const apiKeyInput = document.getElementById('brevoApiKeyInput');
         const fromNameInput = document.getElementById('smtpFromNameInput');
         const fromEmailInput = document.getElementById('smtpFromEmailInput');
 
-        if (!hostInput || !portInput || !secureInput || !usernameInput || !passwordInput || !fromNameInput || !fromEmailInput) return;
+        if (!transportInput || !hostInput || !portInput || !secureInput || !usernameInput || !passwordInput || !apiKeyInput || !fromNameInput || !fromEmailInput) return;
 
         try {
             const res = await api('/api/admin/settings/smtp');
             if (!res.success) throw new Error(res.error || 'Gagal memuat SMTP');
 
             const settings = res.data || {};
+            transportInput.value = settings.transport || 'smtp';
             hostInput.value = settings.host || '';
             portInput.value = settings.port || 587;
             secureInput.value = String(Boolean(settings.secure));
             usernameInput.value = settings.username || '';
             passwordInput.value = settings.password || '';
+            apiKeyInput.value = settings.apiKey || '';
             fromNameInput.value = settings.fromName || 'NokosHUB';
             fromEmailInput.value = settings.fromEmail || '';
+            syncEmailTransportFields();
         } catch (err) {
             showToast(err.message || 'Gagal memuat SMTP', 'error');
         }
     };
 
+    window.syncEmailTransportFields = function () {
+        const transport = document.getElementById('emailTransportInput')?.value || 'smtp';
+        const smtpConnectionRow = document.getElementById('smtpConnectionRow');
+        const smtpCredentialsRow = document.getElementById('smtpCredentialsRow');
+        const brevoApiRow = document.getElementById('brevoApiRow');
+
+        const useSmtp = transport === 'smtp';
+        if (smtpConnectionRow) smtpConnectionRow.hidden = !useSmtp;
+        if (smtpCredentialsRow) smtpCredentialsRow.hidden = !useSmtp;
+        if (brevoApiRow) brevoApiRow.hidden = useSmtp;
+    };
+
     window.saveSmtpSettings = async function () {
         const btn = document.getElementById('saveSmtpBtn');
         const payload = {
+            transport: document.getElementById('emailTransportInput')?.value || 'smtp',
             host: document.getElementById('smtpHostInput')?.value.trim() || '',
             port: Number(document.getElementById('smtpPortInput')?.value || 587),
             secure: document.getElementById('smtpSecureInput')?.value === 'true',
             username: document.getElementById('smtpUsernameInput')?.value.trim() || '',
             password: document.getElementById('smtpPasswordInput')?.value || '',
+            apiKey: document.getElementById('brevoApiKeyInput')?.value.trim() || '',
             fromName: document.getElementById('smtpFromNameInput')?.value.trim() || 'NokosHUB',
             fromEmail: document.getElementById('smtpFromEmailInput')?.value.trim() || '',
         };
 
-        if (!payload.host || !payload.username || !payload.password || !payload.fromEmail) {
+        if (!payload.fromEmail) {
+            showToast('Lengkapi email pengirim terlebih dahulu', 'warning');
+            return;
+        }
+
+        if (payload.transport === 'brevo_api') {
+            if (!payload.apiKey) {
+                showToast('Isi Brevo API key terlebih dahulu', 'warning');
+                return;
+            }
+        } else if (!payload.host || !payload.username || !payload.password) {
             showToast('Lengkapi host, username, password, dan email pengirim SMTP', 'warning');
             return;
         }
@@ -824,7 +853,7 @@
                 body: JSON.stringify(payload),
             });
             if (!res.success) throw new Error(res.error || 'Gagal menyimpan SMTP');
-            showToast(res.message || 'SMTP berhasil disimpan');
+            showToast(res.message || 'Konfigurasi email berhasil disimpan');
             await loadSmtpSettings();
         } catch (err) {
             showToast(err.message || 'Gagal menyimpan SMTP', 'error');

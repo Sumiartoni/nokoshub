@@ -405,7 +405,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M4 4h16v16H4z"/><path d="m22 6-10 7L2 6"/><path d="M6 18h12"/>
                             </svg>
-                            SMTP Email OTP
+                            Email OTP
                         </div>
                         <button class="btn btn-sm btn-outline" onclick="loadSmtpSettings()">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -414,11 +414,34 @@
                             Refresh
                         </button>
                     </div>
-                    <div class="panel-body">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="form-label" for="smtpHostInput">SMTP Host</label>
-                                <input class="form-input" id="smtpHostInput" type="text" placeholder="smtp-relay.brevo.com">
+                        <div class="panel-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="emailTransportInput">Metode Kirim</label>
+                                    <select class="form-select" id="emailTransportInput" onchange="syncEmailTransportFields()">
+                                        <option value="smtp">SMTP</option>
+                                        <option value="brevo_api">Brevo API</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="smtpFromNameInput">Nama Pengirim</label>
+                                    <input class="form-input" id="smtpFromNameInput" type="text" placeholder="NokosHUB">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="smtpFromEmailInput">Email Pengirim</label>
+                                    <input class="form-input" id="smtpFromEmailInput" type="email" placeholder="no-reply@nokoshub.store">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:14px" id="brevoApiRow" hidden>
+                                <div class="form-group">
+                                    <label class="form-label" for="brevoApiKeyInput">Brevo API Key</label>
+                                    <input class="form-input" id="brevoApiKeyInput" type="password" placeholder="xkeysib-...">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:14px" id="smtpConnectionRow">
+                                <div class="form-group">
+                                    <label class="form-label" for="smtpHostInput">SMTP Host</label>
+                                    <input class="form-input" id="smtpHostInput" type="text" placeholder="smtp-relay.brevo.com">
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="smtpPortInput">Port</label>
@@ -426,13 +449,13 @@
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="smtpSecureInput">Mode TLS</label>
-                                <select class="form-select" id="smtpSecureInput">
-                                    <option value="false">STARTTLS / TLS biasa</option>
-                                    <option value="true">SSL/TLS langsung</option>
-                                </select>
+                                    <select class="form-select" id="smtpSecureInput">
+                                        <option value="false">STARTTLS / TLS biasa</option>
+                                        <option value="true">SSL/TLS langsung</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                        <div class="form-row" style="margin-top:14px">
+                        <div class="form-row" style="margin-top:14px" id="smtpCredentialsRow">
                             <div class="form-group">
                                 <label class="form-label" for="smtpUsernameInput">Username SMTP</label>
                                 <input class="form-input" id="smtpUsernameInput" type="text" placeholder="Username Brevo SMTP">
@@ -440,16 +463,6 @@
                             <div class="form-group">
                                 <label class="form-label" for="smtpPasswordInput">Password SMTP</label>
                                 <input class="form-input" id="smtpPasswordInput" type="password" placeholder="Password SMTP">
-                            </div>
-                        </div>
-                        <div class="form-row" style="margin-top:14px">
-                            <div class="form-group">
-                                <label class="form-label" for="smtpFromNameInput">Nama Pengirim</label>
-                                <input class="form-input" id="smtpFromNameInput" type="text" placeholder="NokosHUB">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="smtpFromEmailInput">Email Pengirim</label>
-                                <input class="form-input" id="smtpFromEmailInput" type="email" placeholder="no-reply@nokoshub.store">
                             </div>
                         </div>
                         <div class="form-row" style="margin-top:14px">
@@ -468,7 +481,7 @@
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                             </svg>
-                            Untuk Brevo biasanya gunakan host <strong>smtp-relay.brevo.com</strong> dan port <strong>587</strong> dengan STARTTLS.
+                            Jika port SMTP VPS diblokir, pilih <strong>Brevo API</strong>. Untuk SMTP Brevo biasanya gunakan host <strong>smtp-relay.brevo.com</strong> dan port <strong>587</strong> dengan STARTTLS.
                         </div>
                     </div>
                 </div>

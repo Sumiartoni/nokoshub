@@ -16,13 +16,50 @@ const pricingSettingsSchema = z.object({
 });
 
 const smtpSettingsSchema = z.object({
-    host: z.string().min(1, 'Host SMTP wajib diisi'),
-    port: z.number().int().min(1).max(65535),
-    secure: z.boolean(),
-    username: z.string().min(1, 'Username SMTP wajib diisi'),
-    password: z.string().min(1, 'Password SMTP wajib diisi'),
+    transport: z.enum(['smtp', 'brevo_api']).default('smtp'),
+    host: z.string().optional().default(''),
+    port: z.number().int().min(1).max(65535).default(587),
+    secure: z.boolean().default(false),
+    username: z.string().optional().default(''),
+    password: z.string().optional().default(''),
+    apiKey: z.string().optional().default(''),
     fromName: z.string().min(1, 'Nama pengirim wajib diisi').max(100),
     fromEmail: z.string().email('Email pengirim tidak valid'),
+}).superRefine((value, ctx) => {
+    if (value.transport === 'brevo_api') {
+        if (!value.apiKey?.trim()) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['apiKey'],
+                message: 'Brevo API key wajib diisi',
+            });
+        }
+        return;
+    }
+
+    if (!value.host?.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['host'],
+            message: 'Host SMTP wajib diisi',
+        });
+    }
+
+    if (!value.username?.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['username'],
+            message: 'Username SMTP wajib diisi',
+        });
+    }
+
+    if (!value.password?.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['password'],
+            message: 'Password SMTP wajib diisi',
+        });
+    }
 });
 
 const smtpTestSchema = z.object({
@@ -377,7 +414,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const settings = await smtpSettingsService.saveSettings(parsed.data);
         return {
             success: true,
-            message: 'SMTP berhasil disimpan',
+            message: 'Konfigurasi email berhasil disimpan',
             data: settings,
         };
     });
