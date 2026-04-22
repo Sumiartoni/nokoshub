@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://nokoshub.com/sitemap.xml
+Sitemap: https://nokoshub.store/sitemap.xml
