@@ -60,6 +60,10 @@ const authLoginSchema = z.object({
     password: z.string().min(1),
 });
 
+const authGoogleSchema = z.object({
+    credential: z.string().min(100),
+});
+
 const confirmTelegramLinkSchema = z.object({
     code: z.string().min(4),
     telegramId: z.string().min(1),
@@ -100,6 +104,32 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         try {
             const result = await authService.login(parsed.data);
+            return { success: true, data: result };
+        } catch (err) {
+            return reply.status(401).send({ success: false, error: (err as Error).message });
+        }
+    });
+
+    // GET /api/auth/google/config
+    fastify.get('/auth/google/config', async () => {
+        return {
+            success: true,
+            data: {
+                enabled: Boolean(config.GOOGLE_CLIENT_ID),
+                clientId: config.GOOGLE_CLIENT_ID || null,
+            },
+        };
+    });
+
+    // POST /api/auth/google
+    fastify.post('/auth/google', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        const parsed = authGoogleSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            const result = await authService.loginWithGoogle(parsed.data.credential);
             return { success: true, data: result };
         } catch (err) {
             return reply.status(401).send({ success: false, error: (err as Error).message });

@@ -87,7 +87,19 @@ Dashboard user memakai auth email/password melalui endpoint:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/google`
 - `GET /api/auth/me`
+
+Untuk mengaktifkan login Google:
+
+```env
+GOOGLE_CLIENT_ID=isi_dengan_web_client_id_google
+```
+
+Di Google Cloud Console, buat OAuth 2.0 Client type `Web application`, lalu tambahkan `Authorized JavaScript origins` sesuai domain frontend Anda, misalnya:
+
+- `https://nokoshub.store`
+- `https://www.nokoshub.store`
 
 Untuk menghubungkan akun web dengan bot Telegram:
 

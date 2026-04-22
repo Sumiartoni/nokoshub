@@ -25,7 +25,8 @@ model User {
 model WebUser {
   id           String                @id @default(cuid())
   email        String                @unique
-  passwordHash String
+  passwordHash String?
+  googleId     String?               @unique
   firstName    String?
   lastName     String?
   telegramId   String?               @unique

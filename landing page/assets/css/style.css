@@ -1974,6 +1974,31 @@ img { max-width: 100%; display: block; }
   box-shadow: 6px 6px 0 var(--border);
 }
 
+.login-google-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-google-slot {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-google-hint {
+  font-family: var(--font-sub);
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.login-google-hint.is-error {
+  color: #C2410C;
+}
+
 .login-divider {
   display: flex;
   align-items: center;

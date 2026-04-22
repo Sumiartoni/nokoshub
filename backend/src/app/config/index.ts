@@ -50,6 +50,7 @@ const envSchema = z.object({
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
+    GOOGLE_CLIENT_ID: z.string().default(''),
 
     JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters').default('change_this_secret_in_production'),
     JWT_EXPIRES_IN: z.string().default('7d'),

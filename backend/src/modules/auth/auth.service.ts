@@ -5,6 +5,15 @@ import { userService } from '../users/user.service';
 
 const TOKEN_TTL_SECONDS = parseDurationToSeconds(config.JWT_EXPIRES_IN);
 const LINK_CODE_TTL_MINUTES = 10;
+const GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
+const GOOGLE_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
+
+let googleSigningCertCache:
+    | {
+        expiresAt: number;
+        certs: Map<string, string>;
+    }
+    | undefined;
 
 export interface AuthTokenPayload {
     sub: string;
@@ -34,11 +43,76 @@ export const authService = {
     async login(input: { email: string; password: string }) {
         const email = normalizeEmail(input.email);
         const user = await prisma.webUser.findUnique({ where: { email } });
-        if (!user || !verifyPassword(input.password, user.passwordHash)) {
+        if (!user?.passwordHash || !verifyPassword(input.password, user.passwordHash)) {
             throw new Error('Email atau password tidak valid');
         }
 
         return { user: sanitizeWebUser(user), token: signToken(user.id, user.email) };
+    },
+
+    async loginWithGoogle(credential: string) {
+        if (!config.GOOGLE_CLIENT_ID) {
+            throw new Error('Login Google belum dikonfigurasi');
+        }
+
+        const googleUser = await verifyGoogleIdToken(credential);
+        const email = normalizeEmail(googleUser.email);
+        const profile = extractGoogleProfile(googleUser);
+
+        const existingByGoogleId = await prisma.webUser.findUnique({
+            where: { googleId: googleUser.sub },
+        });
+
+        if (existingByGoogleId) {
+            const emailOwner = existingByGoogleId.email !== email
+                ? await prisma.webUser.findUnique({ where: { email } })
+                : null;
+
+            if (emailOwner && emailOwner.id !== existingByGoogleId.id) {
+                throw new Error('Email Google ini sudah digunakan akun lain');
+            }
+
+            const updated = await prisma.webUser.update({
+                where: { id: existingByGoogleId.id },
+                data: {
+                    email,
+                    firstName: profile.firstName ?? existingByGoogleId.firstName,
+                    lastName: profile.lastName ?? existingByGoogleId.lastName,
+                },
+            });
+
+            return { user: sanitizeWebUser(updated), token: signToken(updated.id, updated.email) };
+        }
+
+        const existingByEmail = await prisma.webUser.findUnique({ where: { email } });
+        if (existingByEmail) {
+            if (existingByEmail.googleId && existingByEmail.googleId !== googleUser.sub) {
+                throw new Error('Email ini sudah terhubung ke akun Google lain');
+            }
+
+            const updated = await prisma.webUser.update({
+                where: { id: existingByEmail.id },
+                data: {
+                    googleId: googleUser.sub,
+                    firstName: existingByEmail.firstName ?? profile.firstName,
+                    lastName: existingByEmail.lastName ?? profile.lastName,
+                },
+            });
+
+            return { user: sanitizeWebUser(updated), token: signToken(updated.id, updated.email) };
+        }
+
+        const created = await prisma.webUser.create({
+            data: {
+                email,
+                googleId: googleUser.sub,
+                passwordHash: null,
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+            },
+        });
+
+        return { user: sanitizeWebUser(created), token: signToken(created.id, created.email) };
     },
 
     async getUserFromAuthHeader(authHeader?: string) {
@@ -236,4 +310,151 @@ function parseDurationToSeconds(value: string) {
         d: 24 * 60 * 60,
     };
     return amount * multipliers[unit];
+}
+
+interface GoogleIdTokenPayload {
+    sub: string;
+    email: string;
+    email_verified?: boolean | string;
+    given_name?: string;
+    family_name?: string;
+    name?: string;
+    aud?: string;
+    iss?: string;
+    exp?: number;
+}
+
+async function verifyGoogleIdToken(idToken: string): Promise<GoogleIdTokenPayload> {
+    const [encodedHeader, encodedPayload, encodedSignature] = idToken.split('.');
+    if (!encodedHeader || !encodedPayload || !encodedSignature) {
+        throw new Error('Credential Google tidak valid');
+    }
+
+    const header = JSON.parse(Buffer.from(encodedHeader, 'base64url').toString('utf8')) as {
+        alg?: string;
+        kid?: string;
+    };
+
+    if (header.alg !== 'RS256' || !header.kid) {
+        throw new Error('Header token Google tidak valid');
+    }
+
+    const certs = await getGoogleSigningCertificates();
+    const certPem = certs.get(header.kid);
+    if (!certPem) {
+        throw new Error('Kunci verifikasi Google tidak ditemukan');
+    }
+
+    const verifier = crypto.createVerify('RSA-SHA256');
+    verifier.update(`${encodedHeader}.${encodedPayload}`);
+    verifier.end();
+
+    const signature = Buffer.from(encodedSignature, 'base64url');
+    const isValidSignature = verifier.verify(crypto.createPublicKey(certPem), signature);
+    if (!isValidSignature) {
+        throw new Error('Signature Google tidak valid');
+    }
+
+    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as Partial<GoogleIdTokenPayload>;
+    if (!payload.sub || !payload.email) {
+        throw new Error('Payload Google tidak lengkap');
+    }
+
+    if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000)) {
+        throw new Error('Token Google sudah expired');
+    }
+
+    if (payload.aud !== config.GOOGLE_CLIENT_ID) {
+        throw new Error('Audience Google tidak cocok');
+    }
+
+    if (!payload.iss || !GOOGLE_ISSUERS.has(payload.iss)) {
+        throw new Error('Issuer Google tidak valid');
+    }
+
+    if (!normalizeBoolean(payload.email_verified)) {
+        throw new Error('Email Google belum terverifikasi');
+    }
+
+    return {
+        sub: payload.sub,
+        email: payload.email,
+        email_verified: payload.email_verified,
+        given_name: payload.given_name,
+        family_name: payload.family_name,
+        name: payload.name,
+        aud: payload.aud,
+        iss: payload.iss,
+        exp: payload.exp,
+    };
+}
+
+async function getGoogleSigningCertificates(): Promise<Map<string, string>> {
+    if (googleSigningCertCache && googleSigningCertCache.expiresAt > Date.now()) {
+        return googleSigningCertCache.certs;
+    }
+
+    const response = await fetch(GOOGLE_CERTS_URL);
+    if (!response.ok) {
+        throw new Error('Gagal mengambil sertifikat Google');
+    }
+
+    const cacheControl = response.headers.get('cache-control') || '';
+    const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
+    const maxAgeSeconds = Number(maxAgeMatch?.[1] || 3600);
+    const body = await response.json() as {
+        keys?: Array<{
+            kid?: string;
+            x5c?: string[];
+        }>;
+    };
+
+    const certs = new Map<string, string>();
+    for (const key of body.keys || []) {
+        if (!key.kid || !key.x5c?.[0]) continue;
+        certs.set(key.kid, toPemCertificate(key.x5c[0]));
+    }
+
+    if (!certs.size) {
+        throw new Error('Sertifikat Google kosong');
+    }
+
+    googleSigningCertCache = {
+        certs,
+        expiresAt: Date.now() + maxAgeSeconds * 1000,
+    };
+
+    return certs;
+}
+
+function toPemCertificate(value: string) {
+    const lines = value.match(/.{1,64}/g)?.join('\n') ?? value;
+    return `-----BEGIN CERTIFICATE-----\n${lines}\n-----END CERTIFICATE-----\n`;
+}
+
+function normalizeBoolean(value: boolean | string | undefined) {
+    if (typeof value === 'boolean') return value;
+    return String(value).toLowerCase() === 'true';
+}
+
+function extractGoogleProfile(payload: GoogleIdTokenPayload) {
+    const firstName = payload.given_name?.trim();
+    const lastName = payload.family_name?.trim();
+
+    if (firstName || lastName) {
+        return {
+            firstName: firstName || undefined,
+            lastName: lastName || undefined,
+        };
+    }
+
+    const parts = (payload.name || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    return {
+        firstName: parts.shift() || undefined,
+        lastName: parts.join(' ') || undefined,
+    };
 }

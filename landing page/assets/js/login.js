@@ -9,21 +9,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordToggle = document.getElementById('passwordToggle');
   const submit = document.getElementById('loginSubmit');
   const googleLoginBtn = document.getElementById('googleLoginBtn');
+  const googleLoginHint = document.getElementById('googleLoginHint');
   const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
   const registerForm = document.getElementById('registerForm');
   const registerSubmit = document.getElementById('registerSubmit');
   const googleRegisterBtn = document.getElementById('googleRegisterBtn');
+  const googleRegisterHint = document.getElementById('googleRegisterHint');
 
   bindPasswordToggle(passwordToggle, password);
   bindPasswordToggle(document.getElementById('registerPasswordToggle'), document.getElementById('registerPassword'));
   bindPasswordToggle(document.getElementById('confirmPasswordToggle'), document.getElementById('confirmPassword'));
 
-  googleLoginBtn?.addEventListener('click', () => {
-    showToast('Login Google akan aktif setelah auth web disambungkan.', 'info');
-  });
-
-  googleRegisterBtn?.addEventListener('click', () => {
-    showToast('Daftar Google akan aktif setelah auth web disambungkan.', 'info');
+  initGoogleAuth({
+    buttonSlot: googleLoginBtn || googleRegisterBtn,
+    hint: googleLoginHint || googleRegisterHint,
+    submit,
+    registerSubmit,
+    mode: registerForm ? 'register' : 'login',
   });
 
   forgotPasswordBtn?.addEventListener('click', () => {
@@ -211,6 +213,18 @@ async function apiFetch(path, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  return unwrapApiResponse(response);
+}
+
+async function apiGet(path) {
+  const response = await fetch(apiUrl(path), {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+  return unwrapApiResponse(response);
+}
+
+async function unwrapApiResponse(response) {
   const text = await response.text();
   const payload = text ? JSON.parse(text) : {};
   if (!response.ok || payload.success === false) {
@@ -218,6 +232,118 @@ async function apiFetch(path, body) {
     throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
   }
   return payload.data ?? payload;
+}
+
+async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode }) {
+  if (!buttonSlot || !hint) return;
+
+  try {
+    const config = await apiGet('/auth/google/config');
+    if (!config?.enabled || !config?.clientId) {
+      hint.textContent = 'Login Google belum tersedia saat ini.';
+      hint.classList.add('is-error');
+      buttonSlot.replaceChildren();
+      return;
+    }
+
+    await loadGoogleIdentityScript();
+    if (!window.google?.accounts?.id) {
+      throw new Error('Google Identity Services gagal dimuat.');
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: config.clientId,
+      callback: async (response) => {
+        const currentSubmit = mode === 'register' ? registerSubmit : submit;
+        setAuthSubmitState(currentSubmit, true, mode === 'register' ? 'Menyambungkan Google...' : 'Memproses Google...');
+        setGoogleBusy(buttonSlot, hint, true);
+
+        try {
+          const result = await apiFetch('/auth/google', {
+            credential: response.credential,
+          });
+          persistAuth(result);
+          showToast(mode === 'register' ? 'Akun Google berhasil terhubung.' : 'Login Google berhasil.', 'success');
+          setTimeout(() => {
+            window.location.href = '/user/#/home';
+          }, 500);
+        } catch (err) {
+          hint.textContent = err.message || 'Login Google gagal.';
+          hint.classList.add('is-error');
+          showToast(err.message || 'Login Google gagal.', 'error');
+          setAuthSubmitState(currentSubmit, false);
+          setGoogleBusy(buttonSlot, hint, false);
+        }
+      },
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+
+    window.google.accounts.id.renderButton(buttonSlot, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      shape: 'pill',
+      text: mode === 'register' ? 'signup_with' : 'signin_with',
+      width: Math.max(buttonSlot.clientWidth || 320, 280),
+      logo_alignment: 'left',
+    });
+
+    hint.textContent = mode === 'register'
+      ? 'Daftar cepat dengan akun Google Anda.'
+      : 'Masuk cepat dengan akun Google Anda.';
+    hint.dataset.defaultText = hint.textContent;
+    hint.classList.remove('is-error');
+  } catch (err) {
+    buttonSlot.replaceChildren();
+    hint.textContent = err.message || 'Google login belum bisa dipakai.';
+    hint.classList.add('is-error');
+  }
+}
+
+function setGoogleBusy(buttonSlot, hint, busy) {
+  buttonSlot.style.opacity = busy ? '0.7' : '1';
+  buttonSlot.style.pointerEvents = busy ? 'none' : 'auto';
+  if (!busy && hint && !hint.classList.contains('is-error')) {
+    hint.textContent = hint.dataset.defaultText || 'Masuk cepat dengan akun Google Anda.';
+  }
+}
+
+function setAuthSubmitState(button, busy, label) {
+  if (!button) return;
+
+  button.disabled = busy;
+  if (busy) {
+    button.innerHTML = `<i data-lucide="loader-circle"></i> ${label}`;
+  } else if (button.id === 'registerSubmit') {
+    button.innerHTML = '<i data-lucide="rocket"></i> Buat Akun';
+  } else {
+    button.innerHTML = '<i data-lucide="arrow-right"></i> Masuk Dashboard';
+  }
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function loadGoogleIdentityScript() {
+  if (window.google?.accounts?.id) {
+    return Promise.resolve();
+  }
+
+  if (window.__nokosGoogleScriptPromise) {
+    return window.__nokosGoogleScriptPromise;
+  }
+
+  window.__nokosGoogleScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Script Google gagal dimuat.'));
+    document.head.appendChild(script);
+  });
+
+  return window.__nokosGoogleScriptPromise;
 }
 
 function apiUrl(path) {
