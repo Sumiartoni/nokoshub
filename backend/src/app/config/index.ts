@@ -51,6 +51,17 @@ const envSchema = z.object({
     }),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
     GOOGLE_CLIENT_ID: z.string().default(''),
+    EMAIL_TRANSPORT: z.enum(['', 'smtp', 'brevo_api']).default(''),
+    EMAIL_FROM_NAME: z.string().default('NokosHUB'),
+    EMAIL_FROM_EMAIL: z.string().default(''),
+    BREVO_API_KEY: z.string().default(''),
+    SMTP_HOST: z.string().default(''),
+    SMTP_PORT: z.string().default('587').transform(Number),
+    SMTP_SECURE: z.string().default('false').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
+    SMTP_USERNAME: z.string().default(''),
+    SMTP_PASSWORD: z.string().default(''),
 
     JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters').default('change_this_secret_in_production'),
     JWT_EXPIRES_IN: z.string().default('7d'),

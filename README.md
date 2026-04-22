@@ -110,3 +110,16 @@ Untuk menghubungkan akun web dengan bot Telegram:
 5. Kirim kode 6 digit dari web ke bot.
 
 Setelah berhasil, saldo, order, deposit, dan riwayat Telegram akan terbaca di dashboard web.
+
+## Email OTP
+
+Untuk kasus VPS yang gagal konek ke SMTP port `587`, disarankan memakai Brevo API langsung dari `.env` agar tidak bergantung pada panel admin.
+
+```env
+EMAIL_TRANSPORT=brevo_api
+EMAIL_FROM_NAME=NokosHUB
+EMAIL_FROM_EMAIL=no-reply@nokoshub.store
+BREVO_API_KEY=isi_dengan_api_key_brevo_xkeysib
+```
+
+Jika `EMAIL_TRANSPORT` diisi, backend akan memprioritaskan konfigurasi email dari `.env` di atas pengaturan panel super admin.
