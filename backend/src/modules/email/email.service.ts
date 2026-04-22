@@ -10,6 +10,9 @@ interface EmailPayload {
     text?: string;
 }
 
+const SMTP_CONNECT_TIMEOUT_MS = 10000;
+const SMTP_RESPONSE_TIMEOUT_MS = 15000;
+
 export const emailService = {
     async sendRegistrationOtp(input: {
         to: string;
@@ -136,33 +139,75 @@ async function sendCommand(
 
 function openSmtpSocket(settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>) {
     return new Promise<net.Socket | tls.TLSSocket>((resolve, reject) => {
-        const handleError = (err: Error) => reject(err);
+        let timer: NodeJS.Timeout | null = setTimeout(() => {
+            cleanup();
+            reject(new Error('Timeout koneksi SMTP. Periksa host, port, dan firewall server.'));
+        }, SMTP_CONNECT_TIMEOUT_MS);
+
+        const cleanup = () => {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+            socket?.off('error', handleError);
+        };
+
+        let socket: net.Socket | tls.TLSSocket | null = null;
+
+        const handleError = (err: Error) => {
+            cleanup();
+            reject(err);
+        };
 
         if (settings.secure) {
-            const socket = tls.connect({
+            socket = tls.connect({
                 host: settings.host,
                 port: settings.port,
                 servername: settings.host,
-            }, () => resolve(socket));
+            }, () => {
+                cleanup();
+                resolve(socket as tls.TLSSocket);
+            });
             socket.once('error', handleError);
             return;
         }
 
-        const socket = net.createConnection({
+        socket = net.createConnection({
             host: settings.host,
             port: settings.port,
-        }, () => resolve(socket));
+        }, () => {
+            cleanup();
+            resolve(socket as net.Socket);
+        });
         socket.once('error', handleError);
     });
 }
 
 function upgradeToTls(socket: net.Socket | tls.TLSSocket, host: string) {
     return new Promise<tls.TLSSocket>((resolve, reject) => {
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('Timeout saat upgrade STARTTLS ke TLS.'));
+        }, SMTP_CONNECT_TIMEOUT_MS);
+
+        const cleanup = () => {
+            clearTimeout(timer);
+            upgraded.off('error', onError);
+        };
+
+        const onError = (err: Error) => {
+            cleanup();
+            reject(err);
+        };
+
         const upgraded = tls.connect({
             socket: socket as net.Socket,
             servername: host,
-        }, () => resolve(upgraded));
-        upgraded.once('error', reject);
+        }, () => {
+            cleanup();
+            resolve(upgraded);
+        });
+        upgraded.once('error', onError);
     });
 }
 
@@ -172,8 +217,13 @@ function readSmtpResponse(socket: net.Socket | tls.TLSSocket, expectedCodes: num
     return new Promise<{ code: number; lines: string[] }>((resolve, reject) => {
         let buffer = '';
         const lines: string[] = [];
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('Timeout menunggu respons SMTP.'));
+        }, SMTP_RESPONSE_TIMEOUT_MS);
 
         const cleanup = () => {
+            clearTimeout(timer);
             socket.off('data', onData);
             socket.off('error', onError);
             socket.off('close', onClose);
