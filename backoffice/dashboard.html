@@ -403,6 +403,46 @@
                     <div class="panel-header">
                         <div class="panel-title">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 21s-8-4.438-8-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 6.562-8 11-8 11z"/>
+                            </svg>
+                            Program Referral
+                        </div>
+                        <button class="btn btn-sm btn-outline" onclick="loadReferralSettings()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="referralEnabledInput">Status Referral</label>
+                                <select class="form-select" id="referralEnabledInput">
+                                    <option value="true">Aktif</option>
+                                    <option value="false">Nonaktif</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="referralRewardAmountInput">Bonus Referral (Rp)</label>
+                                <input class="form-input" id="referralRewardAmountInput" type="number" min="0" step="1000" placeholder="5000">
+                            </div>
+                            <div class="form-group" style="align-self:end">
+                                <button class="btn btn-sm btn-primary" id="saveReferralBtn" onclick="saveReferralSettings()">Simpan Referral</button>
+                            </div>
+                        </div>
+                        <div class="form-hint" style="margin-top:14px">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Bonus referral hanya diberikan setelah akun yang diundang berhasil melakukan deposit saldo pertamanya.
+                        </div>
+                    </div>
+                </div>
+                <div class="panel pricing-panel" style="margin-top:16px">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M4 4h16v16H4z"/><path d="m22 6-10 7L2 6"/><path d="M6 18h12"/>
                             </svg>
                             Email OTP
@@ -656,6 +696,6 @@
 </div>
 
 <script src="js/auth.js?v=20260422-1"></script>
-<script src="js/dashboard.js?v=20260422-1"></script>
+<script src="js/dashboard.js?v=20260423-1"></script>
 </body>
 </html>

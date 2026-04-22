@@ -55,6 +55,8 @@ const envSchema = z.object({
     EMAIL_FROM_NAME: z.string().default('NokosHUB'),
     EMAIL_FROM_EMAIL: z.string().default(''),
     BREVO_API_KEY: z.string().default(''),
+    TURNSTILE_SITE_KEY: z.string().default(''),
+    TURNSTILE_SECRET_KEY: z.string().default(''),
     SMTP_HOST: z.string().default(''),
     SMTP_PORT: z.string().default('587').transform(Number),
     SMTP_SECURE: z.string().default('false').transform((value) => {

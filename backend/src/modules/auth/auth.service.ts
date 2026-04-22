@@ -3,6 +3,7 @@ import { prisma } from '../../database/prisma.client';
 import { config } from '../../app/config';
 import { userService } from '../users/user.service';
 import { emailService } from '../email/email.service';
+import { referralService } from '../referrals/referral.service';
 
 const TOKEN_TTL_SECONDS = parseDurationToSeconds(config.JWT_EXPIRES_IN);
 const LINK_CODE_TTL_MINUTES = 10;
@@ -25,52 +26,20 @@ export interface AuthTokenPayload {
 }
 
 export const authService = {
-    async register(input: { email: string; password: string; firstName?: string; lastName?: string }) {
+    async register(input: { email: string; password: string; firstName?: string; lastName?: string; referralCode?: string }) {
         const email = normalizeEmail(input.email);
-        const existing = await prisma.webUser.findUnique({ where: { email } });
-        if (existing) throw new Error('Email sudah terdaftar');
-
         const passwordHash = hashPassword(input.password);
-        const otpCode = generateCode();
-        const otpHash = hashOtp(email, otpCode);
-        const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MINUTES * 60 * 1000);
+        const referredBy = await resolveReferredBy(input.referralCode, email);
+        await ensureEmailAvailableForRegistration(email);
 
-        await prisma.pendingWebRegistration.upsert({
-            where: { email },
-            update: {
-                passwordHash,
-                firstName: input.firstName,
-                lastName: input.lastName,
-                otpHash,
-                otpExpiresAt: expiresAt,
-                otpAttempts: 0,
-                otpSentAt: new Date(),
-            },
-            create: {
-                email,
-                passwordHash,
-                firstName: input.firstName,
-                lastName: input.lastName,
-                otpHash,
-                otpExpiresAt: expiresAt,
-                otpAttempts: 0,
-                otpSentAt: new Date(),
-            },
-        });
-
-        await emailService.sendRegistrationOtp({
-            to: email,
-            otpCode,
-            expiresAt,
-            recipientName: [input.firstName, input.lastName].filter(Boolean).join(' ') || input.firstName || 'Pengguna',
-        });
-
-        return {
-            otpRequired: true,
+        return createOrRefreshPendingRegistration({
             email,
-            maskedEmail: maskEmail(email),
-            expiresAt,
-        };
+            passwordHash,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            referredById: referredBy?.id ?? null,
+            referralCodeUsed: referredBy?.referralCode ?? null,
+        });
     },
 
     async verifyRegisterOtp(input: { email: string; otpCode: string }) {
@@ -96,19 +65,30 @@ export const authService = {
             throw new Error('Kode OTP tidak valid');
         }
 
-        const existing = await prisma.webUser.findUnique({ where: { email } });
+        const existing = await prisma.webUser.findFirst({
+            where: {
+                OR: [
+                    { email },
+                    ...(pending.googleId ? [{ googleId: pending.googleId }] : []),
+                ],
+            },
+        });
         if (existing) {
             await prisma.pendingWebRegistration.delete({ where: { id: pending.id } }).catch(() => null);
             throw new Error('Email sudah terdaftar');
         }
 
         const user = await prisma.$transaction(async (tx) => {
+            const referralCode = await referralService.generateReferralCode(tx);
             const created = await tx.webUser.create({
                 data: {
                     email,
                     passwordHash: pending.passwordHash,
+                    googleId: pending.googleId,
                     firstName: pending.firstName,
                     lastName: pending.lastName,
+                    referralCode,
+                    referredById: pending.referredById,
                 },
             });
 
@@ -120,6 +100,19 @@ export const authService = {
         });
 
         return { user: sanitizeWebUser(user), token: signToken(user.id, user.email) };
+    },
+
+    async resendRegisterOtp(input: { email: string }) {
+        const email = normalizeEmail(input.email);
+        const pending = await prisma.pendingWebRegistration.findUnique({
+            where: { email },
+        });
+
+        if (!pending) {
+            throw new Error('Permintaan pendaftaran tidak ditemukan. Silakan daftar ulang.');
+        }
+
+        return refreshPendingRegistrationOtp(pending);
     },
 
     async login(input: { email: string; password: string }) {
@@ -184,17 +177,30 @@ export const authService = {
             return { user: sanitizeWebUser(updated), token: signToken(updated.id, updated.email) };
         }
 
-        const created = await prisma.webUser.create({
-            data: {
-                email,
-                googleId: googleUser.sub,
-                passwordHash: null,
-                firstName: profile.firstName,
-                lastName: profile.lastName,
-            },
-        });
+        throw new Error('Akun Google belum terdaftar. Silakan daftar terlebih dahulu.');
+    },
 
-        return { user: sanitizeWebUser(created), token: signToken(created.id, created.email) };
+    async startGoogleRegistration(input: { credential: string; referralCode?: string }) {
+        if (!config.GOOGLE_CLIENT_ID) {
+            throw new Error('Login Google belum dikonfigurasi');
+        }
+
+        const googleUser = await verifyGoogleIdToken(input.credential);
+        const email = normalizeEmail(googleUser.email);
+        const profile = extractGoogleProfile(googleUser);
+        const referredBy = await resolveReferredBy(input.referralCode, email);
+
+        await ensureEmailAvailableForRegistration(email, googleUser.sub);
+
+        return createOrRefreshPendingRegistration({
+            email,
+            passwordHash: null,
+            googleId: googleUser.sub,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            referredById: referredBy?.id ?? null,
+            referralCodeUsed: referredBy?.referralCode ?? null,
+        });
     },
 
     async getUserFromAuthHeader(authHeader?: string) {
@@ -281,6 +287,8 @@ export const authService = {
             });
         });
 
+        await referralService.releasePendingRewardsForReferrer(webUser.id);
+
         return sanitizeWebUser(webUser);
     },
 
@@ -293,6 +301,7 @@ export function sanitizeWebUser(user: {
     firstName: string | null;
     lastName: string | null;
     telegramId: string | null;
+    referralCode?: string | null;
     createdAt: Date;
 }) {
     return {
@@ -301,9 +310,118 @@ export function sanitizeWebUser(user: {
         firstName: user.firstName,
         lastName: user.lastName,
         telegramId: user.telegramId,
+        referralCode: user.referralCode ?? null,
         telegramLinked: Boolean(user.telegramId),
         createdAt: user.createdAt,
     };
+}
+
+async function ensureEmailAvailableForRegistration(email: string, googleId?: string) {
+    const existing = await prisma.webUser.findFirst({
+        where: {
+            OR: [
+                { email },
+                ...(googleId ? [{ googleId }] : []),
+            ],
+        },
+    });
+
+    if (existing) {
+        throw new Error('Email sudah terdaftar');
+    }
+}
+
+async function resolveReferredBy(referralCode: string | undefined, email: string) {
+    const normalized = referralService.normalizeReferralCode(referralCode);
+    if (!normalized) return null;
+
+    const referrer = await referralService.resolveReferrerByCode(normalized);
+    if (!referrer) {
+        throw new Error('Kode referral tidak valid');
+    }
+
+    if (normalizeEmail(referrer.email) === email) {
+        throw new Error('Kode referral milik akun Anda sendiri tidak bisa digunakan');
+    }
+
+    return referrer;
+}
+
+async function createOrRefreshPendingRegistration(input: {
+    email: string;
+    passwordHash: string | null;
+    googleId?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    referredById?: string | null;
+    referralCodeUsed?: string | null;
+}) {
+    const otpCode = generateCode();
+    const otpHash = hashOtp(input.email, otpCode);
+    const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MINUTES * 60 * 1000);
+
+    await prisma.pendingWebRegistration.upsert({
+        where: { email: input.email },
+        update: {
+            passwordHash: input.passwordHash,
+            googleId: input.googleId ?? null,
+            firstName: input.firstName ?? null,
+            lastName: input.lastName ?? null,
+            referredById: input.referredById ?? null,
+            referralCodeUsed: input.referralCodeUsed ?? null,
+            otpHash,
+            otpExpiresAt: expiresAt,
+            otpAttempts: 0,
+            otpSentAt: new Date(),
+        },
+        create: {
+            email: input.email,
+            passwordHash: input.passwordHash,
+            googleId: input.googleId ?? null,
+            firstName: input.firstName ?? null,
+            lastName: input.lastName ?? null,
+            referredById: input.referredById ?? null,
+            referralCodeUsed: input.referralCodeUsed ?? null,
+            otpHash,
+            otpExpiresAt: expiresAt,
+            otpAttempts: 0,
+            otpSentAt: new Date(),
+        },
+    });
+
+    await emailService.sendRegistrationOtp({
+        to: input.email,
+        otpCode,
+        expiresAt,
+        recipientName: [input.firstName, input.lastName].filter(Boolean).join(' ') || input.firstName || 'Pengguna',
+    });
+
+    return {
+        otpRequired: true,
+        email: input.email,
+        maskedEmail: maskEmail(input.email),
+        expiresAt,
+    };
+}
+
+async function refreshPendingRegistrationOtp(pending: {
+    email: string;
+    passwordHash: string | null;
+    googleId: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    referredById: string | null;
+    referralCodeUsed: string | null;
+}) {
+    return createOrRefreshPendingRegistration({
+        email: pending.email,
+        passwordHash: pending.passwordHash,
+        googleId: pending.googleId,
+        firstName: pending.firstName,
+        lastName: pending.lastName,
+        referredById: pending.referredById,
+        referralCodeUsed: pending.referralCodeUsed,
+    });
 }
 
 function normalizeEmail(email: string) {

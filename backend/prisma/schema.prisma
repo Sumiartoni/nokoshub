@@ -23,33 +23,48 @@ model User {
 }
 
 model WebUser {
-  id           String                @id @default(cuid())
-  email        String                @unique
-  passwordHash String?
-  googleId     String?               @unique
-  firstName    String?
-  lastName     String?
-  telegramId   String?               @unique
-  telegramUser User?                 @relation(fields: [telegramId], references: [telegramId])
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  linkCodes    WebTelegramLinkCode[]
+  id                       String                @id @default(cuid())
+  email                    String                @unique
+  passwordHash             String?
+  googleId                 String?               @unique
+  firstName                String?
+  lastName                 String?
+  telegramId               String?               @unique
+  referralCode             String                @unique
+  referredById             String?
+  referredBy               WebUser?              @relation("WebUserReferrals", fields: [referredById], references: [id])
+  referrals                WebUser[]             @relation("WebUserReferrals")
+  referredDepositQualifiedAt DateTime?
+  referralRewardGrantedAt  DateTime?
+  referralRewardAmount     Int                   @default(0)
+  telegramUser             User?                 @relation(fields: [telegramId], references: [telegramId])
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  linkCodes                WebTelegramLinkCode[]
+  pendingReferralRegistrations PendingWebRegistration[] @relation("PendingRegistrationReferrer")
+
+  @@index([referredById])
 }
 
 model PendingWebRegistration {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  firstName    String?
-  lastName     String?
-  otpHash      String
-  otpExpiresAt DateTime
-  otpAttempts  Int      @default(0)
-  otpSentAt    DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String?
+  googleId         String?
+  firstName        String?
+  lastName         String?
+  referredById     String?
+  referredBy       WebUser? @relation("PendingRegistrationReferrer", fields: [referredById], references: [id])
+  referralCodeUsed String?
+  otpHash          String
+  otpExpiresAt     DateTime
+  otpAttempts      Int      @default(0)
+  otpSentAt        DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([otpExpiresAt])
+  @@index([referredById])
 }
 
 model WebTelegramLinkCode {
@@ -132,7 +147,7 @@ model Transaction {
   id          String   @id @default(cuid())
   user        User     @relation(fields: [userId], references: [id])
   userId      String
-  type        String // DEPOSIT | DEDUCT | REFUND
+  type        String // DEPOSIT | DEDUCT | REFUND | REFERRAL
   amount      Int
   description String?
   reference   String? // orderId or invoiceId

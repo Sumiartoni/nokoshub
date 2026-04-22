@@ -10,6 +10,8 @@ import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { prisma } from '../../database/prisma.client';
 import { authService } from '../auth/auth.service';
+import { referralService } from '../referrals/referral.service';
+import { turnstileService } from '../security/turnstile.service';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -53,11 +55,17 @@ const authRegisterSchema = z.object({
     password: z.string().min(8),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
+    referralCode: z.string().max(32).optional(),
+    turnstileToken: z.string().max(2048).optional(),
 });
 
 const authRegisterVerifySchema = z.object({
     email: z.string().email(),
     otpCode: z.string().min(4).max(8),
+});
+
+const authRegisterResendSchema = z.object({
+    email: z.string().email(),
 });
 
 const authLoginSchema = z.object({
@@ -67,6 +75,12 @@ const authLoginSchema = z.object({
 
 const authGoogleSchema = z.object({
     credential: z.string().min(100),
+});
+
+const authGoogleRegisterSchema = z.object({
+    credential: z.string().min(100),
+    referralCode: z.string().max(32).optional(),
+    turnstileToken: z.string().max(2048).optional(),
 });
 
 const confirmTelegramLinkSchema = z.object({
@@ -85,6 +99,16 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         return { status: 'ok', timestamp: new Date().toISOString() };
     });
 
+    // GET /api/auth/register/config
+    fastify.get('/auth/register/config', async () => {
+        return {
+            success: true,
+            data: {
+                turnstile: turnstileService.getClientConfig(),
+            },
+        };
+    });
+
     // POST /api/auth/register
     fastify.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = authRegisterSchema.safeParse(req.body);
@@ -93,6 +117,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
             const result = await authService.register(parsed.data);
             return { success: true, data: result };
         } catch (err) {
@@ -109,6 +134,21 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         try {
             const result = await authService.verifyRegisterOtp(parsed.data);
+            return { success: true, data: result };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
+        }
+    });
+
+    // POST /api/auth/register/resend
+    fastify.post('/auth/register/resend', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        const parsed = authRegisterResendSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            const result = await authService.resendRegisterOtp(parsed.data);
             return { success: true, data: result };
         } catch (err) {
             return reply.status(400).send({ success: false, error: (err as Error).message });
@@ -153,6 +193,22 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return { success: true, data: result };
         } catch (err) {
             return reply.status(401).send({ success: false, error: (err as Error).message });
+        }
+    });
+
+    // POST /api/auth/google/register
+    fastify.post('/auth/google/register', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        const parsed = authGoogleRegisterSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
+            const result = await authService.startGoogleRegistration(parsed.data);
+            return { success: true, data: result };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
         }
     });
 
@@ -253,10 +309,20 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const query = req.query as { telegramId?: string };
         let telegramId = query.telegramId;
         let webUser = null;
+        let referral = null;
 
         if (!telegramId && req.headers.authorization) {
             try {
                 webUser = await authService.getUserFromAuthHeader(req.headers.authorization);
+                if (webUser?.id) {
+                    const summary = await referralService.getSummary(webUser.id);
+                    referral = {
+                        code: webUser.referralCode,
+                        settings: summary.settings,
+                        stats: summary.stats,
+                        invites: summary.invites.slice(0, 10),
+                    };
+                }
             } catch {
                 return reply.status(401).send({ success: false, error: 'Unauthorized' });
             }
@@ -268,6 +334,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 success: true,
                 data: {
                     webUser,
+                    referral,
                     user: null,
                     telegramLinked: false,
                     summary: {
@@ -319,6 +386,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                     createdAt: user.createdAt,
                 },
                 webUser,
+                referral,
                 telegramLinked: true,
                 summary: {
                     ordersCount: orders.length,
@@ -648,4 +716,9 @@ function sanitizeFileName(value: string) {
 
 function formatRupiahPlain(value: number) {
     return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+}
+
+function getRequestIp(req: { headers: Record<string, any>; ip?: string }) {
+    const forwarded = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    return forwarded || req.ip || '';
 }

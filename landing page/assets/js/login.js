@@ -1,52 +1,59 @@
-document.addEventListener('DOMContentLoaded', () => {
+const REGISTER_PENDING_KEY = 'nokoshub.register.pending';
+const REGISTER_VERIFY_PATH = '/register/verify/';
+
+document.addEventListener('DOMContentLoaded', async () => {
   if (typeof lucide !== 'undefined') {
     lucide.createIcons();
   }
 
-  const form = document.getElementById('loginForm');
-  const email = document.getElementById('email');
-  const password = document.getElementById('password');
-  const passwordToggle = document.getElementById('passwordToggle');
-  const submit = document.getElementById('loginSubmit');
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  const loginSubmit = document.getElementById('loginSubmit');
+  const registerSubmit = document.getElementById('registerSubmit');
   const googleLoginBtn = document.getElementById('googleLoginBtn');
   const googleLoginHint = document.getElementById('googleLoginHint');
-  const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
-  const registerForm = document.getElementById('registerForm');
-  const registerSubmit = document.getElementById('registerSubmit');
   const googleRegisterBtn = document.getElementById('googleRegisterBtn');
   const googleRegisterHint = document.getElementById('googleRegisterHint');
-  const registerOtpPanel = document.getElementById('registerOtpPanel');
-  const registerOtpCode = document.getElementById('registerOtpCode');
-  const registerOtpInfo = document.getElementById('registerOtpInfo');
-  const registerResendOtpBtn = document.getElementById('registerResendOtpBtn');
-  const registerEditDataBtn = document.getElementById('registerEditDataBtn');
-  window.__nokosRegisterStage = 'details';
 
-  bindPasswordToggle(passwordToggle, password);
+  const registerSecurity = {
+    turnstileEnabled: false,
+    turnstileSiteKey: '',
+    turnstileWidgetId: null,
+    turnstileToken: '',
+  };
+
+  bindPasswordToggle(document.getElementById('passwordToggle'), document.getElementById('password'));
   bindPasswordToggle(document.getElementById('registerPasswordToggle'), document.getElementById('registerPassword'));
   bindPasswordToggle(document.getElementById('confirmPasswordToggle'), document.getElementById('confirmPassword'));
+
+  if (registerForm) {
+    hydrateRegisterFormFromUrl();
+    await initRegisterSecurity(registerSecurity);
+  }
 
   initGoogleAuth({
     buttonSlot: googleLoginBtn || googleRegisterBtn,
     hint: googleLoginHint || googleRegisterHint,
-    submit,
+    submit: loginSubmit,
     registerSubmit,
     mode: registerForm ? 'register' : 'login',
+    getRegisterPayload: () => getRegisterAuxPayload(registerSecurity),
+    onRegisterPending: handleRegisterPending,
+    onRegisterFailure: () => resetTurnstileWidget(registerSecurity),
   });
 
-  forgotPasswordBtn?.addEventListener('click', () => {
+  document.getElementById('forgotPasswordBtn')?.addEventListener('click', () => {
     showToast('Reset password akan tersedia saat auth web aktif.', 'info');
   });
 
-  form?.addEventListener('submit', async (event) => {
+  loginForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-
-    const emailValue = email.value.trim();
-    const passwordValue = password.value.trim();
-    let valid = true;
-
     clearError('emailError');
     clearError('passwordError');
+
+    const emailValue = document.getElementById('email')?.value.trim() || '';
+    const passwordValue = document.getElementById('password')?.value.trim() || '';
+    let valid = true;
 
     if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
       setError('emailError', 'Masukkan email yang valid.');
@@ -60,9 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!valid) return;
 
-    submit.disabled = true;
-    submit.innerHTML = '<i data-lucide="loader-circle"></i> Memproses...';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    setAuthSubmitState(loginSubmit, true, 'Memproses...');
 
     try {
       const result = await apiFetch('/auth/login', {
@@ -77,132 +82,26 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       setError('passwordError', err.message || 'Login gagal.');
       showToast(err.message || 'Login gagal.', 'error');
-      submit.disabled = false;
-      submit.innerHTML = '<i data-lucide="arrow-right"></i> Masuk Dashboard';
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      setAuthSubmitState(loginSubmit, false);
     }
   });
 
   registerForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const fullName = document.getElementById('fullName');
-    const registerEmail = document.getElementById('registerEmail');
-    const registerPassword = document.getElementById('registerPassword');
-    const confirmPassword = document.getElementById('confirmPassword');
-    const terms = document.getElementById('terms');
+    const registerData = collectRegisterFormData(registerSecurity);
+    if (!registerData) return;
 
-    const fullNameValue = fullName.value.trim();
-    const emailValue = registerEmail.value.trim();
-    const passwordValue = registerPassword.value.trim();
-    const confirmValue = confirmPassword.value.trim();
-    const otpValue = registerOtpCode?.value.trim() || '';
-    let valid = true;
-
-    ['fullNameError', 'registerEmailError', 'registerPasswordError', 'confirmPasswordError', 'termsError', 'registerOtpError'].forEach(clearError);
-
-    if (fullNameValue.length < 3) {
-      setError('fullNameError', 'Nama minimal 3 karakter.');
-      valid = false;
-    }
-
-    if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
-      setError('registerEmailError', 'Masukkan email yang valid.');
-      valid = false;
-    }
-
-    if (!isStrongEnoughPassword(passwordValue)) {
-      setError('registerPasswordError', 'Gunakan minimal 8 karakter dengan huruf dan angka.');
-      valid = false;
-    }
-
-    if (confirmValue !== passwordValue) {
-      setError('confirmPasswordError', 'Konfirmasi password belum sama.');
-      valid = false;
-    }
-
-    if (!terms.checked) {
-      setError('termsError', 'Centang persetujuan untuk melanjutkan.');
-      valid = false;
-    }
-
-    if (window.__nokosRegisterStage === 'otp' && (!otpValue || otpValue.length < 4)) {
-      setError('registerOtpError', 'Masukkan kode OTP email yang valid.');
-      valid = false;
-    }
-
-    if (!valid) return;
-
-    registerSubmit.disabled = true;
-    registerSubmit.innerHTML = window.__nokosRegisterStage === 'otp'
-      ? '<i data-lucide="loader-circle"></i> Verifikasi OTP...'
-      : '<i data-lucide="loader-circle"></i> Mengirim OTP...';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-
-    const name = splitName(fullNameValue);
+    setAuthSubmitState(registerSubmit, true, 'Mengirim OTP...');
 
     try {
-      if (window.__nokosRegisterStage === 'otp') {
-        const result = await apiFetch('/auth/register/verify', {
-          email: emailValue,
-          otpCode: otpValue,
-        });
-        persistAuth(result);
-        showToast('Email berhasil diverifikasi. Membuka dashboard...', 'success');
-        setTimeout(() => {
-          window.location.href = '/user/#/home';
-        }, 500);
-      } else {
-        const result = await apiFetch('/auth/register', {
-          email: emailValue,
-          password: passwordValue,
-          firstName: name.firstName,
-          lastName: name.lastName,
-        });
-        enterRegisterOtpStage(result?.maskedEmail || emailValue);
-        showToast('OTP sudah dikirim ke email Anda.', 'success');
-      }
+      const result = await apiFetch('/auth/register', registerData);
+      handleRegisterPending(result, registerData.email);
+      showToast('OTP sudah dikirim ke email Anda.', 'success');
     } catch (err) {
-      setError(window.__nokosRegisterStage === 'otp' ? 'registerOtpError' : 'registerEmailError', err.message || 'Daftar gagal.');
-      showToast(err.message || 'Daftar gagal.', 'error');
-      registerSubmit.disabled = false;
-      registerSubmit.innerHTML = window.__nokosRegisterStage === 'otp'
-        ? '<i data-lucide="shield-check"></i> Verifikasi OTP & Buat Akun'
-        : '<i data-lucide="rocket"></i> Buat Akun';
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      handleRegisterError(err, registerSecurity);
+      setAuthSubmitState(registerSubmit, false);
     }
-  });
-
-  registerResendOtpBtn?.addEventListener('click', async () => {
-    const fullNameValue = document.getElementById('fullName')?.value.trim() || '';
-    const emailValue = document.getElementById('registerEmail')?.value.trim() || '';
-    const passwordValue = document.getElementById('registerPassword')?.value.trim() || '';
-    const name = splitName(fullNameValue);
-
-    registerResendOtpBtn.disabled = true;
-    registerResendOtpBtn.textContent = 'Mengirim...';
-    clearError('registerOtpError');
-
-    try {
-      const result = await apiFetch('/auth/register', {
-        email: emailValue,
-        password: passwordValue,
-        firstName: name.firstName,
-        lastName: name.lastName,
-      });
-      enterRegisterOtpStage(result?.maskedEmail || emailValue);
-      showToast('OTP baru berhasil dikirim.', 'success');
-    } catch (err) {
-      setError('registerOtpError', err.message || 'Gagal mengirim ulang OTP.');
-      showToast(err.message || 'Gagal mengirim ulang OTP.', 'error');
-    } finally {
-      registerResendOtpBtn.disabled = false;
-      registerResendOtpBtn.textContent = 'Kirim Ulang OTP';
-    }
-  });
-
-  registerEditDataBtn?.addEventListener('click', () => {
-    exitRegisterOtpStage();
   });
 });
 
@@ -215,6 +114,197 @@ function bindPasswordToggle(button, input) {
     button.innerHTML = visible ? '<i data-lucide="eye"></i>' : '<i data-lucide="eye-off"></i>';
     if (typeof lucide !== 'undefined') lucide.createIcons();
   });
+}
+
+function hydrateRegisterFormFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const referralCode = normalizeReferralCode(params.get('ref') || params.get('referral') || '');
+  const email = String(params.get('email') || '').trim().toLowerCase();
+
+  const referralInput = document.getElementById('referralCode');
+  if (referralInput && referralCode && !referralInput.value.trim()) {
+    referralInput.value = referralCode;
+  }
+
+  const emailInput = document.getElementById('registerEmail');
+  if (emailInput && email && !emailInput.value.trim()) {
+    emailInput.value = email;
+  }
+}
+
+async function initRegisterSecurity(state) {
+  const wrap = document.getElementById('registerTurnstileWrap');
+  const box = document.getElementById('registerTurnstileBox');
+  const hint = document.getElementById('registerTurnstileHint');
+
+  if (!wrap || !box) return;
+
+  try {
+    const config = await apiGet('/auth/register/config');
+    const turnstile = config?.turnstile || {};
+    if (!turnstile.enabled || !turnstile.siteKey) {
+      wrap.hidden = true;
+      return;
+    }
+
+    state.turnstileEnabled = true;
+    state.turnstileSiteKey = turnstile.siteKey;
+    wrap.hidden = false;
+    if (hint) {
+      hint.textContent = 'Cloudflare Turnstile aktif untuk melindungi form register dari bot dan spam.';
+    }
+
+    await loadTurnstileScript();
+    if (!window.turnstile?.render) {
+      throw new Error('Widget keamanan gagal dimuat.');
+    }
+
+    state.turnstileWidgetId = window.turnstile.render(box, {
+      sitekey: state.turnstileSiteKey,
+      callback(token) {
+        state.turnstileToken = token || '';
+        clearError('registerTurnstileError');
+      },
+      'expired-callback'() {
+        state.turnstileToken = '';
+        setError('registerTurnstileError', 'Captcha kedaluwarsa. Silakan verifikasi ulang.');
+      },
+      'error-callback'() {
+        state.turnstileToken = '';
+        setError('registerTurnstileError', 'Captcha gagal dimuat. Muat ulang halaman lalu coba lagi.');
+      },
+    });
+  } catch (err) {
+    wrap.hidden = false;
+    setError('registerTurnstileError', err.message || 'Verifikasi keamanan belum siap.');
+  }
+}
+
+function collectRegisterFormData(state) {
+  ['fullNameError', 'registerEmailError', 'registerPasswordError', 'confirmPasswordError', 'referralCodeError', 'termsError', 'registerTurnstileError'].forEach(clearError);
+
+  const fullNameValue = document.getElementById('fullName')?.value.trim() || '';
+  const emailValue = document.getElementById('registerEmail')?.value.trim() || '';
+  const passwordValue = document.getElementById('registerPassword')?.value.trim() || '';
+  const confirmValue = document.getElementById('confirmPassword')?.value.trim() || '';
+  const referralCodeValue = normalizeReferralCode(document.getElementById('referralCode')?.value || '');
+  const termsChecked = Boolean(document.getElementById('terms')?.checked);
+  const turnstileToken = getTurnstileTokenOrShowError(state);
+  let valid = true;
+
+  if (fullNameValue.length < 3) {
+    setError('fullNameError', 'Nama minimal 3 karakter.');
+    valid = false;
+  }
+
+  if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
+    setError('registerEmailError', 'Masukkan email yang valid.');
+    valid = false;
+  }
+
+  if (!isStrongEnoughPassword(passwordValue)) {
+    setError('registerPasswordError', 'Gunakan minimal 8 karakter dengan huruf dan angka.');
+    valid = false;
+  }
+
+  if (confirmValue !== passwordValue) {
+    setError('confirmPasswordError', 'Konfirmasi password belum sama.');
+    valid = false;
+  }
+
+  if (!termsChecked) {
+    setError('termsError', 'Centang persetujuan untuk melanjutkan.');
+    valid = false;
+  }
+
+  if (referralCodeValue && referralCodeValue.length < 4) {
+    setError('referralCodeError', 'Kode referral terlihat terlalu pendek.');
+    valid = false;
+  }
+
+  if (state.turnstileEnabled && !turnstileToken) {
+    valid = false;
+  }
+
+  if (!valid) return null;
+
+  const name = splitName(fullNameValue);
+  return {
+    email: emailValue.toLowerCase(),
+    password: passwordValue,
+    firstName: name.firstName,
+    lastName: name.lastName,
+    referralCode: referralCodeValue || undefined,
+    turnstileToken: turnstileToken || undefined,
+  };
+}
+
+function getRegisterAuxPayload(state) {
+  clearError('termsError');
+  clearError('referralCodeError');
+  clearError('registerTurnstileError');
+
+  if (!document.getElementById('terms')?.checked) {
+    setError('termsError', 'Centang persetujuan untuk melanjutkan.');
+    throw new Error('Setujui syarat layanan terlebih dahulu.');
+  }
+
+  const referralCode = normalizeReferralCode(document.getElementById('referralCode')?.value || '');
+  if (referralCode && referralCode.length < 4) {
+    setError('referralCodeError', 'Kode referral terlihat terlalu pendek.');
+    throw new Error('Kode referral belum valid.');
+  }
+
+  const turnstileToken = getTurnstileTokenOrShowError(state);
+  if (state.turnstileEnabled && !turnstileToken) {
+    throw new Error('Selesaikan verifikasi keamanan terlebih dahulu.');
+  }
+
+  return {
+    referralCode: referralCode || undefined,
+    turnstileToken: turnstileToken || undefined,
+  };
+}
+
+function getTurnstileTokenOrShowError(state) {
+  if (!state.turnstileEnabled) return '';
+  if (state.turnstileToken) return state.turnstileToken;
+  setError('registerTurnstileError', 'Selesaikan verifikasi keamanan terlebih dahulu.');
+  return '';
+}
+
+function handleRegisterPending(result, fallbackEmail) {
+  const email = String(result?.email || fallbackEmail || '').trim().toLowerCase();
+  const maskedEmail = result?.maskedEmail || maskEmail(email);
+
+  localStorage.setItem(REGISTER_PENDING_KEY, JSON.stringify({
+    email,
+    maskedEmail,
+    expiresAt: result?.expiresAt || null,
+    updatedAt: new Date().toISOString(),
+  }));
+
+  const target = `${REGISTER_VERIFY_PATH}?email=${encodeURIComponent(email)}`;
+  setTimeout(() => {
+    window.location.href = target;
+  }, 350);
+}
+
+function handleRegisterError(err, state) {
+  const message = err.message || 'Daftar gagal.';
+  applyRegisterErrorMessage(message);
+  showToast(message, 'error');
+  resetTurnstileWidget(state);
+}
+
+function applyRegisterErrorMessage(message) {
+  if (/referral/i.test(message)) {
+    setError('referralCodeError', message);
+  } else if (/captcha|verifikasi keamanan/i.test(message)) {
+    setError('registerTurnstileError', message);
+  } else {
+    setError('registerEmailError', message);
+  }
 }
 
 function setError(id, message) {
@@ -273,54 +363,6 @@ async function apiFetch(path, body) {
   return unwrapApiResponse(response);
 }
 
-function enterRegisterOtpStage(maskedEmail) {
-  const registerOtpPanel = document.getElementById('registerOtpPanel');
-  const registerOtpInfo = document.getElementById('registerOtpInfo');
-  const registerSubmit = document.getElementById('registerSubmit');
-  const registerOtpCode = document.getElementById('registerOtpCode');
-
-  window.__nokosRegisterStage = 'otp';
-  if (registerOtpPanel) registerOtpPanel.hidden = false;
-  if (registerOtpInfo) {
-    registerOtpInfo.textContent = `Masukkan OTP 6 digit yang kami kirim ke ${maskedEmail}.`;
-  }
-  toggleRegisterInputs(true);
-  if (registerSubmit) {
-    registerSubmit.disabled = false;
-    registerSubmit.innerHTML = '<i data-lucide="shield-check"></i> Verifikasi OTP & Buat Akun';
-  }
-  registerOtpCode?.focus();
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function exitRegisterOtpStage() {
-  const registerOtpPanel = document.getElementById('registerOtpPanel');
-  const registerSubmit = document.getElementById('registerSubmit');
-  const registerOtpCode = document.getElementById('registerOtpCode');
-
-  window.__nokosRegisterStage = 'details';
-  if (registerOtpPanel) registerOtpPanel.hidden = true;
-  if (registerOtpCode) registerOtpCode.value = '';
-  toggleRegisterInputs(false);
-  clearError('registerOtpError');
-  if (registerSubmit) {
-    registerSubmit.disabled = false;
-    registerSubmit.innerHTML = '<i data-lucide="rocket"></i> Buat Akun';
-  }
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-function toggleRegisterInputs(lock) {
-  ['fullName', 'registerEmail', 'registerPassword', 'confirmPassword', 'terms'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = lock;
-  });
-  ['registerPasswordToggle', 'confirmPasswordToggle'].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = lock;
-  });
-}
-
 async function apiGet(path) {
   const response = await fetch(apiUrl(path), {
     method: 'GET',
@@ -339,7 +381,7 @@ async function unwrapApiResponse(response) {
   return payload.data ?? payload;
 }
 
-async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode }) {
+async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode, getRegisterPayload, onRegisterPending, onRegisterFailure }) {
   if (!buttonSlot || !hint) return;
 
   try {
@@ -360,24 +402,44 @@ async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode }
       client_id: config.clientId,
       callback: async (response) => {
         const currentSubmit = mode === 'register' ? registerSubmit : submit;
-        setAuthSubmitState(currentSubmit, true, mode === 'register' ? 'Menyambungkan Google...' : 'Memproses Google...');
+        hint.classList.remove('is-error');
+        hint.textContent = hint.dataset.defaultText || hint.textContent;
+        setAuthSubmitState(currentSubmit, true, mode === 'register' ? 'Menyiapkan OTP Google...' : 'Memproses Google...');
         setGoogleBusy(buttonSlot, hint, true);
 
         try {
+          if (mode === 'register') {
+            const registerPayload = typeof getRegisterPayload === 'function'
+              ? getRegisterPayload()
+              : {};
+            const result = await apiFetch('/auth/google/register', {
+              credential: response.credential,
+              referralCode: registerPayload.referralCode,
+              turnstileToken: registerPayload.turnstileToken,
+            });
+            onRegisterPending?.(result, result?.email);
+            showToast('OTP Google sudah dikirim ke email Anda.', 'success');
+            return;
+          }
+
           const result = await apiFetch('/auth/google', {
             credential: response.credential,
           });
           persistAuth(result);
-          showToast(mode === 'register' ? 'Akun Google berhasil terhubung.' : 'Login Google berhasil.', 'success');
+          showToast('Login Google berhasil.', 'success');
           setTimeout(() => {
             window.location.href = '/user/#/home';
           }, 500);
         } catch (err) {
+          if (mode === 'register') {
+            applyRegisterErrorMessage(err.message || 'Daftar Google gagal.');
+          }
           hint.textContent = err.message || 'Login Google gagal.';
           hint.classList.add('is-error');
-          showToast(err.message || 'Login Google gagal.', 'error');
+          showToast(err.message || (mode === 'register' ? 'Daftar Google gagal.' : 'Login Google gagal.'), 'error');
           setAuthSubmitState(currentSubmit, false);
           setGoogleBusy(buttonSlot, hint, false);
+          onRegisterFailure?.();
         }
       },
       auto_select: false,
@@ -429,6 +491,14 @@ function setAuthSubmitState(button, busy, label) {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+function resetTurnstileWidget(state) {
+  if (!state.turnstileEnabled) return;
+  state.turnstileToken = '';
+  if (window.turnstile?.reset && state.turnstileWidgetId !== null && state.turnstileWidgetId !== undefined) {
+    window.turnstile.reset(state.turnstileWidgetId);
+  }
+}
+
 function loadGoogleIdentityScript() {
   if (window.google?.accounts?.id) {
     return Promise.resolve();
@@ -449,6 +519,28 @@ function loadGoogleIdentityScript() {
   });
 
   return window.__nokosGoogleScriptPromise;
+}
+
+function loadTurnstileScript() {
+  if (window.turnstile?.render) {
+    return Promise.resolve();
+  }
+
+  if (window.__nokosTurnstileScriptPromise) {
+    return window.__nokosTurnstileScriptPromise;
+  }
+
+  window.__nokosTurnstileScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Script keamanan Cloudflare gagal dimuat.'));
+    document.head.appendChild(script);
+  });
+
+  return window.__nokosTurnstileScriptPromise;
 }
 
 function apiUrl(path) {
@@ -481,4 +573,19 @@ function showToast(message, type = 'info') {
   showToast.timer = setTimeout(() => {
     toast.classList.remove('show');
   }, 2600);
+}
+
+function normalizeReferralCode(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function maskEmail(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  const [localPart, domain] = normalized.split('@');
+  if (!localPart || !domain) return normalized;
+  const prefix = localPart.slice(0, Math.min(2, localPart.length));
+  return `${prefix}${'*'.repeat(Math.max(2, localPart.length - prefix.length))}@${domain}`;
 }

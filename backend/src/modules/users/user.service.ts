@@ -79,7 +79,7 @@ export const userService = {
     async addBalance(
         userId: string,
         amount: number,
-        type: 'DEPOSIT' | 'REFUND',
+        type: 'DEPOSIT' | 'REFUND' | 'REFERRAL',
         description: string,
         reference?: string
     ): Promise<void> {

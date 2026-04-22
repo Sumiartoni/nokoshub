@@ -4,6 +4,7 @@ import { userService } from '../users/user.service';
 import { generateDynamicQRIS } from './qris.service';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
+import { referralService } from '../referrals/referral.service';
 
 export const paymentService = {
     /**
@@ -160,6 +161,8 @@ export const paymentService = {
             `Deposit via QRIS`,
             invoice.id
         );
+
+        await referralService.processQualifiedDeposit(invoice.userId, invoice.id);
 
         logger.info({ invoiceId: invoice.id, userId: invoice.userId, credited: amountToCredit, paid: invoice.amount }, 'Deposit confirmed');
         return { success: true, message: 'Payment confirmed' };

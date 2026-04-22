@@ -9,10 +9,16 @@ import { hasBackofficeSession } from '../../utils/backoffice-auth';
 import { pricingService } from '../pricing/pricing.service';
 import { smtpSettingsService } from '../settings/smtp-settings.service';
 import { emailService } from '../email/email.service';
+import { referralService } from '../referrals/referral.service';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
     sellPriceMultiplier: z.number().min(1).max(20),
+});
+
+const referralSettingsSchema = z.object({
+    enabled: z.boolean(),
+    rewardAmount: z.number().int().min(0).max(100000000),
 });
 
 const smtpSettingsSchema = z.object({
@@ -437,6 +443,30 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         } catch (err) {
             return reply.status(400).send({ success: false, error: (err as Error).message });
         }
+    });
+
+    // GET /api/admin/settings/referral
+    fastify.get('/settings/referral', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await referralService.getSettings();
+        return { success: true, data: settings };
+    });
+
+    // PATCH /api/admin/settings/referral
+    fastify.patch('/settings/referral', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = referralSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await referralService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'Pengaturan referral berhasil disimpan',
+            data: settings,
+        };
     });
 
     // PATCH /api/admin/user-balance - manually adjust user balance

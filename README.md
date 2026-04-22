@@ -101,6 +101,15 @@ Di Google Cloud Console, buat OAuth 2.0 Client type `Web application`, lalu tamb
 - `https://nokoshub.store`
 - `https://www.nokoshub.store`
 
+Untuk proteksi anti-bot di halaman register, Anda juga bisa mengaktifkan Cloudflare Turnstile:
+
+```env
+TURNSTILE_SITE_KEY=isi_site_key_turnstile
+TURNSTILE_SECRET_KEY=isi_secret_key_turnstile
+```
+
+`TURNSTILE_SITE_KEY` dikirim ke frontend melalui endpoint backend, sedangkan `TURNSTILE_SECRET_KEY` hanya dipakai untuk validasi server-side.
+
 Untuk menghubungkan akun web dengan bot Telegram:
 
 1. User login ke dashboard web.

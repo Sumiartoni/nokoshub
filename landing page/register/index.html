@@ -119,29 +119,25 @@
             <small class="login-error" id="confirmPasswordError"></small>
           </label>
 
+          <label class="login-field" for="referralCode">
+            <span>Kode Referral <small style="color:var(--muted);font-weight:600;">Opsional</small></span>
+            <div class="login-input-wrap">
+              <i data-lucide="gift"></i>
+              <input id="referralCode" name="referralCode" type="text" autocomplete="off" placeholder="Masukkan kode referral jika ada" />
+            </div>
+            <small class="login-error" id="referralCodeError"></small>
+          </label>
+
           <label class="login-check login-terms">
             <input type="checkbox" id="terms" name="terms" />
             <span>Saya setuju dengan <a href="/syarat-ketentuan/" class="login-link" target="_blank" rel="noopener">syarat layanan</a> dan <a href="/kebijakan-privasi/" class="login-link" target="_blank" rel="noopener">kebijakan privasi</a> NokosHUB.</span>
           </label>
           <small class="login-error" id="termsError"></small>
 
-          <div class="login-otp-panel" id="registerOtpPanel" hidden>
-            <div class="login-otp-head">
-              <strong>Verifikasi Email</strong>
-              <span id="registerOtpInfo">Masukkan OTP yang dikirim ke email Anda.</span>
-            </div>
-            <label class="login-field" for="registerOtpCode">
-              <span>Kode OTP Email</span>
-              <div class="login-input-wrap">
-                <i data-lucide="mail-check"></i>
-                <input id="registerOtpCode" name="otpCode" type="text" inputmode="numeric" maxlength="6" placeholder="6 digit OTP" />
-              </div>
-              <small class="login-error" id="registerOtpError"></small>
-            </label>
-            <div class="login-otp-actions">
-              <button type="button" class="btn btn-outline btn-sm" id="registerResendOtpBtn">Kirim Ulang OTP</button>
-              <button type="button" class="btn btn-outline btn-sm" id="registerEditDataBtn">Ubah Data</button>
-            </div>
+          <div class="login-turnstile-box" id="registerTurnstileWrap" hidden>
+            <div class="login-turnstile-slot" id="registerTurnstileBox"></div>
+            <small class="login-error" id="registerTurnstileError"></small>
+            <small class="login-turnstile-hint" id="registerTurnstileHint">Verifikasi keamanan aktif untuk melindungi pendaftaran akun.</small>
           </div>
 
           <button type="submit" class="btn btn-primary btn-lg login-submit" id="registerSubmit">
@@ -159,6 +155,6 @@
   </main>
 
   <div class="login-toast" id="loginToast" role="status" aria-live="polite"></div>
-  <script src="../assets/js/login.js"></script>
+  <script src="../assets/js/login.js?v=20260423-1"></script>
 </body>
 </html>

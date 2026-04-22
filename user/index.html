@@ -579,6 +579,27 @@
                 <div class="topup-notice" id="telegramLinkHint" style="margin-top:10px;">Kode berlaku 10 menit dan hanya bisa dipakai satu kali.</div>
               </div>
 
+              <div class="table-card" style="margin-bottom:16px;">
+                <div class="card-title" style="margin-bottom:12px;">🎁 Referral Saya</div>
+                <p style="font-size:0.82rem;color:var(--muted);font-weight:700;margin-bottom:12px;">
+                  Bagikan kode referral Anda. Bonus akan masuk setelah teman yang diundang berhasil melakukan deposit saldo pertamanya.
+                </p>
+                <div class="link-code-box" id="referralCodeBox">
+                  <span id="referralCodeValue">Memuat kode...</span>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                  <button class="btn btn-primary btn-sm" onclick="copyReferralCode()">📋 Salin Kode</button>
+                  <button class="btn btn-outline btn-sm" onclick="copyReferralLink()">🔗 Salin Link Referral</button>
+                </div>
+                <div class="topup-notice" id="referralHint" style="margin-top:10px;">Program referral belum aktif.</div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;">
+                  <div class="ps"><div class="ps-v" id="ref-total">0</div><div class="ps-l">Diundang</div></div>
+                  <div class="ps"><div class="ps-v" id="ref-qualified">0</div><div class="ps-l">Lolos Syarat</div></div>
+                  <div class="ps"><div class="ps-v" id="ref-pending">Rp 0</div><div class="ps-l">Menunggu</div></div>
+                  <div class="ps"><div class="ps-v" id="ref-earned">Rp 0</div><div class="ps-l">Sudah Masuk</div></div>
+                </div>
+              </div>
+
               <form class="table-card" style="margin-bottom:16px;" onsubmit="event.preventDefault();showToast('Password berhasil diperbarui! 🔐','success')">
                 <div class="card-title" style="margin-bottom:16px;">🔐 Ganti Password</div>
                 <div class="f-group"><label class="f-label">Password Lama</label><input type="password" class="f-input" autocomplete="current-password" placeholder="Password lama" /></div>
@@ -715,6 +736,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260419-5"></script>
+  <script src="assets/js/dashboard.js?v=20260423-1"></script>
 </body>
 </html>

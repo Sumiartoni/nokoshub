@@ -32,6 +32,17 @@ const S = {
     refundTotal: 0,
     invoicesCount: 0,
   },
+  referral: {
+    code: '',
+    settings: { enabled: false, rewardAmount: 0 },
+    stats: {
+      totalInvited: 0,
+      qualifiedInvites: 0,
+      rewardedInvites: 0,
+      totalRewardEarned: 0,
+      pendingRewardAmount: 0,
+    },
+  },
   topup: { amount: 0, method: 'QRIS', fee: 0, invoice: null, proofFile: null },
   buy: {
     step: 1,
@@ -340,6 +351,20 @@ async function loadDashboardData({ silent = false } = {}) {
     if (profile.webUser) applyWebUser(profile.webUser);
     if (profile.user) applyBackendUser(profile.user);
     S.summary = { ...S.summary, ...(profile.summary || {}) };
+    S.referral = {
+      code: profile.referral?.code || me.user?.referralCode || S.referral.code || '',
+      settings: {
+        enabled: Boolean(profile.referral?.settings?.enabled),
+        rewardAmount: Number(profile.referral?.settings?.rewardAmount || 0),
+      },
+      stats: {
+        totalInvited: Number(profile.referral?.stats?.totalInvited || 0),
+        qualifiedInvites: Number(profile.referral?.stats?.qualifiedInvites || 0),
+        rewardedInvites: Number(profile.referral?.stats?.rewardedInvites || 0),
+        totalRewardEarned: Number(profile.referral?.stats?.totalRewardEarned || 0),
+        pendingRewardAmount: Number(profile.referral?.stats?.pendingRewardAmount || 0),
+      },
+    };
     S.orders = profile.telegramLinked ? (profile.recentOrders || []) : [];
     S.transactions = profile.telegramLinked ? (profile.recentTransactions || []) : [];
     S.invoices = profile.telegramLinked ? (profile.recentInvoices || []) : [];
@@ -454,6 +479,17 @@ function updateProfileFields() {
   setInput('pLast', S.user.lastName || '');
   setInput('pEmail', S.user.email || '');
   setInput('pTelegramId', S.user.telegramId || '');
+  set('referralCodeValue', S.referral.code || 'Belum tersedia');
+  set('ref-total', String(S.referral.stats.totalInvited || 0));
+  set('ref-qualified', String(S.referral.stats.qualifiedInvites || 0));
+  set('ref-pending', FMT(S.referral.stats.pendingRewardAmount || 0));
+  set('ref-earned', FMT(S.referral.stats.totalRewardEarned || 0));
+  set(
+    'referralHint',
+    S.referral.settings.enabled
+      ? `Bonus aktif ${FMT(S.referral.settings.rewardAmount)} per referral yang lolos syarat deposit pertama.`
+      : 'Program referral sedang nonaktif. Anda tetap bisa membagikan kode referral.'
+  );
 }
 
 function set(id, val) {
@@ -1126,6 +1162,28 @@ async function createTelegramLinkCode() {
   }
 }
 
+function buildReferralLink() {
+  if (!S.referral.code) return '';
+  return `${window.location.origin}/register/?ref=${encodeURIComponent(S.referral.code)}`;
+}
+
+function copyReferralCode() {
+  if (!S.referral.code) {
+    showToast('Kode referral belum tersedia.', 'warning');
+    return;
+  }
+  copyText(S.referral.code);
+}
+
+function copyReferralLink() {
+  const link = buildReferralLink();
+  if (!link) {
+    showToast('Link referral belum tersedia.', 'warning');
+    return;
+  }
+  copyText(link);
+}
+
 function toggleApi() {
   S.api.visible = !S.api.visible;
   set('apiKeyTxt', S.api.visible ? S.api.key : 'nk_live_••••••••••••••••••••••••••••••••');
@@ -1274,13 +1332,14 @@ function transactionBadge(type = '') {
     DEPOSIT: ['badge-success', 'Deposit'],
     DEDUCT: ['badge-danger', 'Pembelian'],
     REFUND: ['badge-info', 'Refund'],
+    REFERRAL: ['badge-success', 'Referral'],
   };
   const [cls, label] = map[type] || ['badge-info', type || 'Transaksi'];
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
 function typeLabel(type = '') {
-  return { DEPOSIT: 'Top Up', DEDUCT: 'Pembelian OTP', REFUND: 'Refund' }[type] || type;
+  return { DEPOSIT: 'Top Up', DEDUCT: 'Pembelian OTP', REFUND: 'Refund', REFERRAL: 'Bonus Referral' }[type] || type;
 }
 
 function formatDate(date) {

@@ -72,6 +72,7 @@
         else if (pageId === 'transactions') loadTransactions();
         else if (pageId === 'services') {
             loadPricingSettings();
+            loadReferralSettings();
             loadSmtpSettings();
             loadServices();
         }
@@ -109,6 +110,7 @@
         else if (page === 'transactions') loadTransactions();
         else if (page === 'services') {
             loadPricingSettings();
+            loadReferralSettings();
             loadSmtpSettings();
             loadServices();
         }
@@ -155,7 +157,7 @@
             ACTIVE: 'info', SUCCESS: 'success', PAID: 'success',
             PENDING: 'warning', FAILED: 'danger', CANCELLED: 'neutral',
             EXPIRED: 'neutral', DEPOSIT: 'success', DEDUCT: 'danger',
-            REFUND: 'warning', DISABLED: 'danger',
+            REFUND: 'warning', REFERRAL: 'success', DISABLED: 'danger',
         };
         const cls = map[status] || 'neutral';
         return `<span class="badge ${cls}">${status}</span>`;
@@ -767,6 +769,53 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Simpan';
+        }
+    };
+
+    window.loadReferralSettings = async function () {
+        const enabledInput = document.getElementById('referralEnabledInput');
+        const rewardInput = document.getElementById('referralRewardAmountInput');
+        if (!enabledInput || !rewardInput) return;
+
+        try {
+            const res = await api('/api/admin/settings/referral');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat referral');
+
+            enabledInput.value = String(Boolean(res.data?.enabled));
+            rewardInput.value = Number(res.data?.rewardAmount || 0);
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat referral', 'error');
+        }
+    };
+
+    window.saveReferralSettings = async function () {
+        const btn = document.getElementById('saveReferralBtn');
+        const payload = {
+            enabled: document.getElementById('referralEnabledInput')?.value === 'true',
+            rewardAmount: Number(document.getElementById('referralRewardAmountInput')?.value || 0),
+        };
+
+        if (!Number.isFinite(payload.rewardAmount) || payload.rewardAmount < 0) {
+            showToast('Bonus referral harus berupa angka 0 atau lebih', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/referral', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan referral');
+            showToast(res.message || 'Pengaturan referral berhasil disimpan');
+            await loadReferralSettings();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan referral', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Referral';
         }
     };
 

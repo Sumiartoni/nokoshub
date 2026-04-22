@@ -1999,6 +1999,29 @@ img { max-width: 100%; display: block; }
   color: #C2410C;
 }
 
+.login-turnstile-box {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 2px dashed rgba(29, 53, 87, 0.18);
+  border-radius: 22px;
+  background: rgba(255, 248, 228, 0.85);
+}
+
+.login-turnstile-slot {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-turnstile-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .login-divider {
   display: flex;
   align-items: center;

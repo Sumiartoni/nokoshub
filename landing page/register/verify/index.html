@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verifikasi OTP | NokosHUB</title>
+  <meta name="description" content="Masukkan kode OTP email untuk menyelesaikan pendaftaran akun NokosHUB." />
+  <meta name="robots" content="noindex, follow" />
+  <meta name="theme-color" content="#4F9CF9" />
+  <link rel="canonical" href="https://nokoshub.store/register/verify/" />
+  <link rel="stylesheet" href="../../assets/css/style.css" />
+  <link rel="icon" type="image/png" href="../../assets/images/favicon.png" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="login-page-body">
+  <main class="login-page">
+    <div class="login-bg-shapes" aria-hidden="true">
+      <span class="login-shape login-shape-1">MAIL</span>
+      <span class="login-shape login-shape-2">SAFE</span>
+      <span class="login-shape login-shape-3">OTP</span>
+      <span class="login-shape login-shape-4">VERIFY</span>
+    </div>
+
+    <section class="login-shell">
+      <div class="login-brand-panel">
+        <a href="../../index.html" class="login-logo" aria-label="Kembali ke beranda NokosHUB">
+          <img src="../../assets/images/favicon.png" alt="NokosHUB" class="login-logo-img" />
+          <div>
+            <div class="login-logo-text">Nokos<span>HUB</span></div>
+            <div class="login-logo-sub">OTP Platform</div>
+          </div>
+        </a>
+
+        <div class="login-copy">
+          <div class="section-badge"><i data-lucide="shield-check"></i> Verifikasi Email</div>
+          <h1 class="login-title">Masukkan OTP untuk menyelesaikan pendaftaran.</h1>
+          <p class="login-desc" id="verifyOtpIntro">
+            Kami sudah mengirim kode OTP ke email Anda. Masukkan 6 digit kode untuk mengaktifkan akun NokosHUB.
+          </p>
+        </div>
+
+        <div class="login-highlights">
+          <div class="login-highlight">
+            <i data-lucide="mail-check"></i>
+            <span>OTP ke email</span>
+          </div>
+          <div class="login-highlight">
+            <i data-lucide="clock-3"></i>
+            <span>Berlaku 10 menit</span>
+          </div>
+          <div class="login-highlight">
+            <i data-lucide="shield"></i>
+            <span>Aman & terenkripsi</span>
+          </div>
+        </div>
+
+        <div class="login-mascot-wrap">
+          <div class="login-mascot-bubble">Cek inbox, lalu masukkan kodenya!</div>
+          <img src="../../assets/images/mascot.png" alt="Maskot NokosHUB" class="login-mascot" />
+        </div>
+      </div>
+
+      <div class="login-card cartoon-card">
+        <div class="login-card-head">
+          <div class="login-card-icon"><i data-lucide="badge-check"></i></div>
+          <div>
+            <h2>Verifikasi OTP</h2>
+            <p id="verifyOtpEmailLabel">Menunggu data email...</p>
+          </div>
+        </div>
+
+        <form class="login-form" id="verifyOtpForm" novalidate>
+          <label class="login-field" for="verifyOtpCode">
+            <span>Kode OTP Email</span>
+            <div class="login-input-wrap">
+              <i data-lucide="mail-check"></i>
+              <input id="verifyOtpCode" name="otpCode" type="text" inputmode="numeric" maxlength="6" placeholder="Masukkan 6 digit OTP" required />
+            </div>
+            <small class="login-error" id="verifyOtpCodeError"></small>
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-lg login-submit" id="verifyOtpSubmit">
+            <i data-lucide="shield-check"></i>
+            Verifikasi & Buat Akun
+          </button>
+        </form>
+
+        <div class="login-otp-actions" style="margin-top:16px;">
+          <button type="button" class="btn btn-outline btn-sm" id="verifyOtpResendBtn">Kirim Ulang OTP</button>
+          <button type="button" class="btn btn-outline btn-sm" id="verifyOtpBackBtn">Kembali ke Form Daftar</button>
+        </div>
+
+        <p class="login-register" id="verifyOtpFooter">
+          Salah email?
+          <a href="/register/">Isi ulang form pendaftaran</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <div class="login-toast" id="loginToast" role="status" aria-live="polite"></div>
+  <script src="../../assets/js/register-verify.js?v=20260423-1"></script>
+</body>
+</html>
