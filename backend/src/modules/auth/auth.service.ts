@@ -5,7 +5,7 @@ import { userService } from '../users/user.service';
 
 const TOKEN_TTL_SECONDS = parseDurationToSeconds(config.JWT_EXPIRES_IN);
 const LINK_CODE_TTL_MINUTES = 10;
-const GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
+const GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v1/certs';
 const GOOGLE_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 
 let googleSigningCertCache:
@@ -402,17 +402,20 @@ async function getGoogleSigningCertificates(): Promise<Map<string, string>> {
     const cacheControl = response.headers.get('cache-control') || '';
     const maxAgeMatch = cacheControl.match(/max-age=(\d+)/i);
     const maxAgeSeconds = Number(maxAgeMatch?.[1] || 3600);
-    const body = await response.json() as {
-        keys?: Array<{
-            kid?: string;
-            x5c?: string[];
-        }>;
-    };
+    const body = await response.json() as GooglePemCertResponse | GoogleJwkCertResponse;
 
     const certs = new Map<string, string>();
-    for (const key of body.keys || []) {
-        if (!key.kid || !key.x5c?.[0]) continue;
-        certs.set(key.kid, toPemCertificate(key.x5c[0]));
+
+    if (isGooglePemCertResponse(body)) {
+        for (const [kid, certPem] of Object.entries(body)) {
+            if (!kid || typeof certPem !== 'string') continue;
+            certs.set(kid, certPem);
+        }
+    } else {
+        for (const key of body.keys || []) {
+            if (!key.kid || !key.x5c?.[0]) continue;
+            certs.set(key.kid, toPemCertificate(key.x5c[0]));
+        }
     }
 
     if (!certs.size) {
@@ -430,6 +433,19 @@ async function getGoogleSigningCertificates(): Promise<Map<string, string>> {
 function toPemCertificate(value: string) {
     const lines = value.match(/.{1,64}/g)?.join('\n') ?? value;
     return `-----BEGIN CERTIFICATE-----\n${lines}\n-----END CERTIFICATE-----\n`;
+}
+
+type GooglePemCertResponse = Record<string, string>;
+
+interface GoogleJwkCertResponse {
+    keys?: Array<{
+        kid?: string;
+        x5c?: string[];
+    }>;
+}
+
+function isGooglePemCertResponse(value: GooglePemCertResponse | GoogleJwkCertResponse): value is GooglePemCertResponse {
+    return !('keys' in value);
 }
 
 function normalizeBoolean(value: boolean | string | undefined) {
