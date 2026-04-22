@@ -15,6 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const registerSubmit = document.getElementById('registerSubmit');
   const googleRegisterBtn = document.getElementById('googleRegisterBtn');
   const googleRegisterHint = document.getElementById('googleRegisterHint');
+  const registerOtpPanel = document.getElementById('registerOtpPanel');
+  const registerOtpCode = document.getElementById('registerOtpCode');
+  const registerOtpInfo = document.getElementById('registerOtpInfo');
+  const registerResendOtpBtn = document.getElementById('registerResendOtpBtn');
+  const registerEditDataBtn = document.getElementById('registerEditDataBtn');
+  window.__nokosRegisterStage = 'details';
 
   bindPasswordToggle(passwordToggle, password);
   bindPasswordToggle(document.getElementById('registerPasswordToggle'), document.getElementById('registerPassword'));
@@ -90,9 +96,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailValue = registerEmail.value.trim();
     const passwordValue = registerPassword.value.trim();
     const confirmValue = confirmPassword.value.trim();
+    const otpValue = registerOtpCode?.value.trim() || '';
     let valid = true;
 
-    ['fullNameError', 'registerEmailError', 'registerPasswordError', 'confirmPasswordError', 'termsError'].forEach(clearError);
+    ['fullNameError', 'registerEmailError', 'registerPasswordError', 'confirmPasswordError', 'termsError', 'registerOtpError'].forEach(clearError);
 
     if (fullNameValue.length < 3) {
       setError('fullNameError', 'Nama minimal 3 karakter.');
@@ -119,13 +126,62 @@ document.addEventListener('DOMContentLoaded', () => {
       valid = false;
     }
 
+    if (window.__nokosRegisterStage === 'otp' && (!otpValue || otpValue.length < 4)) {
+      setError('registerOtpError', 'Masukkan kode OTP email yang valid.');
+      valid = false;
+    }
+
     if (!valid) return;
 
     registerSubmit.disabled = true;
-    registerSubmit.innerHTML = '<i data-lucide="loader-circle"></i> Membuat akun...';
+    registerSubmit.innerHTML = window.__nokosRegisterStage === 'otp'
+      ? '<i data-lucide="loader-circle"></i> Verifikasi OTP...'
+      : '<i data-lucide="loader-circle"></i> Mengirim OTP...';
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     const name = splitName(fullNameValue);
+
+    try {
+      if (window.__nokosRegisterStage === 'otp') {
+        const result = await apiFetch('/auth/register/verify', {
+          email: emailValue,
+          otpCode: otpValue,
+        });
+        persistAuth(result);
+        showToast('Email berhasil diverifikasi. Membuka dashboard...', 'success');
+        setTimeout(() => {
+          window.location.href = '/user/#/home';
+        }, 500);
+      } else {
+        const result = await apiFetch('/auth/register', {
+          email: emailValue,
+          password: passwordValue,
+          firstName: name.firstName,
+          lastName: name.lastName,
+        });
+        enterRegisterOtpStage(result?.maskedEmail || emailValue);
+        showToast('OTP sudah dikirim ke email Anda.', 'success');
+      }
+    } catch (err) {
+      setError(window.__nokosRegisterStage === 'otp' ? 'registerOtpError' : 'registerEmailError', err.message || 'Daftar gagal.');
+      showToast(err.message || 'Daftar gagal.', 'error');
+      registerSubmit.disabled = false;
+      registerSubmit.innerHTML = window.__nokosRegisterStage === 'otp'
+        ? '<i data-lucide="shield-check"></i> Verifikasi OTP & Buat Akun'
+        : '<i data-lucide="rocket"></i> Buat Akun';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+  });
+
+  registerResendOtpBtn?.addEventListener('click', async () => {
+    const fullNameValue = document.getElementById('fullName')?.value.trim() || '';
+    const emailValue = document.getElementById('registerEmail')?.value.trim() || '';
+    const passwordValue = document.getElementById('registerPassword')?.value.trim() || '';
+    const name = splitName(fullNameValue);
+
+    registerResendOtpBtn.disabled = true;
+    registerResendOtpBtn.textContent = 'Mengirim...';
+    clearError('registerOtpError');
 
     try {
       const result = await apiFetch('/auth/register', {
@@ -134,18 +190,19 @@ document.addEventListener('DOMContentLoaded', () => {
         firstName: name.firstName,
         lastName: name.lastName,
       });
-      persistAuth(result);
-      showToast('Akun berhasil dibuat. Membuka dashboard...', 'success');
-      setTimeout(() => {
-        window.location.href = '/user/#/home';
-      }, 500);
+      enterRegisterOtpStage(result?.maskedEmail || emailValue);
+      showToast('OTP baru berhasil dikirim.', 'success');
     } catch (err) {
-      setError('registerEmailError', err.message || 'Daftar gagal.');
-      showToast(err.message || 'Daftar gagal.', 'error');
-      registerSubmit.disabled = false;
-      registerSubmit.innerHTML = '<i data-lucide="rocket"></i> Buat Akun';
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      setError('registerOtpError', err.message || 'Gagal mengirim ulang OTP.');
+      showToast(err.message || 'Gagal mengirim ulang OTP.', 'error');
+    } finally {
+      registerResendOtpBtn.disabled = false;
+      registerResendOtpBtn.textContent = 'Kirim Ulang OTP';
     }
+  });
+
+  registerEditDataBtn?.addEventListener('click', () => {
+    exitRegisterOtpStage();
   });
 });
 
@@ -214,6 +271,54 @@ async function apiFetch(path, body) {
     body: JSON.stringify(body),
   });
   return unwrapApiResponse(response);
+}
+
+function enterRegisterOtpStage(maskedEmail) {
+  const registerOtpPanel = document.getElementById('registerOtpPanel');
+  const registerOtpInfo = document.getElementById('registerOtpInfo');
+  const registerSubmit = document.getElementById('registerSubmit');
+  const registerOtpCode = document.getElementById('registerOtpCode');
+
+  window.__nokosRegisterStage = 'otp';
+  if (registerOtpPanel) registerOtpPanel.hidden = false;
+  if (registerOtpInfo) {
+    registerOtpInfo.textContent = `Masukkan OTP 6 digit yang kami kirim ke ${maskedEmail}.`;
+  }
+  toggleRegisterInputs(true);
+  if (registerSubmit) {
+    registerSubmit.disabled = false;
+    registerSubmit.innerHTML = '<i data-lucide="shield-check"></i> Verifikasi OTP & Buat Akun';
+  }
+  registerOtpCode?.focus();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function exitRegisterOtpStage() {
+  const registerOtpPanel = document.getElementById('registerOtpPanel');
+  const registerSubmit = document.getElementById('registerSubmit');
+  const registerOtpCode = document.getElementById('registerOtpCode');
+
+  window.__nokosRegisterStage = 'details';
+  if (registerOtpPanel) registerOtpPanel.hidden = true;
+  if (registerOtpCode) registerOtpCode.value = '';
+  toggleRegisterInputs(false);
+  clearError('registerOtpError');
+  if (registerSubmit) {
+    registerSubmit.disabled = false;
+    registerSubmit.innerHTML = '<i data-lucide="rocket"></i> Buat Akun';
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function toggleRegisterInputs(lock) {
+  ['fullName', 'registerEmail', 'registerPassword', 'confirmPassword', 'terms'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = lock;
+  });
+  ['registerPasswordToggle', 'confirmPasswordToggle'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = lock;
+  });
 }
 
 async function apiGet(path) {

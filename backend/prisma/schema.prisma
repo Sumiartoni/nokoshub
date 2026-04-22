@@ -36,6 +36,22 @@ model WebUser {
   linkCodes    WebTelegramLinkCode[]
 }
 
+model PendingWebRegistration {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  otpHash      String
+  otpExpiresAt DateTime
+  otpAttempts  Int      @default(0)
+  otpSentAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([otpExpiresAt])
+}
+
 model WebTelegramLinkCode {
   id         String    @id @default(cuid())
   webUser    WebUser   @relation(fields: [webUserId], references: [id], onDelete: Cascade)

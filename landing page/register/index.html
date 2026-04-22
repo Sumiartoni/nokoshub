@@ -125,6 +125,25 @@
           </label>
           <small class="login-error" id="termsError"></small>
 
+          <div class="login-otp-panel" id="registerOtpPanel" hidden>
+            <div class="login-otp-head">
+              <strong>Verifikasi Email</strong>
+              <span id="registerOtpInfo">Masukkan OTP yang dikirim ke email Anda.</span>
+            </div>
+            <label class="login-field" for="registerOtpCode">
+              <span>Kode OTP Email</span>
+              <div class="login-input-wrap">
+                <i data-lucide="mail-check"></i>
+                <input id="registerOtpCode" name="otpCode" type="text" inputmode="numeric" maxlength="6" placeholder="6 digit OTP" />
+              </div>
+              <small class="login-error" id="registerOtpError"></small>
+            </label>
+            <div class="login-otp-actions">
+              <button type="button" class="btn btn-outline btn-sm" id="registerResendOtpBtn">Kirim Ulang OTP</button>
+              <button type="button" class="btn btn-outline btn-sm" id="registerEditDataBtn">Ubah Data</button>
+            </div>
+          </div>
+
           <button type="submit" class="btn btn-primary btn-lg login-submit" id="registerSubmit">
             <i data-lucide="rocket"></i>
             Buat Akun

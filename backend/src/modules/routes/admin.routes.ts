@@ -7,10 +7,26 @@ import logger from '../../utils/logger';
 import { prisma } from '../../database/prisma.client';
 import { hasBackofficeSession } from '../../utils/backoffice-auth';
 import { pricingService } from '../pricing/pricing.service';
+import { smtpSettingsService } from '../settings/smtp-settings.service';
+import { emailService } from '../email/email.service';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
     sellPriceMultiplier: z.number().min(1).max(20),
+});
+
+const smtpSettingsSchema = z.object({
+    host: z.string().min(1, 'Host SMTP wajib diisi'),
+    port: z.number().int().min(1).max(65535),
+    secure: z.boolean(),
+    username: z.string().min(1, 'Username SMTP wajib diisi'),
+    password: z.string().min(1, 'Password SMTP wajib diisi'),
+    fromName: z.string().min(1, 'Nama pengirim wajib diisi').max(100),
+    fromEmail: z.string().email('Email pengirim tidak valid'),
+});
+
+const smtpTestSchema = z.object({
+    to: z.string().email('Email tujuan test tidak valid'),
 });
 
 function requireAdmin(req: any, reply: any): boolean {
@@ -340,6 +356,50 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             message: 'Margin berhasil disimpan dan harga sudah dihitung ulang',
             data: { sellPriceMultiplier, usdIdrRate },
         };
+    });
+
+    // GET /api/admin/settings/smtp - current SMTP settings for OTP email
+    fastify.get('/settings/smtp', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await smtpSettingsService.getSettings();
+        return { success: true, data: settings };
+    });
+
+    // PATCH /api/admin/settings/smtp - save SMTP settings
+    fastify.patch('/settings/smtp', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = smtpSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await smtpSettingsService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'SMTP berhasil disimpan',
+            data: settings,
+        };
+    });
+
+    // POST /api/admin/settings/smtp/test - send test email
+    fastify.post('/settings/smtp/test', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = smtpTestSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            await emailService.sendSmtpTestEmail(parsed.data.to);
+            return {
+                success: true,
+                message: `Email test berhasil dikirim ke ${parsed.data.to}`,
+            };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
+        }
     });
 
     // PATCH /api/admin/user-balance - manually adjust user balance

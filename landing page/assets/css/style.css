@@ -2177,6 +2177,39 @@ img { max-width: 100%; display: block; }
   color: var(--text-muted);
 }
 
+.login-otp-panel {
+  padding: 16px 16px 14px;
+  border: 2px dashed rgba(29, 53, 87, 0.22);
+  border-radius: 22px;
+  background: #FFF8E4;
+  display: grid;
+  gap: 12px;
+}
+
+.login-otp-head {
+  display: grid;
+  gap: 4px;
+}
+
+.login-otp-head strong {
+  font-family: var(--font-sub);
+  font-size: 0.92rem;
+  color: var(--text-dark);
+}
+
+.login-otp-head span {
+  font-family: var(--font-body);
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.login-otp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .legal-page-body {
   min-height: 100vh;
   background:

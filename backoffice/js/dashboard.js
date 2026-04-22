@@ -72,6 +72,7 @@
         else if (pageId === 'transactions') loadTransactions();
         else if (pageId === 'services') {
             loadPricingSettings();
+            loadSmtpSettings();
             loadServices();
         }
         else if (pageId === 'users') loadUsers();
@@ -108,6 +109,7 @@
         else if (page === 'transactions') loadTransactions();
         else if (page === 'services') {
             loadPricingSettings();
+            loadSmtpSettings();
             loadServices();
         }
         else if (page === 'users') loadUsers();
@@ -765,6 +767,97 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Simpan';
+        }
+    };
+
+    window.loadSmtpSettings = async function () {
+        const hostInput = document.getElementById('smtpHostInput');
+        const portInput = document.getElementById('smtpPortInput');
+        const secureInput = document.getElementById('smtpSecureInput');
+        const usernameInput = document.getElementById('smtpUsernameInput');
+        const passwordInput = document.getElementById('smtpPasswordInput');
+        const fromNameInput = document.getElementById('smtpFromNameInput');
+        const fromEmailInput = document.getElementById('smtpFromEmailInput');
+
+        if (!hostInput || !portInput || !secureInput || !usernameInput || !passwordInput || !fromNameInput || !fromEmailInput) return;
+
+        try {
+            const res = await api('/api/admin/settings/smtp');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat SMTP');
+
+            const settings = res.data || {};
+            hostInput.value = settings.host || '';
+            portInput.value = settings.port || 587;
+            secureInput.value = String(Boolean(settings.secure));
+            usernameInput.value = settings.username || '';
+            passwordInput.value = settings.password || '';
+            fromNameInput.value = settings.fromName || 'NokosHUB';
+            fromEmailInput.value = settings.fromEmail || '';
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat SMTP', 'error');
+        }
+    };
+
+    window.saveSmtpSettings = async function () {
+        const btn = document.getElementById('saveSmtpBtn');
+        const payload = {
+            host: document.getElementById('smtpHostInput')?.value.trim() || '',
+            port: Number(document.getElementById('smtpPortInput')?.value || 587),
+            secure: document.getElementById('smtpSecureInput')?.value === 'true',
+            username: document.getElementById('smtpUsernameInput')?.value.trim() || '',
+            password: document.getElementById('smtpPasswordInput')?.value || '',
+            fromName: document.getElementById('smtpFromNameInput')?.value.trim() || 'NokosHUB',
+            fromEmail: document.getElementById('smtpFromEmailInput')?.value.trim() || '',
+        };
+
+        if (!payload.host || !payload.username || !payload.password || !payload.fromEmail) {
+            showToast('Lengkapi host, username, password, dan email pengirim SMTP', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/smtp', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan SMTP');
+            showToast(res.message || 'SMTP berhasil disimpan');
+            await loadSmtpSettings();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan SMTP', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan SMTP';
+        }
+    };
+
+    window.sendSmtpTestEmail = async function () {
+        const btn = document.getElementById('testSmtpBtn');
+        const to = document.getElementById('smtpTestEmailInput')?.value.trim() || '';
+
+        if (!to) {
+            showToast('Isi email tujuan test terlebih dahulu', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Mengirim...';
+
+        try {
+            const res = await api('/api/admin/settings/smtp/test', {
+                method: 'POST',
+                body: JSON.stringify({ to }),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal mengirim email test');
+            showToast(res.message || 'Email test berhasil dikirim');
+        } catch (err) {
+            showToast(err.message || 'Gagal mengirim email test', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Kirim Email Test';
         }
     };
 

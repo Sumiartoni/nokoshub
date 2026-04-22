@@ -55,6 +55,11 @@ const authRegisterSchema = z.object({
     lastName: z.string().optional(),
 });
 
+const authRegisterVerifySchema = z.object({
+    email: z.string().email(),
+    otpCode: z.string().min(4).max(8),
+});
+
 const authLoginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1),
@@ -89,6 +94,21 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         try {
             const result = await authService.register(parsed.data);
+            return { success: true, data: result };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
+        }
+    });
+
+    // POST /api/auth/register/verify
+    fastify.post('/auth/register/verify', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        const parsed = authRegisterVerifySchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            const result = await authService.verifyRegisterOtp(parsed.data);
             return { success: true, data: result };
         } catch (err) {
             return reply.status(400).send({ success: false, error: (err as Error).message });

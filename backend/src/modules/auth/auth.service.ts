@@ -2,9 +2,12 @@ import crypto from 'crypto';
 import { prisma } from '../../database/prisma.client';
 import { config } from '../../app/config';
 import { userService } from '../users/user.service';
+import { emailService } from '../email/email.service';
 
 const TOKEN_TTL_SECONDS = parseDurationToSeconds(config.JWT_EXPIRES_IN);
 const LINK_CODE_TTL_MINUTES = 10;
+const EMAIL_OTP_TTL_MINUTES = 10;
+const EMAIL_OTP_MAX_ATTEMPTS = 5;
 const GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v1/certs';
 const GOOGLE_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 
@@ -28,13 +31,92 @@ export const authService = {
         if (existing) throw new Error('Email sudah terdaftar');
 
         const passwordHash = hashPassword(input.password);
-        const user = await prisma.webUser.create({
-            data: {
+        const otpCode = generateCode();
+        const otpHash = hashOtp(email, otpCode);
+        const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MINUTES * 60 * 1000);
+
+        await prisma.pendingWebRegistration.upsert({
+            where: { email },
+            update: {
+                passwordHash,
+                firstName: input.firstName,
+                lastName: input.lastName,
+                otpHash,
+                otpExpiresAt: expiresAt,
+                otpAttempts: 0,
+                otpSentAt: new Date(),
+            },
+            create: {
                 email,
                 passwordHash,
                 firstName: input.firstName,
                 lastName: input.lastName,
+                otpHash,
+                otpExpiresAt: expiresAt,
+                otpAttempts: 0,
+                otpSentAt: new Date(),
             },
+        });
+
+        await emailService.sendRegistrationOtp({
+            to: email,
+            otpCode,
+            expiresAt,
+            recipientName: [input.firstName, input.lastName].filter(Boolean).join(' ') || input.firstName || 'Pengguna',
+        });
+
+        return {
+            otpRequired: true,
+            email,
+            maskedEmail: maskEmail(email),
+            expiresAt,
+        };
+    },
+
+    async verifyRegisterOtp(input: { email: string; otpCode: string }) {
+        const email = normalizeEmail(input.email);
+        const pending = await prisma.pendingWebRegistration.findUnique({
+            where: { email },
+        });
+
+        if (!pending) throw new Error('Permintaan pendaftaran tidak ditemukan. Silakan kirim OTP lagi.');
+        if (pending.otpExpiresAt.getTime() < Date.now()) {
+            throw new Error('Kode OTP sudah kadaluarsa. Silakan kirim ulang OTP.');
+        }
+        if (pending.otpAttempts >= EMAIL_OTP_MAX_ATTEMPTS) {
+            throw new Error('Percobaan OTP terlalu banyak. Silakan kirim ulang OTP.');
+        }
+
+        const expectedHash = hashOtp(email, normalizeCode(input.otpCode));
+        if (!safeEqual(expectedHash, pending.otpHash)) {
+            await prisma.pendingWebRegistration.update({
+                where: { id: pending.id },
+                data: { otpAttempts: { increment: 1 } },
+            });
+            throw new Error('Kode OTP tidak valid');
+        }
+
+        const existing = await prisma.webUser.findUnique({ where: { email } });
+        if (existing) {
+            await prisma.pendingWebRegistration.delete({ where: { id: pending.id } }).catch(() => null);
+            throw new Error('Email sudah terdaftar');
+        }
+
+        const user = await prisma.$transaction(async (tx) => {
+            const created = await tx.webUser.create({
+                data: {
+                    email,
+                    passwordHash: pending.passwordHash,
+                    firstName: pending.firstName,
+                    lastName: pending.lastName,
+                },
+            });
+
+            await tx.pendingWebRegistration.delete({
+                where: { id: pending.id },
+            });
+
+            return created;
         });
 
         return { user: sanitizeWebUser(user), token: signToken(user.id, user.email) };
@@ -236,6 +318,13 @@ function generateCode() {
     return String(crypto.randomInt(100000, 1000000));
 }
 
+function hashOtp(email: string, otpCode: string) {
+    return crypto
+        .createHash('sha256')
+        .update(`${email}:${otpCode}:${config.JWT_SECRET}`)
+        .digest('hex');
+}
+
 function hashPassword(password: string) {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -310,6 +399,15 @@ function parseDurationToSeconds(value: string) {
         d: 24 * 60 * 60,
     };
     return amount * multipliers[unit];
+}
+
+function maskEmail(email: string) {
+    const [localPart, domain] = email.split('@');
+    if (!localPart || !domain) return email;
+
+    const prefix = localPart.slice(0, Math.min(2, localPart.length));
+    const masked = `${prefix}${'*'.repeat(Math.max(2, localPart.length - prefix.length))}`;
+    return `${masked}@${domain}`;
 }
 
 interface GoogleIdTokenPayload {
