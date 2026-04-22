@@ -26,28 +26,75 @@ export const emailService = {
         const minutes = Math.max(1, Math.round((input.expiresAt.getTime() - Date.now()) / 60000));
         const escapedOtp = escapeHtml(input.otpCode);
         const escapedName = escapeHtml(input.recipientName || 'Pengguna');
+        const subject = `Verifikasi Email NokosHUB - Kode OTP ${input.otpCode}`;
 
         return this.sendEmail({
             to: input.to,
-            subject: `Kode OTP NokosHUB: ${input.otpCode}`,
+            subject,
             text: [
+                'NokosHUB',
+                '',
                 `Halo ${input.recipientName || 'Pengguna'},`,
                 '',
-                `Kode OTP pendaftaran NokosHUB Anda adalah: ${input.otpCode}`,
-                `Kode ini berlaku sekitar ${minutes} menit.`,
+                'Terima kasih sudah memulai pendaftaran akun di NokosHUB.',
                 '',
-                'Jika Anda tidak merasa mendaftar, abaikan email ini.',
+                'Gunakan kode OTP berikut untuk memverifikasi email Anda:',
+                '',
+                `${input.otpCode}`,
+                '',
+                `Kode ini berlaku sekitar ${minutes} menit.`,
+                'Demi keamanan akun, jangan bagikan kode ini kepada siapa pun.',
+                '',
+                'Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini.',
+                '',
+                'Website: https://nokoshub.store',
+                'Email ini dikirim otomatis oleh sistem NokosHUB.',
             ].join('\n'),
             html: `
-                <div style="font-family:Arial,sans-serif;line-height:1.7;color:#0f172a">
-                  <h2 style="margin:0 0 12px">Verifikasi Email NokosHUB</h2>
-                  <p>Halo <strong>${escapedName}</strong>,</p>
-                  <p>Kode OTP pendaftaran akun NokosHUB Anda adalah:</p>
-                  <div style="display:inline-block;padding:12px 18px;border:2px solid #1d3557;border-radius:12px;background:#fff7d6;font-size:28px;font-weight:700;letter-spacing:6px;color:#1d3557">
-                    ${escapedOtp}
+                <div style="margin:0;padding:24px 12px;background:#f4f7fb;font-family:Arial,sans-serif;color:#0f172a">
+                  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.08)">
+                    <div style="padding:22px 28px;background:linear-gradient(135deg,#10213a 0%,#1d3557 100%);color:#ffffff">
+                      <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;opacity:0.72;margin-bottom:8px">NokosHUB</div>
+                      <h1 style="margin:0;font-size:24px;line-height:1.3">Verifikasi Email Anda</h1>
+                      <p style="margin:10px 0 0;font-size:14px;line-height:1.7;color:rgba(255,255,255,0.86)">
+                        Satu langkah lagi untuk menyelesaikan pendaftaran akun NokosHUB.
+                      </p>
+                    </div>
+
+                    <div style="padding:28px">
+                      <p style="margin:0 0 14px;font-size:15px;line-height:1.8">Halo <strong>${escapedName}</strong>,</p>
+                      <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#334155">
+                        Gunakan kode OTP berikut untuk memverifikasi email Anda dan melanjutkan pembuatan akun.
+                      </p>
+
+                      <div style="margin:0 0 20px;padding:18px;border-radius:18px;background:#fff7d6;border:1px solid #f1d99b;text-align:center">
+                        <div style="font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#8a6a18;margin-bottom:10px">Kode OTP Anda</div>
+                        <div style="font-size:34px;line-height:1;font-weight:700;letter-spacing:8px;color:#1d3557">${escapedOtp}</div>
+                      </div>
+
+                      <div style="margin:0 0 18px;padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0">
+                        <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#334155">
+                          Kode ini berlaku sekitar <strong>${minutes} menit</strong>.
+                        </p>
+                        <p style="margin:0;font-size:14px;line-height:1.7;color:#334155">
+                          Demi keamanan akun, jangan bagikan kode ini kepada siapa pun.
+                        </p>
+                      </div>
+
+                      <p style="margin:0 0 10px;font-size:14px;line-height:1.8;color:#475569">
+                        Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini. Tidak ada perubahan apa pun pada akun Anda sampai kode diverifikasi.
+                      </p>
+                    </div>
+
+                    <div style="padding:18px 28px;background:#f8fafc;border-top:1px solid #e2e8f0">
+                      <p style="margin:0 0 6px;font-size:13px;line-height:1.7;color:#64748b">
+                        Website: <a href="https://nokoshub.store" style="color:#1d4ed8;text-decoration:none">https://nokoshub.store</a>
+                      </p>
+                      <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
+                        Email ini dikirim otomatis oleh sistem NokosHUB.
+                      </p>
+                    </div>
                   </div>
-                  <p style="margin-top:16px">Kode ini berlaku sekitar <strong>${minutes} menit</strong>.</p>
-                  <p>Jika Anda tidak merasa mendaftar, abaikan email ini.</p>
                 </div>
             `,
         });
