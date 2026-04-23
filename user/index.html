@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260423-2" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260423-3" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -626,6 +626,13 @@
             <p style="font-size:0.84rem;color:var(--muted);font-weight:700;margin-bottom:12px;line-height:1.6;">
               Bagikan kode atau link referral Anda. Bonus referral akan diberikan setelah pengguna yang Anda undang berhasil menyelesaikan deposit saldo pertamanya.
             </p>
+            <div class="referral-banner">
+              <div>
+                <div class="referral-banner-label">Kode Referral Aktif</div>
+                <div class="referral-banner-title">Undang teman, tunggu deposit pertama, bonus masuk otomatis.</div>
+              </div>
+              <div class="referral-banner-chip" id="referralProgramStatus">Program belum aktif</div>
+            </div>
             <div class="link-code-box referral-hero-code">
               <span data-referral-code>Memuat kode...</span>
             </div>
@@ -639,6 +646,39 @@
               <div class="ps"><div class="ps-v" data-referral-qualified>0</div><div class="ps-l">Deposit Pertama Selesai</div></div>
               <div class="ps"><div class="ps-v" data-referral-pending>Rp 0</div><div class="ps-l">Bonus Menunggu</div></div>
               <div class="ps"><div class="ps-v" data-referral-earned>Rp 0</div><div class="ps-l">Bonus Masuk</div></div>
+            </div>
+            <div class="referral-grid">
+              <div class="table-card referral-panel">
+                <div class="card-title" style="margin-bottom:12px;">📈 Ringkasan Performa</div>
+                <div class="referral-metrics">
+                  <div class="referral-metric-card">
+                    <strong data-referral-qualified>0</strong>
+                    <span>Referral berhasil menyelesaikan syarat deposit pertama.</span>
+                  </div>
+                  <div class="referral-metric-card">
+                    <strong data-referral-earned>Rp 0</strong>
+                    <span>Total bonus yang sudah cair ke saldo Anda.</span>
+                  </div>
+                  <div class="referral-metric-card">
+                    <strong data-referral-pending>Rp 0</strong>
+                    <span>Bonus yang sudah memenuhi syarat tetapi belum masuk.</span>
+                  </div>
+                </div>
+              </div>
+              <div class="table-card referral-panel">
+                <div class="card-title" style="margin-bottom:12px;">🧭 Cara Kerja</div>
+                <div class="referral-steps">
+                  <div class="referral-step"><span>1</span><p>Bagikan kode referral atau link undangan Anda ke calon user baru.</p></div>
+                  <div class="referral-step"><span>2</span><p>User mendaftar lalu membuat akun NokosHUB menggunakan referral Anda.</p></div>
+                  <div class="referral-step"><span>3</span><p>Bonus diproses setelah user tersebut berhasil menyelesaikan deposit saldo pertamanya.</p></div>
+                </div>
+              </div>
+            </div>
+            <div class="table-card referral-panel" style="margin-top:18px;">
+              <div class="card-title" style="margin-bottom:12px;">👥 Invite Terbaru</div>
+              <div class="referral-invite-list" id="referralInviteList">
+                <div class="empty"><div class="empty-emoji anim-pulse">🎁</div><div class="empty-title">Memuat referral</div><div class="empty-desc">Daftar invite terbaru sedang disiapkan.</div></div>
+              </div>
             </div>
           </div>
         </div><!-- /page-referral -->
@@ -766,6 +806,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260423-2"></script>
+  <script src="assets/js/dashboard.js?v=20260423-3"></script>
 </body>
 </html>

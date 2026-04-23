@@ -42,6 +42,7 @@ const S = {
       totalRewardEarned: 0,
       pendingRewardAmount: 0,
     },
+    invites: [],
   },
   topup: { amount: 0, method: 'QRIS', fee: 0, invoice: null, proofFile: null },
   buy: {
@@ -379,6 +380,7 @@ async function loadDashboardData({ silent = false } = {}) {
         totalRewardEarned: Number(profile.referral?.stats?.totalRewardEarned || 0),
         pendingRewardAmount: Number(profile.referral?.stats?.pendingRewardAmount || 0),
       },
+      invites: Array.isArray(profile.referral?.invites) ? profile.referral.invites : [],
     };
     S.orders = profile.telegramLinked ? (profile.recentOrders || []) : [];
     S.transactions = profile.telegramLinked ? (profile.recentTransactions || []) : [];
@@ -407,6 +409,7 @@ function renderDashboardData() {
   renderActivity();
   renderOrders();
   renderTransactions();
+  renderReferralPage();
   updateDashboardStats();
   updateProfileFields();
   refreshIcons();
@@ -509,6 +512,13 @@ function updateReferralFields() {
       ? `Bonus aktif ${FMT(S.referral.settings.rewardAmount)} per referral yang lolos syarat deposit pertama.`
       : 'Program referral sedang nonaktif. Anda tetap bisa membagikan kode referral.'
   );
+  const statusEl = document.getElementById('referralProgramStatus');
+  if (statusEl) {
+    statusEl.textContent = S.referral.settings.enabled
+      ? `Aktif • Bonus ${FMT(S.referral.settings.rewardAmount)}`
+      : 'Program belum aktif';
+    statusEl.classList.toggle('active', S.referral.settings.enabled);
+  }
 }
 
 function set(id, val) {
@@ -1207,6 +1217,50 @@ function copyReferralLink() {
     return;
   }
   copyText(link);
+}
+
+function renderReferralPage() {
+  const list = document.getElementById('referralInviteList');
+  if (!list) return;
+
+  const invites = Array.isArray(S.referral.invites) ? S.referral.invites : [];
+  if (!invites.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-emoji">🎁</div><div class="empty-title">Belum ada referral</div><div class="empty-desc">Bagikan kode referral Anda untuk mulai mengundang user baru.</div></div>`;
+    return;
+  }
+
+  list.innerHTML = invites.map((invite) => {
+    const status = getReferralInviteStatus(invite);
+    const fullName = [invite.firstName, invite.lastName].filter(Boolean).join(' ').trim() || 'User Baru';
+    const reward = Number(invite.rewardAmount || 0);
+    const qualifiedLabel = invite.qualifiedAt ? `Lolos syarat: ${formatDate(invite.qualifiedAt)}` : 'Belum deposit pertama';
+    const rewardLabel = invite.rewardedAt ? `Bonus cair: ${formatDate(invite.rewardedAt)}` : `Bonus: ${FMT(reward)}`;
+
+    return `
+      <div class="referral-invite-row">
+        <div class="referral-invite-main">
+          <div class="referral-invite-name">${esc(fullName)}</div>
+          <div class="referral-invite-email">${esc(invite.email || '-')}</div>
+          <div class="referral-invite-meta">
+            <span>Terdaftar: ${formatDate(invite.createdAt)}</span>
+            <span>${qualifiedLabel}</span>
+            <span>${rewardLabel}</span>
+          </div>
+        </div>
+        <div class="referral-status-badge ${status.className}">${status.label}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function getReferralInviteStatus(invite) {
+  if (invite.rewardedAt) {
+    return { label: 'Bonus Masuk', className: 'rewarded' };
+  }
+  if (invite.qualifiedAt) {
+    return { label: 'Menunggu Bonus', className: 'qualified' };
+  }
+  return { label: 'Belum Deposit', className: 'pending' };
 }
 
 function toggleApi() {
