@@ -384,8 +384,8 @@ async function loadDashboardData({ silent = false } = {}) {
       invites: Array.isArray(profile.referral?.invites) ? profile.referral.invites : [],
     };
     S.orders = profile.telegramLinked ? (profile.recentOrders || []) : [];
-    S.transactions = profile.telegramLinked ? (profile.recentTransactions || []) : [];
-    S.invoices = profile.telegramLinked ? (profile.recentInvoices || []) : [];
+    S.transactions = profile.recentTransactions || [];
+    S.invoices = profile.recentInvoices || [];
     SVC = mapServices(Array.isArray(services) ? services : []);
 
     updateUI();
@@ -889,8 +889,6 @@ function selectPay(el, method, fee) {
 }
 
 async function doTopup() {
-  const telegramId = getTelegramId({ promptUser: true });
-  if (!telegramId) return;
   if (!S.topup.amount || S.topup.amount < 10000) {
     showToast('Minimal top up Rp 10.000', 'warning');
     return;
@@ -898,7 +896,7 @@ async function doTopup() {
 
   try {
     const invoice = await apiFetch('/deposit', {
-      body: { telegramId, amount: S.topup.amount },
+      body: { amount: S.topup.amount },
     });
     S.topup.invoice = invoice;
     S.invoices.unshift(invoice);
@@ -906,7 +904,7 @@ async function doTopup() {
     updateTopupInvoiceUi(invoice);
     const qrisImage = document.getElementById('topupQrisImage');
     if (qrisImage) {
-      qrisImage.src = apiUrl(`/deposit/${invoice.invoiceId}/qris.png`, { telegramId, t: Date.now() });
+      qrisImage.src = invoice.qrisImageDataUrl || '';
     }
     startTopupCountdown(invoice.expiredAt);
     startTopupStatusPolling();
@@ -1018,23 +1016,23 @@ function fileToBase64(file) {
 
 async function refreshTopupInvoiceStatus({ silent = false } = {}) {
   const invoice = S.topup.invoice;
-  const telegramId = getTelegramId({ promptUser: true });
 
   if (!invoice?.invoiceId) {
     if (!silent) showToast('Invoice belum dibuat atau sudah tidak tersedia', 'warning');
     return null;
   }
-  if (!telegramId) return null;
 
   try {
-    const latest = await apiFetch(`/deposit/${invoice.invoiceId}/status`, {
-      params: { telegramId },
-    });
+    const latest = await apiFetch(`/deposit/${invoice.invoiceId}/status`);
     S.topup.invoice = {
       ...invoice,
       ...latest,
       invoiceId: latest.id || invoice.invoiceId,
     };
+    const qrisImage = document.getElementById('topupQrisImage');
+    if (qrisImage && S.topup.invoice.qrisImageDataUrl) {
+      qrisImage.src = S.topup.invoice.qrisImageDataUrl;
+    }
     updateTopupInvoiceUi(S.topup.invoice);
 
     if (latest.status === 'PAID') {

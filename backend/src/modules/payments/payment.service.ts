@@ -62,7 +62,7 @@ export const paymentService = {
                     provider: 'PAKASIR',
                     paymentMethod: payment.paymentMethod,
                     gatewayOrderId: payment.orderId || invoice.id,
-                    paymentUrl: pakasirService.buildHostedPaymentUrl(payment.orderId || invoice.id, payment.totalPayment),
+                    paymentUrl: pakasirService.buildHostedPaymentUrl(payment.orderId || invoice.id, payment.amount),
                     gatewayPayload: JSON.stringify(payment),
                     qrisPayload: payment.paymentNumber,
                     expiredAt: safeDate(payment.expiredAt) ?? invoice.expiredAt,

@@ -269,7 +269,7 @@ export const authService = {
             throw new Error('Telegram ini sudah tertaut ke akun web lain');
         }
 
-        await userService.findOrCreate(input.telegramId, {
+        const telegramUser = await userService.findOrCreate(input.telegramId, {
             username: input.username,
             firstName: input.firstName,
             lastName: input.lastName,
@@ -287,6 +287,7 @@ export const authService = {
             });
         });
 
+        await userService.mergeWebWalletIntoUser(link.webUserId, telegramUser.id);
         await referralService.releasePendingRewardsForReferrer(webUser.id);
 
         return sanitizeWebUser(webUser);

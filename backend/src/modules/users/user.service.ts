@@ -1,6 +1,8 @@
 import { prisma } from '../../database/prisma.client';
 import logger from '../../utils/logger';
 
+const WEB_WALLET_PREFIX = 'web_';
+
 export const userService = {
     /** Find user by telegramId, create if not exists */
     async findOrCreate(
@@ -32,6 +34,60 @@ export const userService = {
     /** Get user by telegramId */
     async getByTelegramId(telegramId: string) {
         return prisma.user.findUnique({ where: { telegramId } });
+    },
+
+    getWebWalletTelegramId(webUserId: string) {
+        return `${WEB_WALLET_PREFIX}${webUserId}`;
+    },
+
+    async getWebWalletByWebUserId(webUserId: string) {
+        return prisma.user.findUnique({
+            where: { telegramId: this.getWebWalletTelegramId(webUserId) },
+        });
+    },
+
+    async findOrCreateWebWallet(
+        webUserId: string,
+        opts?: { firstName?: string | null; lastName?: string | null }
+    ) {
+        return this.findOrCreate(this.getWebWalletTelegramId(webUserId), {
+            firstName: opts?.firstName ?? undefined,
+            lastName: opts?.lastName ?? undefined,
+        });
+    },
+
+    async mergeWebWalletIntoUser(webUserId: string, targetUserId: string) {
+        const source = await this.getWebWalletByWebUserId(webUserId);
+        if (!source || source.id === targetUserId) return { merged: false };
+
+        await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+                where: { id: targetUserId },
+                data: { balance: { increment: source.balance } },
+            });
+
+            await tx.order.updateMany({
+                where: { userId: source.id },
+                data: { userId: targetUserId },
+            });
+
+            await tx.invoice.updateMany({
+                where: { userId: source.id },
+                data: { userId: targetUserId },
+            });
+
+            await tx.transaction.updateMany({
+                where: { userId: source.id },
+                data: { userId: targetUserId },
+            });
+
+            await tx.user.delete({
+                where: { id: source.id },
+            });
+        });
+
+        logger.info({ webUserId, sourceUserId: source.id, targetUserId }, 'Merged web wallet into linked Telegram user');
+        return { merged: true };
     },
 
     /** Get user balance (in IDR) */

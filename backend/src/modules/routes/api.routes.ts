@@ -28,7 +28,7 @@ const createOrderSchema = z.object({
 
 const depositSchema = z.object({
     amount: z.number().int().min(10000).max(10000000),
-    telegramId: z.string().min(1),
+    telegramId: z.string().min(1).optional(),
 });
 
 const depositProofSchema = z.object({
@@ -332,7 +332,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             telegramId = webUser?.telegramId ?? undefined;
         }
 
-        if (!telegramId) {
+        const user = telegramId
+            ? await userService.findOrCreate(telegramId)
+            : webUser?.id
+                ? await userService.getWebWalletByWebUserId(webUser.id)
+                : null;
+
+        if (!user) {
             return {
                 success: true,
                 data: {
@@ -357,7 +363,6 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             };
         }
 
-        const user = await userService.findOrCreate(telegramId);
         const [orders, transactions, invoices] = await Promise.all([
             orderService.getOrders(user.id, 100),
             userService.getTransactions(user.id, 100),
@@ -380,7 +385,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
                 user: {
                     id: user.id,
-                    telegramId: user.telegramId,
+                    telegramId: telegramId || null,
                     username: user.username,
                     firstName: user.firstName,
                     lastName: user.lastName,
@@ -390,7 +395,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 },
                 webUser,
                 referral,
-                telegramLinked: true,
+                telegramLinked: Boolean(telegramId),
                 summary: {
                     ordersCount: orders.length,
                     successOrders,
@@ -506,8 +511,15 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
         try {
             await maintenanceService.assertActionAllowed('deposits');
-            const user = await userService.findOrCreate(parsed.data.telegramId);
+            const { user } = await resolveOwnedUserFromRequest(req, {
+                telegramId: parsed.data.telegramId,
+                createIfMissing: true,
+            });
+            if (!user) {
+                return reply.status(400).send({ success: false, error: 'Login web atau telegramId diperlukan untuk membuat invoice' });
+            }
             const invoice = await paymentService.createInvoice(user.id, parsed.data.amount);
+            const qrisImageDataUrl = await buildQrisImageDataUrl(invoice.qrisPayload);
             return {
                 success: true,
                 data: {
@@ -519,6 +531,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                     paymentMethod: invoice.paymentMethod,
                     paymentUrl: invoice.paymentUrl,
                     qrisPayload: invoice.qrisPayload,
+                    qrisImageDataUrl,
                     expiredAt: invoice.expiredAt,
                 },
             };
@@ -531,11 +544,14 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.get('/deposit/:invoiceId/qris.png', async (req, reply) => {
         const params = req.params as { invoiceId?: string };
         const query = req.query as { telegramId?: string };
-        if (!params.invoiceId || !query.telegramId) {
-            return reply.status(400).send({ success: false, error: 'invoiceId and telegramId required' });
+        if (!params.invoiceId) {
+            return reply.status(400).send({ success: false, error: 'invoiceId required' });
         }
 
-        const user = await userService.getByTelegramId(query.telegramId);
+        const { user } = await resolveOwnedUserFromRequest(req, {
+            telegramId: query.telegramId,
+            createIfMissing: false,
+        });
         if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
 
         const invoice = await prisma.invoice.findFirst({
@@ -560,11 +576,14 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.get('/deposit/:invoiceId/status', async (req, reply) => {
         const params = req.params as { invoiceId?: string };
         const query = req.query as { telegramId?: string };
-        if (!params.invoiceId || !query.telegramId) {
-            return reply.status(400).send({ success: false, error: 'invoiceId and telegramId required' });
+        if (!params.invoiceId) {
+            return reply.status(400).send({ success: false, error: 'invoiceId required' });
         }
 
-        const user = await userService.getByTelegramId(query.telegramId);
+        const { user } = await resolveOwnedUserFromRequest(req, {
+            telegramId: query.telegramId,
+            createIfMissing: false,
+        });
         if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
 
         const invoice = await paymentService.getInvoiceForUser(params.invoiceId, user.id);
@@ -583,6 +602,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 expiredAt: invoice.expiredAt,
                 paidAt: invoice.paidAt,
                 qrisPayload: invoice.qrisPayload,
+                qrisImageDataUrl: await buildQrisImageDataUrl(invoice.qrisPayload),
             },
         };
     });
@@ -590,11 +610,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/invoices?telegramId=
     fastify.get('/invoices', async (req, reply) => {
         const query = req.query as { telegramId?: string };
-        if (!query.telegramId) {
-            return reply.status(400).send({ success: false, error: 'telegramId required' });
+        const { user } = await resolveOwnedUserFromRequest(req, {
+            telegramId: query.telegramId,
+            createIfMissing: false,
+        });
+        if (!user) {
+            return reply.status(400).send({ success: false, error: 'telegramId atau login web diperlukan' });
         }
-        const user = await userService.getByTelegramId(query.telegramId);
-        if (!user) return { success: true, data: [] };
         const invoices = await paymentService.getInvoices(user.id);
         return { success: true, data: invoices };
     });
@@ -734,6 +756,46 @@ function sanitizeFileName(value: string) {
 
 function formatRupiahPlain(value: number) {
     return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+}
+
+async function resolveOwnedUserFromRequest(
+    req: { headers: Record<string, any> },
+    input: { telegramId?: string; createIfMissing: boolean }
+) {
+    if (input.telegramId) {
+        const user = input.createIfMissing
+            ? await userService.findOrCreate(input.telegramId)
+            : await userService.getByTelegramId(input.telegramId);
+        return { user, webUser: null };
+    }
+
+    if (!req.headers.authorization) {
+        return { user: null, webUser: null };
+    }
+
+    const webUser = await authService.requireUser(req.headers.authorization);
+    const user = webUser.telegramId
+        ? input.createIfMissing
+            ? await userService.findOrCreate(webUser.telegramId)
+            : await userService.getByTelegramId(webUser.telegramId)
+        : input.createIfMissing
+            ? await userService.findOrCreateWebWallet(webUser.id, {
+                firstName: webUser.firstName,
+                lastName: webUser.lastName,
+            })
+            : await userService.getWebWalletByWebUserId(webUser.id);
+
+    return { user, webUser };
+}
+
+async function buildQrisImageDataUrl(payload: string) {
+    return QRCode.toDataURL(payload, {
+        type: 'image/png',
+        width: 900,
+        margin: 4,
+        errorCorrectionLevel: 'H',
+        color: { dark: '#000000', light: '#FFFFFF' },
+    });
 }
 
 function getRequestIp(req: { headers: Record<string, any>; ip?: string }) {
