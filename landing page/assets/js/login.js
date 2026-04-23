@@ -135,7 +135,6 @@ function hydrateRegisterFormFromUrl() {
 async function initRegisterSecurity(state) {
   const wrap = document.getElementById('registerTurnstileWrap');
   const box = document.getElementById('registerTurnstileBox');
-  const hint = document.getElementById('registerTurnstileHint');
 
   if (!wrap || !box) return;
 
@@ -150,9 +149,6 @@ async function initRegisterSecurity(state) {
     state.turnstileEnabled = true;
     state.turnstileSiteKey = turnstile.siteKey;
     wrap.hidden = false;
-    if (hint) {
-      hint.textContent = 'Cloudflare Turnstile aktif untuk melindungi form register dari bot dan spam.';
-    }
 
     await loadTurnstileScript();
     if (!window.turnstile?.render) {
