@@ -93,6 +93,9 @@ const worker = new Worker<OtpJobData>(
 );
 
 async function notifyOtpReceived(telegramId: string, orderId: string, otpCode: string) {
+    if (!/^\d+$/.test(String(telegramId || '').trim())) {
+        return;
+    }
     try {
         await axios.post(`${config.API_BASE_URL}/api/internal/notify`, {
             telegramId,
@@ -108,6 +111,9 @@ async function notifyOtpReceived(telegramId: string, orderId: string, otpCode: s
 }
 
 async function notifyOtpTimeout(telegramId: string, orderId: string) {
+    if (!/^\d+$/.test(String(telegramId || '').trim())) {
+        return;
+    }
     try {
         await axios.post(`${config.API_BASE_URL}/api/internal/notify`, {
             telegramId,

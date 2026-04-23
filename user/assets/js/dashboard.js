@@ -217,7 +217,7 @@ function getTelegramId({ promptUser = false } = {}) {
     return S.user.telegramId;
   }
   if (!promptUser) return '';
-  showToast('Tautkan Telegram dari menu Profil terlebih dahulu.', 'warning');
+  showToast('Tautkan Telegram dari menu Profil bila ingin menyinkronkan akun bot dan web.', 'warning');
   nav('profile');
   return '';
 }
@@ -383,7 +383,7 @@ async function loadDashboardData({ silent = false } = {}) {
       },
       invites: Array.isArray(profile.referral?.invites) ? profile.referral.invites : [],
     };
-    S.orders = profile.telegramLinked ? (profile.recentOrders || []) : [];
+    S.orders = profile.recentOrders || [];
     S.transactions = profile.recentTransactions || [];
     S.invoices = profile.recentInvoices || [];
     SVC = mapServices(Array.isArray(services) ? services : []);
@@ -676,8 +676,6 @@ function filterCountries() {
 
 async function selectCountry(countryId, el) {
   if (S.buy.busy) return;
-  const telegramId = getTelegramId({ promptUser: true });
-  if (!telegramId) return;
 
   document.querySelectorAll('.country-card').forEach(c => c.classList.remove('selected'));
   el?.classList.add('selected');
@@ -723,11 +721,10 @@ async function selectCountry(countryId, el) {
 }
 
 async function createOrder() {
-  const telegramId = getTelegramId({ promptUser: true });
-  if (!telegramId || !S.buy.price) return;
+  if (!S.buy.price) return;
 
   const order = await apiFetch('/order', {
-    body: { telegramId, priceId: S.buy.price.id },
+    body: { priceId: S.buy.price.id },
   });
 
   const svc = S.buy.svc;
@@ -795,10 +792,9 @@ function stopOtpWatch(clearOrder = true) {
 }
 
 async function refreshOrderStatus(orderId) {
-  const telegramId = getTelegramId();
-  if (!telegramId || !orderId) return;
+  if (!orderId) return;
   try {
-    const orders = await apiFetch('/orders', { params: { telegramId } });
+    const orders = await apiFetch('/orders');
     const order = (Array.isArray(orders) ? orders : []).find(item => item.id === orderId);
     if (!order) return;
 
@@ -844,10 +840,8 @@ async function cancelOrder() {
 
 async function cancelExistingOrder(orderId) {
   if (!confirm('Yakin batalkan pesanan? Saldo akan direfund jika order masih aktif.')) return;
-  const telegramId = getTelegramId({ promptUser: true });
-  if (!telegramId) return;
   try {
-    await apiFetch('/order/cancel', { body: { orderId, telegramId } });
+    await apiFetch('/order/cancel', { body: { orderId } });
     stopOtpWatch(false);
     showToast('Pesanan dibatalkan. Refund diproses otomatis.', 'success');
     await loadDashboardData({ silent: true });
@@ -1581,8 +1575,8 @@ document.addEventListener('keydown', e => {
   initRouter();
   loadDashboardData({ silent: true });
   setTimeout(() => {
-    if (!S.user.telegramId) showToast('Tautkan Telegram dari menu Profil untuk memakai saldo bot di web.', 'warning');
-    else showToast(`Halo ${S.user.name.split(' ')[0]}!`, 'success');
+    if (!S.user.telegramId) showToast(`Halo ${S.user.name.split(' ')[0]}! Akun web aktif. Tautkan Telegram hanya jika ingin sinkronisasi opsional.`, 'success');
+    else showToast(`Halo ${S.user.name.split(' ')[0]}! Akun web dan Telegram sudah tertaut.`, 'success');
   }, 600);
 })();
 

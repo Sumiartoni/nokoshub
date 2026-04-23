@@ -23,7 +23,7 @@ const pricesQuerySchema = z.object({
 
 const createOrderSchema = z.object({
     priceId: z.string().min(1),
-    telegramId: z.string().min(1), // passed by bot
+    telegramId: z.string().min(1).optional(), // passed by bot, optional for web auth
 });
 
 const depositSchema = z.object({
@@ -449,7 +449,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
         try {
             await maintenanceService.assertActionAllowed('orders');
-            const user = await userService.findOrCreate(parsed.data.telegramId);
+            const { user } = await resolveOwnedUserFromRequest(req, {
+                telegramId: parsed.data.telegramId,
+                createIfMissing: true,
+            });
+            if (!user) {
+                return reply.status(400).send({ success: false, error: 'Login web atau telegramId diperlukan untuk membuat order' });
+            }
             const order = await orderService.createOrder(user.id, parsed.data.priceId);
             return {
                 success: true,
@@ -468,11 +474,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/orders?telegramId=
     fastify.get('/orders', async (req, reply) => {
         const query = req.query as { telegramId?: string };
-        if (!query.telegramId) {
-            return reply.status(400).send({ success: false, error: 'telegramId required' });
+        const { user } = await resolveOwnedUserFromRequest(req, {
+            telegramId: query.telegramId,
+            createIfMissing: false,
+        });
+        if (!user) {
+            return reply.status(400).send({ success: false, error: 'telegramId atau login web diperlukan' });
         }
-        const user = await userService.getByTelegramId(query.telegramId);
-        if (!user) return { success: true, data: [] };
         const orders = await orderService.getOrders(user.id);
         return { success: true, data: orders };
     });
@@ -624,11 +632,17 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // POST /api/order/cancel
     fastify.post('/order/cancel', async (req, reply) => {
         const body = req.body as { orderId?: string; telegramId?: string };
-        if (!body.orderId || !body.telegramId) {
-            return reply.status(400).send({ success: false, error: 'orderId and telegramId required' });
+        if (!body.orderId) {
+            return reply.status(400).send({ success: false, error: 'orderId required' });
         }
         try {
-            const user = await userService.findOrCreate(body.telegramId);
+            const { user } = await resolveOwnedUserFromRequest(req, {
+                telegramId: body.telegramId,
+                createIfMissing: false,
+            });
+            if (!user) {
+                return reply.status(400).send({ success: false, error: 'telegramId atau login web diperlukan' });
+            }
             const result = await orderService.cancelOrder(body.orderId, user.id);
             return { success: true, data: result };
         } catch (err) {
