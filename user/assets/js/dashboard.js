@@ -1037,8 +1037,10 @@ async function refreshTopupInvoiceStatus({ silent = false } = {}) {
     if (latest.status === 'PAID') {
       stopTopupCountdown();
       stopTopupStatusPolling();
-      if (!silent) showToast('Pembayaran berhasil terdeteksi. Saldo sudah ditambahkan otomatis.', 'success');
+      closeModal('modalTopupOk');
+      showToast('Pembayaran berhasil terdeteksi. Saldo sudah ditambahkan otomatis.', 'success');
       await loadDashboardData({ silent: true });
+      nav('transactions');
     } else if (latest.status === 'EXPIRED') {
       stopTopupCountdown();
       stopTopupStatusPolling();
@@ -1101,6 +1103,7 @@ function startTopupStatusPolling() {
     if (S.topup.invoice?.status && S.topup.invoice.status !== 'PENDING') return;
     refreshTopupInvoiceStatus({ silent: true });
   }, 5000);
+  refreshTopupInvoiceStatus({ silent: true });
 }
 
 function startTopupCountdown(expiredAt) {

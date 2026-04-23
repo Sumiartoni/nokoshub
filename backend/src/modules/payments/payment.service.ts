@@ -121,6 +121,42 @@ export const paymentService = {
         });
     },
 
+    async syncInvoiceForUser(invoiceId: string, userId: string) {
+        await paymentService.expireOverdueInvoices();
+
+        const invoice = await prisma.invoice.findFirst({
+            where: { id: invoiceId, userId },
+        });
+        if (!invoice) return null;
+
+        if (invoice.provider !== 'BAYAR_GG' || invoice.status !== 'PENDING') {
+            return invoice;
+        }
+
+        try {
+            const detail = await bayarGgService.checkPayment(invoice.gatewayOrderId || invoice.id);
+
+            if (detail.status === 'paid') {
+                await confirmInvoicePaid(invoice.id, {
+                    paidAt: safeDate(detail.paidAt) ?? new Date(),
+                    gatewayCompletedAt: safeDate(detail.paidAt),
+                    paymentMethod: detail.paymentMethod || invoice.paymentMethod || 'qris',
+                    gatewayPayload: detail.raw,
+                });
+            } else if (detail.status === 'expired' || detail.status === 'cancelled') {
+                await markInvoiceExpired(invoice.id);
+            } else if (invoice.expiredAt && invoice.expiredAt.getTime() <= Date.now()) {
+                await markInvoiceExpired(invoice.id);
+            }
+        } catch (err) {
+            logger.warn({ err, invoiceId: invoice.id }, 'Failed to sync BAYAR GG invoice on status check');
+        }
+
+        return prisma.invoice.findFirst({
+            where: { id: invoiceId, userId },
+        });
+    },
+
     async getAllInvoices(limit = 50) {
         await paymentService.expireOverdueInvoices();
 

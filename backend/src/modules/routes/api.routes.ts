@@ -614,7 +614,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         });
         if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
 
-        const invoice = await paymentService.getInvoiceForUser(params.invoiceId, user.id);
+        const invoice = await paymentService.syncInvoiceForUser(params.invoiceId, user.id);
         if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
 
         return {
