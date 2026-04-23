@@ -97,12 +97,19 @@ export const bayarGgService = {
     }): Promise<BayarGgPayment> {
         this.assertConfigured();
 
+        const useQrisConverter = config.QRIS_DYNAMIC_ENABLED;
         const body: Record<string, unknown> = {
             amount: input.amount,
             description: input.description,
             payment_method: normalizeMethod(config.BAYAR_GG_PAYMENT_METHOD),
-            use_qris_converter: true,
         };
+
+        if (useQrisConverter) {
+            body.use_qris_converter = true;
+            if (config.QRIS_STATIC_STRING) {
+                body.qris_string = config.QRIS_STATIC_STRING;
+            }
+        }
 
         const callbackUrl = this.buildWebhookUrl();
         if (callbackUrl) body.callback_url = callbackUrl;

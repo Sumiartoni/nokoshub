@@ -785,30 +785,8 @@
        ============================================= -->
   <div class="modal-ov" id="modalTopupOk">
     <div class="modal-box" style="text-align:center;">
-      <div style="font-size:4rem;margin-bottom:12px;animation:mascotFloat 2s ease-in-out infinite;">🎉</div>
-      <div class="modal-title">Invoice Top Up Dibuat</div>
-      <div class="modal-sub" id="topupOkMsg">Invoice payment gateway berhasil dibuat.</div>
-      <div class="invoice-countdown" id="topupInvoiceCountdown">Batas waktu: —</div>
-      <div style="background:linear-gradient(135deg,var(--primary),#7C3AED);border:var(--bw) solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--shadow);margin:16px 0;">
-        <div style="font-size:0.7rem;color:rgba(255,255,255,0.65);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Bayar</div>
-        <div style="font-family:var(--font-h);font-size:2rem;color:#fff;" id="topupOkBal">Rp 0</div>
-      </div>
-      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
-        <div class="invoice-qris-label">Saldo Masuk</div>
-        <code id="topupCreditAmount">Rp 0</code>
-      </div>
-      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
-        <div class="invoice-qris-label">Biaya Gateway</div>
-        <code id="topupGatewayFee">Rp 0</code>
-      </div>
-      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
-        <div class="invoice-qris-label">Metode Pembayaran</div>
-        <code id="topupPaymentMethod">QRIS</code>
-      </div>
-      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
-        <div class="invoice-qris-label">Status Pembayaran</div>
-        <code id="topupPaymentStatus">Menunggu pembayaran</code>
-      </div>
+      <div class="modal-title">Scan QRIS</div>
+      <div class="invoice-countdown" id="topupInvoiceCountdown">Expired: —</div>
       <div class="invoice-qris-scan">
         <img id="topupQrisImage" alt="QRIS pembayaran">
       </div>
@@ -821,6 +799,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260423-6"></script>
+  <script src="assets/js/dashboard.js?v=20260423-7"></script>
 </body>
 </html>

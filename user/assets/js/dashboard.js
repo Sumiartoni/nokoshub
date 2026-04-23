@@ -1050,21 +1050,9 @@ async function refreshTopupInvoiceStatus({ silent = false } = {}) {
 
 function updateTopupInvoiceUi(invoice) {
   const status = String(invoice?.status || 'PENDING').toUpperCase();
-  set('topupOkMsg', `Invoice #${shortId(invoice.invoiceId)} dibuat melalui payment gateway BAYAR GG dan berlaku sampai ${formatDate(invoice.expiredAt)}.`);
-  set('topupOkBal', FMT(invoice.amount));
-  set('topupCreditAmount', FMT(invoice.baseAmount || 0));
-  set('topupGatewayFee', FMT(invoice.fee || 0));
-  set('topupPaymentMethod', String(invoice.paymentMethod || 'qris').toUpperCase());
-  set('topupPaymentStatus', status === 'PAID' ? 'Sudah dibayar' : status === 'EXPIRED' ? 'Expired' : 'Menunggu pembayaran');
 
   const linkBtn = document.getElementById('topupOpenGatewayBtn');
   if (linkBtn) linkBtn.disabled = !invoice.paymentUrl || status !== 'PENDING';
-
-  const statusEl = document.getElementById('topupPaymentStatus');
-  if (statusEl) {
-    statusEl.classList.toggle('success', status === 'PAID');
-    statusEl.classList.toggle('expired', status === 'EXPIRED');
-  }
 }
 
 function openGatewayPaymentPage() {
@@ -1093,13 +1081,13 @@ function startTopupCountdown(expiredAt) {
   const tick = () => {
     const remainingMs = new Date(expiredAt).getTime() - Date.now();
     if (!Number.isFinite(remainingMs)) {
-      el.textContent = 'Batas waktu: -';
+      el.textContent = 'Expired: -';
       el.classList.remove('expired');
       return;
     }
 
     if (remainingMs <= 0) {
-      el.textContent = 'Invoice sudah expired';
+      el.textContent = 'Expired';
       el.classList.add('expired');
       stopTopupCountdown();
       stopTopupStatusPolling();
@@ -1109,7 +1097,7 @@ function startTopupCountdown(expiredAt) {
 
     const minutes = Math.floor(remainingMs / 60000);
     const seconds = Math.floor((remainingMs % 60000) / 1000);
-    el.textContent = `Batas waktu: ${minutes}m ${String(seconds).padStart(2, '0')}s`;
+    el.textContent = `Expired: ${minutes}m ${String(seconds).padStart(2, '0')}s`;
     el.classList.remove('expired');
   };
 
