@@ -72,10 +72,10 @@
         else if (pageId === 'transactions') loadTransactions();
         else if (pageId === 'services') {
             loadPricingSettings();
-            loadReferralSettings();
-            loadSmtpSettings();
             loadServices();
         }
+        else if (pageId === 'referral') loadReferralSettings();
+        else if (pageId === 'smtp') loadSmtpSettings();
         else if (pageId === 'maintenance') loadMaintenanceDashboard();
         else if (pageId === 'users') loadUsers();
     }
@@ -87,6 +87,8 @@
         invoices:     { title: 'Invoices',    sub: 'Riwayat deposit & pembayaran payment gateway' },
         transactions: { title: 'Transaksi',   sub: 'Semua aliran transaksi keuangan' },
         services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari HeroSMS' },
+        referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
+        smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
         maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
         users:        { title: 'Users',       sub: 'Manajemen pengguna & penyesuaian saldo' },
     };
@@ -112,10 +114,10 @@
         else if (page === 'transactions') loadTransactions();
         else if (page === 'services') {
             loadPricingSettings();
-            loadReferralSettings();
-            loadSmtpSettings();
             loadServices();
         }
+        else if (page === 'referral') loadReferralSettings();
+        else if (page === 'smtp') loadSmtpSettings();
         else if (page === 'maintenance') loadMaintenanceDashboard();
         else if (page === 'users') loadUsers();
     };
