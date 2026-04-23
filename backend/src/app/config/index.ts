@@ -9,6 +9,7 @@ const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.string().default('8000').transform(Number),
     API_BASE_URL: z.string().url().default('http://localhost:3000'),
+    PUBLIC_API_BASE_URL: z.string().default(''),
     BACKEND_DASHBOARD_ENABLED: z.string().default('false').transform((value) => {
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),
@@ -40,11 +41,10 @@ const envSchema = z.object({
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),
     PAYMENT_WEBHOOK_SECRET: z.string().default(''),
-    PAKASIR_PROJECT_SLUG: z.string().default(''),
-    PAKASIR_API_KEY: z.string().default(''),
-    PAKASIR_PAYMENT_METHOD: z.string().default('qris'),
-    PAKASIR_WEBHOOK_TOKEN: z.string().default(''),
-    PAKASIR_REDIRECT_URL: z.string().default(''),
+    BAYAR_GG_API_KEY: z.string().default(''),
+    BAYAR_GG_WEBHOOK_SECRET: z.string().default(''),
+    BAYAR_GG_PAYMENT_METHOD: z.string().default('qris'),
+    BAYAR_GG_REDIRECT_URL: z.string().default(''),
 
     ADMIN_API_KEY: z.string().min(1, 'ADMIN_API_KEY is required'),
     BACKOFFICE_USERNAME: z.string().default('admin'),

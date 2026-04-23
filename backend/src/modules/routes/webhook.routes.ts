@@ -21,6 +21,7 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
             const rawBody = JSON.stringify(req.body);
 
             const result = await paymentService.handleWebhook(body, rawBody, {
+                headers: req.headers as Record<string, any>,
                 webhookToken: query.token,
             });
 

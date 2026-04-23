@@ -4,7 +4,7 @@ import { redisConnection } from '../../queue/queue';
 import { paymentService } from '../payments/payment.service';
 import { serviceService } from '../services/service.service';
 import { smtpSettingsService } from '../settings/smtp-settings.service';
-import { pakasirService } from '../payments/pakasir.service';
+import { bayarGgService } from '../payments/bayargg.service';
 
 const MAINTENANCE_SETTINGS_KEY = 'maintenance_settings';
 
@@ -80,7 +80,7 @@ export const maintenanceService = {
         startOfDay.setHours(0, 0, 0, 0);
 
         const settings = await this.getSettings();
-        const paymentConfig = pakasirService.getConfigStatus();
+        const paymentConfig = bayarGgService.getConfigStatus();
 
         const [
             invoicePending,
@@ -136,9 +136,9 @@ export const maintenanceService = {
 
         const database = await checkDatabase();
         const provider = await checkProvider();
-        const stalePakasir = await prisma.invoice.count({
+        const staleBayarGg = await prisma.invoice.count({
             where: {
-                provider: 'PAKASIR',
+                provider: 'BAYAR_GG',
                 status: 'PENDING',
                 createdAt: {
                     lte: new Date(Date.now() - 15 * 60 * 1000),
@@ -150,8 +150,10 @@ export const maintenanceService = {
             invoiceOverdue > 0 ? `${invoiceOverdue} invoice deposit sudah melewati waktu bayar dan perlu dibersihkan.` : '',
             pendingRegistrationsExpired > 0 ? `${pendingRegistrationsExpired} permintaan OTP register sudah kadaluarsa dan bisa dihapus.` : '',
             linkCodesExpired > 0 ? `${linkCodesExpired} kode tautan Telegram lama bisa dibersihkan.` : '',
-            stalePakasir > 0 ? `${stalePakasir} invoice Pakasir pending lebih dari 15 menit dan sebaiknya direkonsiliasi.` : '',
-            !paymentConfig.configured ? 'Konfigurasi Pakasir belum lengkap di .env VPS.' : '',
+            staleBayarGg > 0 ? `${staleBayarGg} invoice BAYAR GG pending lebih dari 15 menit dan sebaiknya direkonsiliasi.` : '',
+            !paymentConfig.configured ? 'Konfigurasi BAYAR GG belum lengkap di .env VPS.' : '',
+            !paymentConfig.publicApiBaseUrl ? 'PUBLIC_API_BASE_URL belum diisi. Webhook otomatis BAYAR GG tidak akan aktif.' : '',
+            !paymentConfig.webhookSecretEnabled ? 'BAYAR_GG_WEBHOOK_SECRET belum diisi. Verifikasi webhook belum aman.' : '',
             smtpSettings && !smtpSettings.fromEmail ? 'Email pengirim OTP belum terisi.' : '',
             !config.GOOGLE_CLIENT_ID ? 'Google login belum dikonfigurasi di environment.' : '',
             !config.TURNSTILE_SITE_KEY || !config.TURNSTILE_SECRET_KEY ? 'Cloudflare Turnstile belum aktif penuh.' : '',
@@ -163,7 +165,7 @@ export const maintenanceService = {
                 invoicePending,
                 invoiceOverdue,
                 invoicePaidToday,
-                stalePakasir,
+                staleBayarGg,
                 pendingRegistrationsExpired,
                 pendingRegistrationsTotal,
                 linkCodesActive,
@@ -185,7 +187,6 @@ export const maintenanceService = {
                 provider,
                 paymentGateway: {
                     ...paymentConfig,
-                    webhookUrl: buildPakasirWebhookUrl(),
                 },
                 email: {
                     transport: smtpSettings?.transport || '',
@@ -314,16 +315,4 @@ function normalizeDateTimeValue(value?: string) {
     const date = new Date(raw);
     if (!Number.isFinite(date.getTime())) return '';
     return date.toISOString();
-}
-
-function buildPakasirWebhookUrl() {
-    const base = String(config.API_BASE_URL || '').replace(/\/+$/, '');
-    if (!base) return '';
-
-    const apiBase = base.endsWith('/api') ? base : `${base}/api`;
-    const url = new URL(`${apiBase}/payment/webhook`);
-    if (config.PAKASIR_WEBHOOK_TOKEN) {
-        url.searchParams.set('token', config.PAKASIR_WEBHOOK_TOKEN);
-    }
-    return url.toString();
 }

@@ -4,7 +4,7 @@ import { userService } from '../users/user.service';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { referralService } from '../referrals/referral.service';
-import { pakasirService } from './pakasir.service';
+import { bayarGgService, type BayarGgWebhookPayload } from './bayargg.service';
 
 type LegacyWebhookBody = {
     invoiceId?: string;
@@ -14,21 +14,13 @@ type LegacyWebhookBody = {
     [key: string]: unknown;
 };
 
-type PakasirWebhookBody = {
-    amount?: number;
-    order_id?: string;
-    project?: string;
-    status?: string;
-    payment_method?: string;
-    completed_at?: string;
-    [key: string]: unknown;
-};
+type PaymentWebhookBody = LegacyWebhookBody | BayarGgWebhookPayload;
 
 export const paymentService = {
     async createInvoice(userId: string, requestedAmount: number) {
         if (requestedAmount < 10000) throw new Error('Minimum deposit is Rp10.000');
         await paymentService.expireOverdueInvoices();
-        pakasirService.assertConfigured();
+        bayarGgService.assertConfigured();
 
         const invoice = await prisma.invoice.create({
             data: {
@@ -36,8 +28,8 @@ export const paymentService = {
                 amount: requestedAmount,
                 baseAmount: requestedAmount,
                 gatewayFee: 0,
-                provider: 'PAKASIR',
-                paymentMethod: config.PAKASIR_PAYMENT_METHOD || 'qris',
+                provider: 'BAYAR_GG',
+                paymentMethod: config.BAYAR_GG_PAYMENT_METHOD || 'qris',
                 gatewayOrderId: null,
                 paymentUrl: null,
                 gatewayPayload: null,
@@ -48,56 +40,60 @@ export const paymentService = {
         });
 
         try {
-            const payment = await pakasirService.createTransaction({
-                orderId: invoice.id,
+            const payment = await bayarGgService.createPayment({
                 amount: requestedAmount,
+                description: `Deposit NokosHUB ${invoice.id}`,
             });
 
             const updated = await prisma.invoice.update({
                 where: { id: invoice.id },
                 data: {
-                    amount: payment.totalPayment,
+                    amount: payment.finalAmount,
                     baseAmount: payment.amount,
-                    gatewayFee: payment.fee,
-                    provider: 'PAKASIR',
+                    gatewayFee: payment.uniqueCode,
+                    provider: 'BAYAR_GG',
                     paymentMethod: payment.paymentMethod,
-                    gatewayOrderId: payment.orderId || invoice.id,
-                    paymentUrl: pakasirService.buildHostedPaymentUrl(payment.orderId || invoice.id, payment.amount),
-                    gatewayPayload: JSON.stringify(payment),
-                    qrisPayload: payment.paymentNumber,
-                    expiredAt: safeDate(payment.expiredAt) ?? invoice.expiredAt,
+                    gatewayOrderId: payment.invoiceId || invoice.id,
+                    paymentUrl: payment.paymentUrl || null,
+                    gatewayPayload: JSON.stringify({
+                        ...asObject(payment.raw),
+                        qrisImageUrl: payment.qrisImageUrl || null,
+                    }),
+                    qrisPayload: payment.qrisPayload || '',
+                    expiredAt: safeDate(payment.expiresAt) ?? invoice.expiredAt,
                 },
             });
 
             logger.info(
                 {
                     invoiceId: updated.id,
+                    gatewayInvoiceId: updated.gatewayOrderId,
                     userId,
                     creditAmount: updated.baseAmount,
                     totalPayment: updated.amount,
                     gatewayFee: updated.gatewayFee,
                     provider: updated.provider,
                 },
-                'Pakasir invoice created'
+                'BAYAR GG invoice created'
             );
 
             return updated;
         } catch (err) {
             await prisma.invoice.delete({ where: { id: invoice.id } }).catch(() => null);
-            logger.error({ err, invoiceId: invoice.id, userId }, 'Failed to create Pakasir invoice');
+            logger.error({ err, invoiceId: invoice.id, userId }, 'Failed to create BAYAR GG invoice');
             throw err;
         }
     },
 
     async handleWebhook(
-        body: LegacyWebhookBody | PakasirWebhookBody,
+        body: PaymentWebhookBody,
         rawBody: string,
-        input: { webhookToken?: string } = {}
+        input: { headers?: Record<string, any>; webhookToken?: string } = {}
     ): Promise<{ success: boolean; message: string }> {
         await paymentService.expireOverdueInvoices();
 
-        if (isPakasirWebhook(body)) {
-            return handlePakasirWebhook(body, input.webhookToken);
+        if (isBayarGgWebhook(body)) {
+            return handleBayarGgWebhook(body, input.headers || {});
         }
 
         return handleLegacyWebhook(body as LegacyWebhookBody, rawBody);
@@ -137,7 +133,7 @@ export const paymentService = {
         const pendingInvoices = await prisma.invoice.findMany({
             where: {
                 status: 'PENDING',
-                provider: 'PAKASIR',
+                provider: 'BAYAR_GG',
             },
             orderBy: { createdAt: 'asc' },
             take: Math.min(Math.max(limit, 1), 100),
@@ -153,39 +149,33 @@ export const paymentService = {
 
         for (const invoice of pendingInvoices) {
             try {
-                const detail = await pakasirService.getTransactionDetail({
-                    orderId: invoice.gatewayOrderId || invoice.id,
-                    amount: invoice.baseAmount || invoice.amount,
-                });
+                const detail = await bayarGgService.checkPayment(invoice.gatewayOrderId || invoice.id);
 
-                if (detail.status === 'completed') {
+                if (detail.status === 'paid') {
                     await confirmInvoicePaid(invoice.id, {
-                        paidAt: safeDate(detail.completedAt) ?? new Date(),
-                        gatewayCompletedAt: safeDate(detail.completedAt),
+                        paidAt: safeDate(detail.paidAt) ?? new Date(),
+                        gatewayCompletedAt: safeDate(detail.paidAt),
                         paymentMethod: detail.paymentMethod || invoice.paymentMethod || 'qris',
-                        gatewayPayload: detail,
+                        gatewayPayload: detail.raw,
                     });
                     summary.completed += 1;
                     continue;
                 }
 
-                if (invoice.expiredAt && invoice.expiredAt.getTime() <= Date.now()) {
-                    try {
-                        await pakasirService.cancelTransaction({
-                            orderId: invoice.gatewayOrderId || invoice.id,
-                            amount: invoice.baseAmount || invoice.amount,
-                        });
-                        summary.cancelled += 1;
-                    } catch (err) {
-                        logger.warn({ err, invoiceId: invoice.id }, 'Failed to cancel expired Pakasir invoice during reconcile');
-                    }
+                if (detail.status === 'expired' || detail.status === 'cancelled') {
+                    await markInvoiceExpired(invoice.id);
+                    if (detail.status === 'cancelled') summary.cancelled += 1;
+                    else summary.expired += 1;
+                    continue;
+                }
 
+                if (invoice.expiredAt && invoice.expiredAt.getTime() <= Date.now()) {
                     await markInvoiceExpired(invoice.id);
                     summary.expired += 1;
                 }
             } catch (err) {
                 summary.failed += 1;
-                logger.warn({ err, invoiceId: invoice.id }, 'Failed to reconcile Pakasir invoice');
+                logger.warn({ err, invoiceId: invoice.id }, 'Failed to reconcile BAYAR GG invoice');
             }
         }
 
@@ -209,33 +199,33 @@ export const paymentService = {
     },
 };
 
-async function handlePakasirWebhook(
-    body: PakasirWebhookBody,
-    webhookToken?: string
+async function handleBayarGgWebhook(
+    body: BayarGgWebhookPayload,
+    headers: Record<string, any>
 ): Promise<{ success: boolean; message: string }> {
-    if (config.PAKASIR_WEBHOOK_TOKEN && webhookToken !== config.PAKASIR_WEBHOOK_TOKEN) {
-        logger.warn({ orderId: body.order_id }, 'Rejected Pakasir webhook because webhook token did not match');
-        return { success: false, message: 'Invalid webhook token' };
+    if (!bayarGgService.verifyWebhookSignature(body, headers)) {
+        logger.warn({ invoiceId: body.invoice_id }, 'Rejected BAYAR GG webhook because signature did not match');
+        return { success: false, message: 'Invalid webhook signature' };
     }
 
-    const orderId = String(body.order_id || '').trim();
+    const externalInvoiceId = String(body.invoice_id || '').trim();
     const status = String(body.status || '').trim().toLowerCase();
-    const baseAmount = Number(body.amount || 0);
+    const finalAmount = Number(body.final_amount || 0);
 
-    if (!orderId) {
-        return { success: false, message: 'Missing order_id' };
+    if (!externalInvoiceId) {
+        return { success: false, message: 'Missing invoice_id' };
     }
 
-    if (status !== 'completed') {
-        logger.info({ orderId, status }, 'Ignoring non-completed Pakasir webhook');
+    if (status !== 'paid') {
+        logger.info({ externalInvoiceId, status }, 'Ignoring non-paid BAYAR GG webhook');
         return { success: true, message: `Ignored webhook status ${status || 'unknown'}` };
     }
 
     const invoice = await prisma.invoice.findFirst({
         where: {
             OR: [
-                { gatewayOrderId: orderId },
-                { id: orderId },
+                { gatewayOrderId: externalInvoiceId },
+                { id: externalInvoiceId },
             ],
         },
     });
@@ -252,42 +242,24 @@ async function handlePakasirWebhook(
         return { success: false, message: 'Invoice expired' };
     }
 
-    const detail = await pakasirService.getTransactionDetail({
-        orderId,
-        amount: baseAmount || invoice.baseAmount || invoice.amount,
-    });
-
-    if (detail.status !== 'completed') {
-        return { success: false, message: 'Transaction not completed' };
-    }
-
-    if (detail.project !== config.PAKASIR_PROJECT_SLUG) {
-        return { success: false, message: 'Project mismatch' };
-    }
-
-    if (detail.orderId !== (invoice.gatewayOrderId || invoice.id)) {
-        return { success: false, message: 'Order mismatch' };
-    }
-
-    if (detail.amount !== invoice.baseAmount) {
+    if (finalAmount && invoice.amount !== Math.trunc(finalAmount)) {
         logger.warn(
             {
                 invoiceId: invoice.id,
-                expected: invoice.baseAmount,
-                received: detail.amount,
+                expected: invoice.amount,
+                received: Math.trunc(finalAmount),
             },
-            'Pakasir detail amount mismatch'
+            'BAYAR GG final amount mismatch'
         );
         return { success: false, message: 'Amount mismatch' };
     }
 
     const confirmed = await confirmInvoicePaid(invoice.id, {
-        paidAt: safeDate(body.completed_at) ?? safeDate(detail.completedAt) ?? new Date(),
-        gatewayCompletedAt: safeDate(detail.completedAt),
-        paymentMethod: detail.paymentMethod || String(body.payment_method || invoice.paymentMethod || 'qris'),
+        paidAt: safeDate(body.paid_at) ?? new Date(),
+        gatewayCompletedAt: safeDate(body.paid_at),
+        paymentMethod: invoice.paymentMethod || config.BAYAR_GG_PAYMENT_METHOD || 'qris',
         gatewayPayload: {
             webhook: body,
-            detail,
         },
     });
 
@@ -332,7 +304,7 @@ async function handleLegacyWebhook(
         invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
     } else if (amount) {
         invoice = await prisma.invoice.findFirst({
-            where: { amount: amount, status: 'PENDING' },
+            where: { amount, status: 'PENDING' },
         });
     }
 
@@ -408,7 +380,7 @@ async function confirmInvoicePaid(
             invoice.userId,
             amountToCredit,
             'DEPOSIT',
-            `Deposit via ${invoice.provider === 'PAKASIR' ? 'Pakasir' : 'QRIS'}`,
+            `Deposit via ${invoice.provider === 'BAYAR_GG' ? 'BAYAR GG' : 'QRIS'}`,
             invoice.id
         );
 
@@ -439,12 +411,16 @@ async function markInvoiceExpired(invoiceId: string) {
     });
 }
 
-function isPakasirWebhook(body: LegacyWebhookBody | PakasirWebhookBody): body is PakasirWebhookBody {
-    return Boolean((body as PakasirWebhookBody).order_id || (body as PakasirWebhookBody).project);
+function isBayarGgWebhook(body: PaymentWebhookBody): body is BayarGgWebhookPayload {
+    return Boolean((body as BayarGgWebhookPayload).invoice_id || (body as BayarGgWebhookPayload).event);
 }
 
 function safeDate(value?: string | Date | null) {
     if (!value) return null;
     const parsed = new Date(value);
     return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function asObject(value: unknown) {
+    return value && typeof value === 'object' ? value : {};
 }

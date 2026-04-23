@@ -44,7 +44,7 @@ const S = {
     },
     invites: [],
   },
-  topup: { amount: 0, method: 'QRIS Pakasir', fee: 0, invoice: null },
+  topup: { amount: 0, method: 'QRIS BAYAR GG', fee: 0, invoice: null },
   buy: {
     step: 1,
     svc: null,
@@ -457,7 +457,7 @@ function updateUI() {
   const fee = S.topup.fee;
   const tot = amt + fee;
   const aft = b + amt;
-  const feeLabel = S.topup.method === 'QRIS Pakasir' && !fee ? 'Dihitung otomatis' : fee ? FMT(fee) : 'Gratis';
+  const feeLabel = S.topup.method === 'QRIS BAYAR GG' && !fee ? 'Dihitung otomatis' : fee ? FMT(fee) : 'Gratis';
   set('sum-cur', fmtBal);
   set('sum-amt', amt ? FMT(amt) : 'Rp 0');
   set('sum-met', S.topup.method);
@@ -898,7 +898,7 @@ async function doTopup() {
     updateTopupInvoiceUi(invoice);
     const qrisImage = document.getElementById('topupQrisImage');
     if (qrisImage) {
-      qrisImage.src = invoice.qrisImageDataUrl || '';
+      qrisImage.src = invoice.qrisImageDataUrl || invoice.qrisImageUrl || '';
     }
     startTopupCountdown(invoice.expiredAt);
     startTopupStatusPolling();
@@ -917,7 +917,7 @@ async function doTopup() {
 function copyInvoicePayload() {
   const payload = S.topup.invoice?.qrisPayload || '';
   if (!payload) {
-    showToast('Kode QRIS belum tersedia.', 'warning');
+    showToast('Gateway ini tidak mengirim string QRIS mentah. Gunakan tombol halaman bayar atau scan gambar QR.', 'warning');
     return;
   }
   copyText(payload);
@@ -1024,8 +1024,8 @@ async function refreshTopupInvoiceStatus({ silent = false } = {}) {
       invoiceId: latest.id || invoice.invoiceId,
     };
     const qrisImage = document.getElementById('topupQrisImage');
-    if (qrisImage && S.topup.invoice.qrisImageDataUrl) {
-      qrisImage.src = S.topup.invoice.qrisImageDataUrl;
+    if (qrisImage) {
+      qrisImage.src = S.topup.invoice.qrisImageDataUrl || S.topup.invoice.qrisImageUrl || '';
     }
     updateTopupInvoiceUi(S.topup.invoice);
 
@@ -1050,7 +1050,7 @@ async function refreshTopupInvoiceStatus({ silent = false } = {}) {
 
 function updateTopupInvoiceUi(invoice) {
   const status = String(invoice?.status || 'PENDING').toUpperCase();
-  set('topupOkMsg', `Invoice #${shortId(invoice.invoiceId)} dibuat melalui payment gateway Pakasir dan berlaku sampai ${formatDate(invoice.expiredAt)}.`);
+  set('topupOkMsg', `Invoice #${shortId(invoice.invoiceId)} dibuat melalui payment gateway BAYAR GG dan berlaku sampai ${formatDate(invoice.expiredAt)}.`);
   set('topupOkBal', FMT(invoice.amount));
   set('topupCreditAmount', FMT(invoice.baseAmount || 0));
   set('topupGatewayFee', FMT(invoice.fee || 0));

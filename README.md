@@ -57,7 +57,7 @@ BACKOFFICE_COOKIE_SECURE=true
 Sebelum domain dibuka ke publik:
 
 - Isi `INTERNAL_API_SECRET`, `JWT_SECRET`, `ADMIN_API_KEY`, dan `BACKOFFICE_SESSION_SECRET` dengan string acak panjang.
-- Jika memakai webhook Pakasir, isi juga `PAKASIR_WEBHOOK_TOKEN` lalu tempel URL webhook dari panel maintenance/backoffice ke proyek Pakasir Anda.
+- Jika memakai webhook BAYAR GG, isi `PUBLIC_API_BASE_URL` dan `BAYAR_GG_WEBHOOK_SECRET`, lalu pastikan callback diarahkan ke URL webhook yang tampil di panel maintenance/backoffice.
 - Jangan buka port `3000`, `8080`, `8081`, `5432`, atau `6379` ke publik. Publik cukup lewat port `80` dan `443` milik reverse proxy.
 - Set `BACKOFFICE_COOKIE_SECURE=true` setelah memakai HTTPS.
 - Isi `CORS_ALLOWED_ORIGINS` dengan domain resmi saja, contoh:
@@ -134,20 +134,21 @@ BREVO_API_KEY=isi_dengan_api_key_brevo_xkeysib
 
 Jika `EMAIL_TRANSPORT` diisi, backend akan memprioritaskan konfigurasi email dari `.env` di atas pengaturan panel super admin.
 
-## Payment Gateway Pakasir
+## Payment Gateway BAYAR GG
 
 Isi environment berikut di VPS:
 
 ```env
-PAKASIR_PROJECT_SLUG=slug_proyek_pakasir
-PAKASIR_API_KEY=api_key_pakasir
-PAKASIR_PAYMENT_METHOD=qris
-PAKASIR_WEBHOOK_TOKEN=token_rahasia_acak
-PAKASIR_REDIRECT_URL=https://nokoshub.store/#/transactions
+PUBLIC_API_BASE_URL=https://api.nokoshub.store
+BAYAR_GG_API_KEY=api_key_bayar_gg
+BAYAR_GG_WEBHOOK_SECRET=webhook_secret_bayar_gg
+BAYAR_GG_PAYMENT_METHOD=qris
+BAYAR_GG_REDIRECT_URL=https://nokoshub.store/#/transactions
 ```
 
-Lalu di dashboard Pakasir:
+Lalu di dashboard BAYAR GG:
 
-1. buka proyek yang dipakai,
-2. isi `Webhook URL` menuju backend NokosHUB Anda,
-3. gunakan URL yang sama seperti yang tampil di panel `Maintenance` backoffice agar token webhook ikut terbawa.
+1. buka menu pengaturan webhook,
+2. isi `Callback URL` menuju `https://api.domainanda.com/api/payment/webhook`,
+3. set `Webhook Secret` yang sama dengan `BAYAR_GG_WEBHOOK_SECRET` di VPS,
+4. gunakan `payment_method=qris` jika ingin QRIS admin standar.

@@ -527,6 +527,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 return reply.status(400).send({ success: false, error: 'Login web atau telegramId diperlukan untuk membuat invoice' });
             }
             const invoice = await paymentService.createInvoice(user.id, parsed.data.amount);
+            const qrisImageUrl = extractQrisImageUrl(invoice.gatewayPayload);
             const qrisImageDataUrl = await buildQrisImageDataUrl(invoice.qrisPayload);
             return {
                 success: true,
@@ -539,6 +540,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                     paymentMethod: invoice.paymentMethod,
                     paymentUrl: invoice.paymentUrl,
                     qrisPayload: invoice.qrisPayload,
+                    qrisImageUrl,
                     qrisImageDataUrl,
                     expiredAt: invoice.expiredAt,
                 },
@@ -564,20 +566,37 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         const invoice = await prisma.invoice.findFirst({
             where: { id: params.invoiceId, userId: user.id },
-            select: { qrisPayload: true },
+            select: { qrisPayload: true, gatewayPayload: true },
         });
-        if (!invoice?.qrisPayload) return reply.status(404).send({ success: false, error: 'Invoice not found' });
+        if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
 
-        const png = await QRCode.toBuffer(invoice.qrisPayload, {
-            type: 'png',
-            width: 900,
-            margin: 4,
-            errorCorrectionLevel: 'H',
-            color: { dark: '#000000', light: '#FFFFFF' },
-        });
+        if (invoice.qrisPayload) {
+            const png = await QRCode.toBuffer(invoice.qrisPayload, {
+                type: 'png',
+                width: 900,
+                margin: 4,
+                errorCorrectionLevel: 'H',
+                color: { dark: '#000000', light: '#FFFFFF' },
+            });
 
+            reply.header('Cache-Control', 'no-store');
+            reply.type('image/png').send(png);
+            return;
+        }
+
+        const qrisImageUrl = extractQrisImageUrl(invoice.gatewayPayload);
+        if (!qrisImageUrl) {
+            return reply.status(404).send({ success: false, error: 'QRIS image not available' });
+        }
+
+        const imageResponse = await fetch(qrisImageUrl);
+        if (!imageResponse.ok) {
+            return reply.status(502).send({ success: false, error: 'Failed to fetch QRIS image from gateway' });
+        }
+
+        const buffer = Buffer.from(await imageResponse.arrayBuffer());
         reply.header('Cache-Control', 'no-store');
-        reply.type('image/png').send(png);
+        reply.type(imageResponse.headers.get('content-type') || 'image/png').send(buffer);
     });
 
     // GET /api/deposit/:invoiceId/status?telegramId=
@@ -610,6 +629,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 expiredAt: invoice.expiredAt,
                 paidAt: invoice.paidAt,
                 qrisPayload: invoice.qrisPayload,
+                qrisImageUrl: extractQrisImageUrl(invoice.gatewayPayload),
                 qrisImageDataUrl: await buildQrisImageDataUrl(invoice.qrisPayload),
             },
         };
@@ -803,6 +823,8 @@ async function resolveOwnedUserFromRequest(
 }
 
 async function buildQrisImageDataUrl(payload: string) {
+    if (!String(payload || '').trim()) return '';
+
     return QRCode.toDataURL(payload, {
         type: 'image/png',
         width: 900,
@@ -810,6 +832,28 @@ async function buildQrisImageDataUrl(payload: string) {
         errorCorrectionLevel: 'H',
         color: { dark: '#000000', light: '#FFFFFF' },
     });
+}
+
+function extractQrisImageUrl(gatewayPayload?: string | null) {
+    if (!gatewayPayload) return '';
+
+    try {
+        const parsed = JSON.parse(gatewayPayload) as Record<string, any>;
+        const root = parsed?.data && typeof parsed.data === 'object' ? parsed.data : parsed;
+        return String(
+            parsed?.qrisImageUrl ||
+            root?.qrisImageUrl ||
+            root?.qr_image_url ||
+            root?.qris_image_url ||
+            root?.qris_converter?.qr_image_url ||
+            parsed?.qr_image_url ||
+            parsed?.qris_image_url ||
+            parsed?.qris_converter?.qr_image_url ||
+            ''
+        ).trim();
+    } catch {
+        return '';
+    }
 }
 
 function getRequestIp(req: { headers: Record<string, any>; ip?: string }) {

@@ -1365,12 +1365,12 @@
                 meta: 'Dipakai untuk rate limit dan queue.',
             },
             {
-                label: 'Pakasir',
+                label: 'BAYAR GG',
                 state: data.checks.paymentGateway?.configured ? 'ok' : 'fail',
                 value: data.checks.paymentGateway?.configured ? 'Configured' : 'Belum lengkap',
                 meta: [
-                    data.checks.paymentGateway?.projectSlug ? `Project: ${data.checks.paymentGateway.projectSlug}` : '',
                     data.checks.paymentGateway?.paymentMethod ? `Method: ${data.checks.paymentGateway.paymentMethod}` : '',
+                    data.checks.paymentGateway?.publicApiBaseUrl ? `Public API: ${data.checks.paymentGateway.publicApiBaseUrl}` : '',
                     data.checks.paymentGateway?.webhookUrl ? `Webhook: ${data.checks.paymentGateway.webhookUrl}` : '',
                 ].filter(Boolean).join('<br>'),
             },
@@ -1414,10 +1414,10 @@
 
         const operations = [
             {
-                label: 'Invoice Pakasir pending > 15 menit',
-                value: String(data.summary.stalePakasir ?? 0),
-                tone: Number(data.summary.stalePakasir ?? 0) > 0 ? 'warn' : 'ok',
-                hint: 'Gunakan aksi Reconcile Pakasir untuk sinkron ulang status pembayaran.',
+                label: 'Invoice BAYAR GG pending > 15 menit',
+                value: String(data.summary.staleBayarGg ?? 0),
+                tone: Number(data.summary.staleBayarGg ?? 0) > 0 ? 'warn' : 'ok',
+                hint: 'Gunakan aksi Reconcile BAYAR GG untuk sinkron ulang status pembayaran.',
             },
             {
                 label: 'OTP register kadaluarsa',
@@ -1455,10 +1455,10 @@
                 ? 'Maintenance mode sedang aktif. Pastikan pesan ke user jelas, durasi terisi, dan blokir hanya area yang memang terdampak.'
                 : 'Maintenance mode masih nonaktif. Anda bisa menyalakannya sebelum migrasi besar, sinkron provider massal, atau perubahan gateway.',
             data.checks.paymentGateway?.configured
-                ? `Webhook Pakasir aktif di ${escText(data.checks.paymentGateway.webhookUrl || '-')}. Simpan URL ini agar tidak berubah saat deploy.`
-                : 'Lengkapi konfigurasi Pakasir di .env VPS sebelum membuka kembali deposit otomatis.',
+                ? `Webhook BAYAR GG aktif di ${escText(data.checks.paymentGateway.webhookUrl || '-')}. Simpan URL ini agar tidak berubah saat deploy.`
+                : 'Lengkapi konfigurasi BAYAR GG di .env VPS sebelum membuka kembali deposit otomatis.',
             'Urutan aman saat maintenance: aktifkan notice, blok deposit/pesanan bila perlu, jalankan full routine, cek alerts, lalu buka layanan bertahap.',
-            'Sesudah deploy, refresh halaman ini lalu pastikan Database, Redis, Pakasir, Email OTP, dan Auth Protection semuanya kembali sehat.',
+            'Sesudah deploy, refresh halaman ini lalu pastikan Database, Redis, BAYAR GG, Email OTP, dan Auth Protection semuanya kembali sehat.',
         ];
 
         document.getElementById('maintenanceNotesBody').innerHTML = `

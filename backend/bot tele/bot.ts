@@ -289,7 +289,7 @@ export function createBot(): TelegramBot {
             `1️⃣ *Deposit Saldo*\n` +
             `• Wajib dilakukan sebelum membeli nomor.\n` +
             `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
-            `• Scan QR QRIS yang tampil atau buka link bayar Pakasir\n` +
+            `• Scan QR QRIS yang tampil atau buka link bayar BAYAR GG\n` +
             `• Saldo masuk otomatis setelah pembayaran terdeteksi\n\n` +
             `2️⃣ *Beli Nomor*\n` +
             `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
@@ -331,7 +331,7 @@ export function createBot(): TelegramBot {
             session.step = undefined;
             await bot.sendMessage(
                 chatId,
-                'ℹ️ Bukti transfer tidak perlu dikirim lagi. Deposit sekarang diproses otomatis oleh Pakasir. Setelah pembayaran berhasil, saldo akan bertambah otomatis.'
+                'ℹ️ Bukti transfer tidak perlu dikirim lagi. Deposit sekarang diproses otomatis oleh BAYAR GG. Setelah pembayaran berhasil, saldo akan bertambah otomatis.'
             );
             return;
         }
@@ -361,7 +361,7 @@ export function createBot(): TelegramBot {
         if (data.startsWith('pay_ok:') || data.startsWith('pay_no:')) {
             return bot.sendMessage(
                 chatId,
-                'ℹ️ Konfirmasi manual deposit sudah tidak dipakai lagi. Deposit sekarang diproses otomatis oleh Pakasir setelah pembayaran terdeteksi.'
+                'ℹ️ Konfirmasi manual deposit sudah tidak dipakai lagi. Deposit sekarang diproses otomatis oleh BAYAR GG setelah pembayaran terdeteksi.'
             );
         }
 
@@ -970,33 +970,45 @@ async function handleDepositWithAmount(
             return bot.sendMessage(chatId, `❌ Gagal membuat invoice: ${res.error}`);
         }
 
-        const { invoiceId, qrisPayload, expiredAt, amount: payableAmount, paymentUrl, fee, baseAmount } = res.data;
+        const { invoiceId, qrisPayload, qrisImageUrl, expiredAt, amount: payableAmount, paymentUrl, fee, baseAmount } = res.data;
 
-        // Generate QR code image
-        const qrBuffer = await QRCode.toBuffer(qrisPayload, {
-            type: 'png',
-            width: 900,
-            margin: 4,
-            errorCorrectionLevel: 'H',
-            color: {
-                dark: '#000000',
-                light: '#FFFFFF',
-            },
-        });
+        const caption =
+            `💳 *Invoice Deposit*\n\n` +
+            `Jumlah deposit: *${formatRupiah(baseAmount ?? amount)}*\n` +
+            `Biaya gateway: *${formatRupiah(fee ?? 0)}*\n` +
+            `Nominal bayar: *${formatRupiah(payableAmount)}*\n` +
+            `Invoice ID: \`${invoiceId}\`\n` +
+            `Expires: ${new Date(expiredAt).toLocaleString('id-ID')}\n\n` +
+            `📌 Scan QR di atas, lalu bayar sesuai nominal bayar persis.\n` +
+            `${paymentUrl ? `🌐 Link bayar: ${paymentUrl}\n\n` : ''}` +
+            `_Saldo akan ditambahkan otomatis setelah pembayaran terdeteksi._`;
 
-        await bot.sendPhoto(chatId, qrBuffer as any, {
-            caption:
-                `💳 *Invoice Deposit*\n\n` +
-                `Jumlah deposit: *${formatRupiah(baseAmount ?? amount)}*\n` +
-                `Biaya gateway: *${formatRupiah(fee ?? 0)}*\n` +
-                `Nominal bayar: *${formatRupiah(payableAmount)}*\n` +
-                `Invoice ID: \`${invoiceId}\`\n` +
-                `Expires: ${new Date(expiredAt).toLocaleString('id-ID')}\n\n` +
-                `📌 Scan QR di atas, lalu bayar sesuai nominal bayar persis.\n` +
-                `${paymentUrl ? `🌐 Link bayar: ${paymentUrl}\n\n` : ''}` +
-                `_Saldo akan ditambahkan otomatis setelah pembayaran terdeteksi._`,
-            parse_mode: 'Markdown',
-        });
+        if (qrisPayload) {
+            const qrBuffer = await QRCode.toBuffer(qrisPayload, {
+                type: 'png',
+                width: 900,
+                margin: 4,
+                errorCorrectionLevel: 'H',
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF',
+                },
+            });
+
+            await bot.sendPhoto(chatId, qrBuffer as any, {
+                caption,
+                parse_mode: 'Markdown',
+            });
+        } else if (qrisImageUrl) {
+            await bot.sendPhoto(chatId, qrisImageUrl, {
+                caption,
+                parse_mode: 'Markdown',
+            });
+        } else {
+            await bot.sendMessage(chatId, caption, {
+                parse_mode: 'Markdown',
+            });
+        }
 
         const session = getSession(chatId);
         session.step = undefined;
