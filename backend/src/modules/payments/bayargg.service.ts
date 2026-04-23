@@ -3,7 +3,7 @@ import axios from 'axios';
 import { config } from '../../app/config';
 
 const bayarGgClient = axios.create({
-    baseURL: 'https://www.bayar.gg/api',
+    baseURL: 'https://bayar.gg/api',
     timeout: 15000,
     headers: {
         'Content-Type': 'application/json',
