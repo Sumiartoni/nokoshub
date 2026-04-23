@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260419-5" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260423-2" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -62,6 +62,7 @@
 
         <div class="sidebar-nav-group">Akun</div>
         <div class="sidebar-nav-item"         id="n-profile"      onclick="nav('profile')"><span class="n-icon"><i data-lucide="circle-user"></i></span> Profil Saya</div>
+        <div class="sidebar-nav-item referral-desktop-nav" id="n-referral" onclick="nav('referral')"><span class="n-icon"><i data-lucide="gift"></i></span> Referral</div>
         <div class="sidebar-nav-item"         id="n-api"          onclick="nav('api')"><span class="n-icon"><i data-lucide="key-round"></i></span> API Key</div>
       </nav>
 
@@ -579,24 +580,24 @@
                 <div class="topup-notice" id="telegramLinkHint" style="margin-top:10px;">Kode berlaku 10 menit dan hanya bisa dipakai satu kali.</div>
               </div>
 
-              <div class="table-card" style="margin-bottom:16px;">
+              <div class="table-card referral-mobile-only" style="margin-bottom:16px;">
                 <div class="card-title" style="margin-bottom:12px;">🎁 Referral Saya</div>
                 <p style="font-size:0.82rem;color:var(--muted);font-weight:700;margin-bottom:12px;">
                   Bagikan kode referral Anda. Bonus akan masuk setelah teman yang diundang berhasil melakukan deposit saldo pertamanya.
                 </p>
-                <div class="link-code-box" id="referralCodeBox">
-                  <span id="referralCodeValue">Memuat kode...</span>
+                <div class="link-code-box">
+                  <span data-referral-code>Memuat kode...</span>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
                   <button class="btn btn-primary btn-sm" onclick="copyReferralCode()">📋 Salin Kode</button>
                   <button class="btn btn-outline btn-sm" onclick="copyReferralLink()">🔗 Salin Link Referral</button>
                 </div>
-                <div class="topup-notice" id="referralHint" style="margin-top:10px;">Program referral belum aktif.</div>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;">
-                  <div class="ps"><div class="ps-v" id="ref-total">0</div><div class="ps-l">Diundang</div></div>
-                  <div class="ps"><div class="ps-v" id="ref-qualified">0</div><div class="ps-l">Lolos Syarat</div></div>
-                  <div class="ps"><div class="ps-v" id="ref-pending">Rp 0</div><div class="ps-l">Menunggu</div></div>
-                  <div class="ps"><div class="ps-v" id="ref-earned">Rp 0</div><div class="ps-l">Sudah Masuk</div></div>
+                <div class="topup-notice" data-referral-hint style="margin-top:10px;">Program referral belum aktif.</div>
+                <div class="referral-stats-grid" style="margin-top:16px;">
+                  <div class="ps"><div class="ps-v" data-referral-total>0</div><div class="ps-l">Diundang</div></div>
+                  <div class="ps"><div class="ps-v" data-referral-qualified>0</div><div class="ps-l">Lolos Syarat</div></div>
+                  <div class="ps"><div class="ps-v" data-referral-pending>Rp 0</div><div class="ps-l">Menunggu</div></div>
+                  <div class="ps"><div class="ps-v" data-referral-earned>Rp 0</div><div class="ps-l">Sudah Masuk</div></div>
                 </div>
               </div>
 
@@ -612,6 +613,35 @@
             </div>
           </div>
         </div><!-- /page-profile -->
+
+
+        <!-- =============================================
+             PAGE: REFERRAL
+             ============================================= -->
+        <div class="page" id="page-referral">
+          <div class="ph"><h1>🎁 Referral</h1><p>Bagikan kode referral Anda dan pantau bonus setelah deposit pertama referral berhasil.</p></div>
+
+          <div class="table-card referral-desktop-page" style="margin-bottom:16px;">
+            <div class="card-title" style="margin-bottom:12px;">🎁 Program Referral Saya</div>
+            <p style="font-size:0.84rem;color:var(--muted);font-weight:700;margin-bottom:12px;line-height:1.6;">
+              Bagikan kode atau link referral Anda. Bonus referral akan diberikan setelah pengguna yang Anda undang berhasil menyelesaikan deposit saldo pertamanya.
+            </p>
+            <div class="link-code-box referral-hero-code">
+              <span data-referral-code>Memuat kode...</span>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+              <button class="btn btn-primary btn-sm" onclick="copyReferralCode()">📋 Salin Kode</button>
+              <button class="btn btn-outline btn-sm" onclick="copyReferralLink()">🔗 Salin Link Referral</button>
+            </div>
+            <div class="topup-notice" data-referral-hint style="margin-top:10px;">Program referral belum aktif.</div>
+            <div class="referral-stats-grid referral-stats-grid-desktop" style="margin-top:18px;">
+              <div class="ps"><div class="ps-v" data-referral-total>0</div><div class="ps-l">Total Diundang</div></div>
+              <div class="ps"><div class="ps-v" data-referral-qualified>0</div><div class="ps-l">Deposit Pertama Selesai</div></div>
+              <div class="ps"><div class="ps-v" data-referral-pending>Rp 0</div><div class="ps-l">Bonus Menunggu</div></div>
+              <div class="ps"><div class="ps-v" data-referral-earned>Rp 0</div><div class="ps-l">Bonus Masuk</div></div>
+            </div>
+          </div>
+        </div><!-- /page-referral -->
 
 
         <!-- =============================================
@@ -736,6 +766,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260423-1"></script>
+  <script src="assets/js/dashboard.js?v=20260423-2"></script>
 </body>
 </html>

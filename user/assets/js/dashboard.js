@@ -69,6 +69,7 @@ const TTLS = {
   topup: 'Top Up',
   orders: 'Pesanan',
   transactions: 'Transaksi',
+  referral: 'Referral',
   profile: 'Profil',
   api: 'API Key',
 };
@@ -83,6 +84,9 @@ const ROUTE_ALIASES = {
   saldo: 'topup',
   pesanan: 'orders',
   transaksi: 'transactions',
+  referral: 'referral',
+  refferal: 'referral',
+  referal: 'referral',
   akun: 'profile',
   profil: 'profile',
   settings: 'profile',
@@ -272,7 +276,8 @@ function applyWebUser(user) {
 }
 
 function nav(page, options = {}) {
-  const route = normalizeRoute(page);
+  const requestedRoute = normalizeRoute(page);
+  const route = isMobileViewport() && requestedRoute === 'referral' ? 'profile' : requestedRoute;
   const shouldUpdateHash = options.updateHash !== false;
   const shouldReplace = options.replace === true;
 
@@ -285,7 +290,7 @@ function nav(page, options = {}) {
   document.getElementById('n-' + route)?.classList.add('active');
 
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const mnMap = { home: 'mn-home', buy: 'mn-buy', topup: 'mn-topup', orders: 'mn-orders', transactions: 'mn-orders', profile: 'mn-profile', api: 'mn-profile' };
+  const mnMap = { home: 'mn-home', buy: 'mn-buy', topup: 'mn-topup', orders: 'mn-orders', transactions: 'mn-orders', referral: 'mn-profile', profile: 'mn-profile', api: 'mn-profile' };
   document.getElementById(mnMap[route] || '')?.classList.add('active');
 
   set('topbarTitle', TTLS[route] || route);
@@ -315,6 +320,10 @@ function normalizeRoute(page) {
   return ROUTES.includes(route) ? route : 'home';
 }
 
+function isMobileViewport() {
+  return window.innerWidth <= 768;
+}
+
 function getHashRoute() {
   return normalizeRoute(window.location.hash || 'home');
 }
@@ -335,6 +344,12 @@ function initRouter() {
     const route = getHashRoute();
     nav(route, { updateHash: false });
     syncHash(route, true);
+  });
+
+  window.addEventListener('resize', () => {
+    if (isMobileViewport() && getHashRoute() === 'referral') {
+      nav('profile', { replace: true });
+    }
   });
 }
 
@@ -479,13 +494,17 @@ function updateProfileFields() {
   setInput('pLast', S.user.lastName || '');
   setInput('pEmail', S.user.email || '');
   setInput('pTelegramId', S.user.telegramId || '');
-  set('referralCodeValue', S.referral.code || 'Belum tersedia');
-  set('ref-total', String(S.referral.stats.totalInvited || 0));
-  set('ref-qualified', String(S.referral.stats.qualifiedInvites || 0));
-  set('ref-pending', FMT(S.referral.stats.pendingRewardAmount || 0));
-  set('ref-earned', FMT(S.referral.stats.totalRewardEarned || 0));
-  set(
-    'referralHint',
+  updateReferralFields();
+}
+
+function updateReferralFields() {
+  setAll('[data-referral-code]', S.referral.code || 'Belum tersedia');
+  setAll('[data-referral-total]', String(S.referral.stats.totalInvited || 0));
+  setAll('[data-referral-qualified]', String(S.referral.stats.qualifiedInvites || 0));
+  setAll('[data-referral-pending]', FMT(S.referral.stats.pendingRewardAmount || 0));
+  setAll('[data-referral-earned]', FMT(S.referral.stats.totalRewardEarned || 0));
+  setAll(
+    '[data-referral-hint]',
     S.referral.settings.enabled
       ? `Bonus aktif ${FMT(S.referral.settings.rewardAmount)} per referral yang lolos syarat deposit pertama.`
       : 'Program referral sedang nonaktif. Anda tetap bisa membagikan kode referral.'
@@ -495,6 +514,12 @@ function updateProfileFields() {
 function set(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
+}
+
+function setAll(selector, val) {
+  document.querySelectorAll(selector).forEach((el) => {
+    el.textContent = val;
+  });
 }
 
 function setInput(id, val) {
