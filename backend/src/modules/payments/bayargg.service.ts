@@ -124,7 +124,8 @@ export const bayarGgService = {
             },
         });
 
-        return normalizeCreatePaymentResponse(response.data);
+        const payment = normalizeCreatePaymentResponse(response.data);
+        return enrichHostedPaymentQr(payment);
     },
 
     async checkPayment(invoiceId: string): Promise<BayarGgPaymentDetail> {
@@ -262,4 +263,67 @@ function safeEqual(a: string, b: string) {
     const left = Buffer.from(a);
     const right = Buffer.from(b);
     return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+async function enrichHostedPaymentQr(payment: BayarGgPayment): Promise<BayarGgPayment> {
+    if (!payment.paymentUrl) return payment;
+
+    if (payment.qrisPayload && payment.qrisImageUrl) {
+        return payment;
+    }
+
+    try {
+        const response = await axios.get(payment.paymentUrl, {
+            timeout: 15000,
+            responseType: 'text',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36',
+                Accept: 'text/html,application/xhtml+xml',
+            },
+        });
+
+        const html = String(response.data || '');
+        const hostedQrImageUrl = extractHostedQrImageUrl(html, payment.paymentUrl);
+        const hostedQrisPayload = extractHostedQrisPayload(hostedQrImageUrl);
+
+        return {
+            ...payment,
+            qrisImageUrl: hostedQrImageUrl || payment.qrisImageUrl,
+            qrisPayload: hostedQrisPayload || payment.qrisPayload,
+        };
+    } catch {
+        return payment;
+    }
+}
+
+function extractHostedQrImageUrl(html: string, paymentUrl: string) {
+    const matches = [
+        ...html.matchAll(/https?:\/\/[^"'\\\s>]+qr\.php\?text=[^"'\\\s>]+/gi),
+        ...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi),
+    ];
+
+    for (const match of matches) {
+        const candidate = String(match[1] || match[0] || '').trim();
+        if (!candidate) continue;
+        if (!/qr\.php\?text=|qris|qr-code/i.test(candidate)) continue;
+
+        try {
+            return new URL(candidate, paymentUrl).toString();
+        } catch {
+            continue;
+        }
+    }
+
+    return '';
+}
+
+function extractHostedQrisPayload(qrImageUrl: string) {
+    if (!qrImageUrl) return '';
+
+    try {
+        const url = new URL(qrImageUrl);
+        return url.searchParams.get('text') || url.searchParams.get('qris') || '';
+    } catch {
+        return '';
+    }
 }
