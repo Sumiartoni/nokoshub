@@ -414,6 +414,7 @@ function renderDashboardData() {
   renderActivity();
   renderOrders();
   renderTransactions();
+  renderInvoiceHistory();
   renderReferralPage();
   updateDashboardStats();
   updateProfileFields();
@@ -1258,6 +1259,47 @@ function renderTransactions() {
         <td><span class="badge badge-success"><span class="badge-dot"></span>OK</span></td>
         <td style="font-size:0.72rem;color:var(--muted);">${esc(formatDate(tx.createdAt))}</td>
       </tr>
+    `;
+  }).join('');
+}
+
+function renderInvoiceHistory() {
+  const list = document.getElementById('invoiceHistoryList');
+  if (!list) return;
+  if (!Array.isArray(S.invoices) || !S.invoices.length) {
+    list.innerHTML = emptyBlock('🧾', 'Belum ada invoice top up', 'Invoice deposit akan tampil di sini setelah Anda membuat top up.');
+    return;
+  }
+
+  list.innerHTML = S.invoices.map(invoice => {
+    const status = String(invoice.status || 'PENDING').toUpperCase();
+    const paid = status === 'PAID';
+    const expired = status === 'EXPIRED';
+    const badgeClass = paid ? 'badge-success' : expired ? 'badge-danger' : 'badge-warning';
+    const badgeLabel = paid ? 'Lunas' : expired ? 'Expired' : 'Menunggu Bayar';
+    const fee = Number(invoice.gatewayFee || invoice.fee || 0);
+    const baseAmount = Number(invoice.baseAmount || Math.max(0, Number(invoice.amount || 0) - fee));
+    const totalAmount = Number(invoice.amount || 0);
+    const paidAt = invoice.paidAt ? formatDate(invoice.paidAt) : '-';
+    const expiredAt = invoice.expiredAt ? formatDate(invoice.expiredAt) : '-';
+
+    return `
+      <div class="order-card-big">
+        <div class="oc-top">
+          <div class="oc-icon" style="background:${paid ? '#D4FFF0' : expired ? '#FFE1E1' : '#FFF3D4'};">${paid ? '💰' : expired ? '⌛' : '📲'}</div>
+          <div>
+            <div class="oc-svc">Top Up ${esc(invoice.paymentMethod || invoice.provider || 'QRIS')}</div>
+            <div class="oc-id">#${shortId(invoice.id)} · ${esc(invoice.provider || 'BAYAR_GG')}</div>
+          </div>
+          <div style="margin-left:auto;flex-shrink:0;"><span class="badge ${badgeClass}"><span class="badge-dot"></span>${badgeLabel}</span></div>
+        </div>
+        <div class="oc-mid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Saldo Masuk<br><strong style="color:var(--success);font-size:0.95rem;">${FMT(baseAmount)}</strong></div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Total Dibayar<br><strong style="color:var(--text);font-size:0.95rem;">${FMT(totalAmount)}</strong></div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Biaya / Kode Unik<br><strong style="color:var(--text);font-size:0.95rem;">${FMT(fee)}</strong></div>
+          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">${paid ? 'Dibayar Pada' : 'Berlaku Sampai'}<br><strong style="color:var(--text);font-size:0.95rem;">${esc(paid ? paidAt : expiredAt)}</strong></div>
+        </div>
+      </div>
     `;
   }).join('');
 }
