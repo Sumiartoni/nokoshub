@@ -105,6 +105,7 @@ export const paymentService = {
 
     async getInvoices(userId: string, limit = 10) {
         await paymentService.expireOverdueInvoices();
+        await paymentService.syncPendingInvoicesForUser(userId, Math.min(limit, 10));
 
         return prisma.invoice.findMany({
             where: { userId },
@@ -155,6 +156,47 @@ export const paymentService = {
         return prisma.invoice.findFirst({
             where: { id: invoiceId, userId },
         });
+    },
+
+    async syncPendingInvoicesForUser(userId: string, limit = 10) {
+        await paymentService.expireOverdueInvoices();
+
+        const pendingInvoices = await prisma.invoice.findMany({
+            where: {
+                userId,
+                provider: 'BAYAR_GG',
+                status: 'PENDING',
+            },
+            orderBy: { createdAt: 'desc' },
+            take: Math.min(Math.max(limit, 1), 20),
+        });
+
+        for (const invoice of pendingInvoices) {
+            try {
+                const detail = await bayarGgService.checkPayment(invoice.gatewayOrderId || invoice.id);
+
+                if (detail.status === 'paid') {
+                    await confirmInvoicePaid(invoice.id, {
+                        paidAt: safeDate(detail.paidAt) ?? new Date(),
+                        gatewayCompletedAt: safeDate(detail.paidAt),
+                        paymentMethod: detail.paymentMethod || invoice.paymentMethod || 'qris',
+                        gatewayPayload: detail.raw,
+                    });
+                    continue;
+                }
+
+                if (detail.status === 'expired' || detail.status === 'cancelled') {
+                    await markInvoiceExpired(invoice.id);
+                    continue;
+                }
+
+                if (invoice.expiredAt && invoice.expiredAt.getTime() <= Date.now()) {
+                    await markInvoiceExpired(invoice.id);
+                }
+            } catch (err) {
+                logger.warn({ err, invoiceId: invoice.id, userId }, 'Failed to sync pending BAYAR GG invoice for user');
+            }
+        }
     },
 
     async getAllInvoices(limit = 50) {

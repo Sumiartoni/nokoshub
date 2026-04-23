@@ -100,6 +100,7 @@ const ROUTE_ALIASES = {
 
 let topupCountdownTimer = null;
 let topupStatusPoller = null;
+let invoiceHistoryPoller = null;
 
 let SVC = [
   { id: 'wa', e: '📱', n: 'WhatsApp', cat: 'social', bg: '#FFF3D4', p: 1200, priceCount: 1 },
@@ -389,7 +390,9 @@ async function loadDashboardData({ silent = false } = {}) {
     };
     S.orders = profile.recentOrders || [];
     S.transactions = profile.recentTransactions || [];
-    S.invoices = profile.recentInvoices || [];
+    S.invoices = Array.isArray(profile.recentInvoices)
+      ? profile.recentInvoices.map(normalizeInvoiceRecord)
+      : [];
     SVC = mapServices(Array.isArray(services) ? services : []);
 
     updateUI();
@@ -415,6 +418,7 @@ function renderDashboardData() {
   renderOrders();
   renderTransactions();
   renderInvoiceHistory();
+  updateInvoiceHistoryPolling();
   renderReferralPage();
   updateDashboardStats();
   updateProfileFields();
@@ -895,9 +899,9 @@ async function doTopup() {
   }
 
   try {
-    const invoice = await apiFetch('/deposit', {
+    const invoice = normalizeInvoiceRecord(await apiFetch('/deposit', {
       body: { amount: S.topup.amount },
-    });
+    }));
     S.topup.invoice = invoice;
     S.invoices.unshift(invoice);
 
@@ -1023,7 +1027,7 @@ async function refreshTopupInvoiceStatus({ silent = false } = {}) {
   }
 
   try {
-    const latest = await apiFetch(`/deposit/${invoice.invoiceId}/status`);
+    const latest = normalizeInvoiceRecord(await apiFetch(`/deposit/${invoice.invoiceId}/status`));
     S.topup.invoice = {
       ...invoice,
       ...latest,
@@ -1266,12 +1270,15 @@ function renderTransactions() {
 function renderInvoiceHistory() {
   const list = document.getElementById('invoiceHistoryList');
   if (!list) return;
-  if (!Array.isArray(S.invoices) || !S.invoices.length) {
+  const visibleInvoices = Array.isArray(S.invoices)
+    ? S.invoices.filter(invoice => !shouldHidePendingInvoice(invoice))
+    : [];
+  if (!visibleInvoices.length) {
     list.innerHTML = emptyBlock('🧾', 'Belum ada invoice top up', 'Invoice deposit akan tampil di sini setelah Anda membuat top up.');
     return;
   }
 
-  list.innerHTML = S.invoices.map(invoice => {
+  list.innerHTML = visibleInvoices.map(invoice => {
     const status = String(invoice.status || 'PENDING').toUpperCase();
     const paid = status === 'PAID';
     const expired = status === 'EXPIRED';
@@ -1299,9 +1306,94 @@ function renderInvoiceHistory() {
           <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Biaya / Kode Unik<br><strong style="color:var(--text);font-size:0.95rem;">${FMT(fee)}</strong></div>
           <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">${paid ? 'Dibayar Pada' : 'Berlaku Sampai'}<br><strong style="color:var(--text);font-size:0.95rem;">${esc(paid ? paidAt : expiredAt)}</strong></div>
         </div>
+        <div class="oc-foot" style="margin-top:12px;gap:8px;flex-wrap:wrap;">
+          ${status === 'PENDING'
+            ? `<button class="btn btn-primary btn-sm" onclick="reopenInvoicePayment(${jsArg(invoice.id)})">Bayar Sekarang</button>
+               <button class="btn btn-outline btn-sm" onclick="reopenInvoicePayment(${jsArg(invoice.id)})">Lihat QRIS</button>`
+            : `<button class="btn btn-outline btn-sm" onclick="nav('transactions')">Lihat Riwayat Saldo</button>`}
+        </div>
       </div>
     `;
   }).join('');
+}
+
+function shouldHidePendingInvoice(invoice) {
+  const status = String(invoice?.status || '').toUpperCase();
+  if (status !== 'PENDING') return false;
+  const createdAt = new Date(invoice?.createdAt || invoice?.updatedAt || 0).getTime();
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
+  return Date.now() - createdAt > 5 * 60 * 1000;
+}
+
+async function reopenInvoicePayment(invoiceId) {
+  try {
+    const latest = normalizeInvoiceRecord(await apiFetch(`/deposit/${invoiceId}/status`));
+    const invoice = {
+      ...latest,
+      invoiceId: latest.id || invoiceId,
+    };
+
+    if (String(invoice.status || '').toUpperCase() === 'PAID') {
+      await loadDashboardData({ silent: true });
+      nav('transactions');
+      showToast('Invoice ini sudah dibayar dan saldo sudah masuk.', 'success');
+      return;
+    }
+
+    if (String(invoice.status || '').toUpperCase() === 'EXPIRED') {
+      await loadDashboardData({ silent: true });
+      showToast('Invoice ini sudah expired. Buat top up baru untuk melanjutkan.', 'warning');
+      return;
+    }
+
+    S.topup.invoice = invoice;
+    updateTopupInvoiceUi(invoice);
+    const qrisImage = document.getElementById('topupQrisImage');
+    if (qrisImage) {
+      qrisImage.src = invoice.qrisImageUrl || invoice.qrisImageDataUrl || '';
+    }
+    startTopupCountdown(invoice.expiredAt);
+    startTopupStatusPolling();
+    openModal('modalTopupOk');
+  } catch (err) {
+    showToast(`Gagal membuka invoice: ${err.message}`, 'error');
+  }
+}
+
+function updateInvoiceHistoryPolling() {
+  const hasPendingInvoices = Array.isArray(S.invoices)
+    && S.invoices.some(invoice => {
+      const status = String(invoice?.status || '').toUpperCase();
+      return status === 'PENDING' && !shouldHidePendingInvoice(invoice);
+    });
+
+  if (!hasPendingInvoices) {
+    stopInvoiceHistoryPolling();
+    return;
+  }
+
+  if (invoiceHistoryPoller) return;
+  invoiceHistoryPoller = setInterval(async () => {
+    const route = getHashRoute();
+    if (!['transactions', 'topup'].includes(route)) return;
+    await loadDashboardData({ silent: true });
+  }, 5000);
+}
+
+function stopInvoiceHistoryPolling() {
+  if (!invoiceHistoryPoller) return;
+  clearInterval(invoiceHistoryPoller);
+  invoiceHistoryPoller = null;
+}
+
+function normalizeInvoiceRecord(invoice) {
+  if (!invoice || typeof invoice !== 'object') return invoice;
+  const id = invoice.id || invoice.invoiceId || '';
+  return {
+    ...invoice,
+    id,
+    invoiceId: invoice.invoiceId || id,
+  };
 }
 
 function openOtpModal(code, svc) {
