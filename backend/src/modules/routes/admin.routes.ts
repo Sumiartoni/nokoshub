@@ -11,6 +11,7 @@ import { smtpSettingsService } from '../settings/smtp-settings.service';
 import { emailService } from '../email/email.service';
 import { referralService } from '../referrals/referral.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
+import { paymentSettingsService } from '../settings/payment-settings.service';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
@@ -20,6 +21,10 @@ const pricingSettingsSchema = z.object({
 const referralSettingsSchema = z.object({
     enabled: z.boolean(),
     rewardAmount: z.number().int().min(0).max(100000000),
+});
+
+const paymentSettingsSchema = z.object({
+    minimumDeposit: z.number().int().min(1000).max(10000000),
 });
 
 const smtpSettingsSchema = z.object({
@@ -555,6 +560,30 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return {
             success: true,
             message: 'Pengaturan referral berhasil disimpan',
+            data: settings,
+        };
+    });
+
+    // GET /api/admin/settings/payment
+    fastify.get('/settings/payment', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await paymentSettingsService.getSettings();
+        return { success: true, data: settings };
+    });
+
+    // PATCH /api/admin/settings/payment
+    fastify.patch('/settings/payment', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = paymentSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await paymentSettingsService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'Pengaturan minimum deposit berhasil disimpan',
             data: settings,
         };
     });

@@ -44,6 +44,10 @@ const S = {
     },
     invites: [],
   },
+  payment: {
+    minimumDeposit: 10000,
+    maximumDeposit: 10000000,
+  },
   topup: { amount: 0, method: 'QRIS BAYAR GG', fee: 0, invoice: null },
   buy: {
     step: 1,
@@ -464,6 +468,7 @@ function updateUI() {
   set('sum-fee', feeLabel);
   set('sum-tot', tot ? FMT(tot) : 'Rp 0');
   set('sum-aft', FMT(aft));
+  applyMinimumDepositUi();
 }
 
 function updateDashboardStats() {
@@ -883,8 +888,8 @@ function selectPay(el, method, fee) {
 }
 
 async function doTopup() {
-  if (!S.topup.amount || S.topup.amount < 10000) {
-    showToast('Minimal top up Rp 10.000', 'warning');
+  if (!S.topup.amount || S.topup.amount < S.payment.minimumDeposit) {
+    showToast(`Minimal top up ${FMT(S.payment.minimumDeposit)}`, 'warning');
     return;
   }
 
@@ -1053,6 +1058,31 @@ function updateTopupInvoiceUi(invoice) {
 
   const linkBtn = document.getElementById('topupOpenGatewayBtn');
   if (linkBtn) linkBtn.disabled = !invoice.paymentUrl || status !== 'PENDING';
+}
+
+async function loadPaymentSettings() {
+  try {
+    const settings = await apiFetch('/settings/payment');
+    S.payment.minimumDeposit = Number(settings.minimumDeposit || 10000);
+    S.payment.maximumDeposit = Number(settings.maximumDeposit || 10000000);
+    applyMinimumDepositUi();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function applyMinimumDepositUi() {
+  const input = document.getElementById('topupAmt');
+  if (input) {
+    input.min = String(S.payment.minimumDeposit);
+    input.placeholder = `Minimal ${FMT(S.payment.minimumDeposit)}`;
+  }
+
+  document.querySelectorAll('.amount-presets .preset').forEach((el) => {
+    const amount = Number(String(el.textContent || '').replace(/[^\d]/g, '')) * (String(el.textContent || '').includes('K') ? 1000 : 1);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    el.style.display = amount < S.payment.minimumDeposit ? 'none' : '';
+  });
 }
 
 function openGatewayPaymentPage() {
@@ -1561,6 +1591,7 @@ document.addEventListener('keydown', e => {
   updateUI();
   renderSvcs();
   initRouter();
+  loadPaymentSettings();
   loadDashboardData({ silent: true });
   setTimeout(() => {
     if (!S.user.telegramId) showToast(`Halo ${S.user.name.split(' ')[0]}! Akun web aktif. Tautkan Telegram hanya jika ingin sinkronisasi opsional.`, 'success');

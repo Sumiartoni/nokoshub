@@ -5,6 +5,7 @@ import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { referralService } from '../referrals/referral.service';
 import { bayarGgService, type BayarGgWebhookPayload } from './bayargg.service';
+import { paymentSettingsService } from '../settings/payment-settings.service';
 
 type LegacyWebhookBody = {
     invoiceId?: string;
@@ -18,7 +19,10 @@ type PaymentWebhookBody = LegacyWebhookBody | BayarGgWebhookPayload;
 
 export const paymentService = {
     async createInvoice(userId: string, requestedAmount: number) {
-        if (requestedAmount < 10000) throw new Error('Minimum deposit is Rp10.000');
+        const paymentSettings = await paymentSettingsService.getSettings();
+        if (requestedAmount < paymentSettings.minimumDeposit) {
+            throw new Error(`Minimum deposit is Rp${paymentSettings.minimumDeposit.toLocaleString('id-ID')}`);
+        }
         await paymentService.expireOverdueInvoices();
         bayarGgService.assertConfigured();
 

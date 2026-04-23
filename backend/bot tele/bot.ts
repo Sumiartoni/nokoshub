@@ -66,7 +66,13 @@ interface PaymentProof {
     type: 'photo' | 'document';
 }
 
+type PaymentSettings = {
+    minimumDeposit: number;
+    maximumDeposit: number;
+};
+
 const sessions = new Map<number, Session>();
+let paymentSettingsCache: { value: PaymentSettings; expiresAt: number } | null = null;
 
 function isDepositExpired(deposit: PendingDeposit): boolean {
     const expiredAt = new Date(deposit.expiredAt).getTime();
@@ -339,9 +345,10 @@ export function createBot(): TelegramBot {
         if (!msg.text || msg.text.startsWith('/')) return;
 
         if (session.step === 'AWAIT_DEPOSIT_AMOUNT') {
+            const paymentSettings = await getPaymentSettings();
             const amount = parseInt(msg.text.replace(/[^\d]/g, ''));
-            if (isNaN(amount) || amount < 10000) {
-                await bot.sendMessage(chatId, '❗ Masukkan jumlah minimal Rp10.000\nContoh: 50000');
+            if (isNaN(amount) || amount < paymentSettings.minimumDeposit) {
+                await bot.sendMessage(chatId, `❗ Masukkan jumlah minimal ${formatRupiah(paymentSettings.minimumDeposit)}\nContoh: 50000`);
                 return;
             }
             session.step = undefined;
@@ -378,10 +385,12 @@ export function createBot(): TelegramBot {
 
         // Quick deposit amount buttons
         if (data.startsWith('DEPOSIT_')) {
+            const paymentSettings = await getPaymentSettings();
             const amount = parseInt(data.replace('DEPOSIT_', ''));
-            if (!isNaN(amount) && amount >= 10000) {
+            if (!isNaN(amount) && amount >= paymentSettings.minimumDeposit) {
                 return handleDepositWithAmount(bot, chatId, telegramId, amount);
             }
+            return bot.sendMessage(chatId, `❗ Minimum deposit saat ini ${formatRupiah(paymentSettings.minimumDeposit)}.`);
         }
 
         // Pagination for services
@@ -927,20 +936,21 @@ async function handlePriceSelected(
 }
 
 async function askDepositAmount(bot: TelegramBot, chatId: number) {
+    const paymentSettings = await getPaymentSettings();
     const session = getSession(chatId);
     session.step = 'AWAIT_DEPOSIT_AMOUNT';
 
     await bot.sendMessage(
         chatId,
         `💳 *Deposit Saldo*\n\n` +
-        `Masukkan jumlah deposit (min. Rp10.000):\n\n` +
+        `Masukkan jumlah deposit (min. ${formatRupiah(paymentSettings.minimumDeposit)}):\n\n` +
         `Contoh: \`50000\``,
         {
             parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: 'Rp10.000', callback_data: 'DEPOSIT_10000' },
+                        { text: `Min ${formatRupiah(paymentSettings.minimumDeposit)}`, callback_data: `DEPOSIT_${paymentSettings.minimumDeposit}` },
                         { text: 'Rp20.000', callback_data: 'DEPOSIT_20000' },
                     ],
                     [
@@ -1241,5 +1251,28 @@ async function handleCancelOrder(
     } catch (err: any) {
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Error';
         await bot.sendMessage(chatId, `❌ Gagal membatalkan order: ${errMsg}`);
+    }
+}
+async function getPaymentSettings(): Promise<PaymentSettings> {
+    if (paymentSettingsCache && paymentSettingsCache.expiresAt > Date.now()) {
+        return paymentSettingsCache.value;
+    }
+
+    try {
+        const res = await apiGet<{ success: boolean; data?: PaymentSettings }>('/api/settings/payment');
+        const settings = {
+            minimumDeposit: Number(res.data?.minimumDeposit || 10000),
+            maximumDeposit: Number(res.data?.maximumDeposit || 10000000),
+        };
+        paymentSettingsCache = {
+            value: settings,
+            expiresAt: Date.now() + 60_000,
+        };
+        return settings;
+    } catch {
+        return {
+            minimumDeposit: 10000,
+            maximumDeposit: 10000000,
+        };
     }
 }

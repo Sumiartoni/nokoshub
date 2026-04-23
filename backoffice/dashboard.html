@@ -98,6 +98,14 @@
                 <span>SMTP / Email</span>
             </div>
 
+            <div class="nav-item" data-page="deposit-settings" id="nav-deposit-settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1v22"/>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+                <span>Minimum Deposit</span>
+            </div>
+
             <div class="nav-item" data-page="maintenance" id="nav-maintenance">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 7h-4v4H6v2h4v4h4v-4h4v-2h-4z"/>
@@ -595,6 +603,57 @@
                     </div>
                 </div>
             </div>
+
+            <!-- ════════ DEPOSIT SETTINGS PAGE ════════ -->
+            <div class="page-section" id="page-deposit-settings">
+                <div class="filter-bar">
+                    <div class="search-wrapper" style="pointer-events:none;opacity:.85">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1v22"/>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                        <input type="text" class="search-input" value="Atur nominal minimal top up saldo" readonly>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="loadPaymentSettings()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1v22"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                            Pengaturan Deposit
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="minimumDepositInput">Minimum Deposit (Rp)</label>
+                                <input class="form-input" id="minimumDepositInput" type="number" min="1000" max="10000000" step="1000" placeholder="10000">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="maximumDepositInfo">Maksimum Deposit</label>
+                                <input class="form-input" id="maximumDepositInfo" type="text" value="Rp 10.000.000" readonly>
+                            </div>
+                            <div class="form-group" style="align-self:end">
+                                <button class="btn btn-sm btn-primary" id="savePaymentSettingsBtn" onclick="savePaymentSettings()">Simpan Minimum</button>
+                            </div>
+                        </div>
+                        <div class="form-hint" style="margin-top:14px">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Nilai ini dipakai untuk validasi deposit di website dan bot Telegram. Perubahan berlaku untuk invoice baru.
+                        </div>
+                    </div>
+                </div>
+            </div>
             <!-- ════════ MAINTENANCE PAGE ════════ -->
             <div class="page-section" id="page-maintenance">
                 <div class="filter-bar">
@@ -919,7 +978,7 @@
 </div>
 
 <script src="js/auth.js?v=20260422-1"></script>
-<script src="js/dashboard.js?v=20260424-1"></script>
+<script src="js/dashboard.js?v=20260424-2"></script>
 </body>
 </html>
 

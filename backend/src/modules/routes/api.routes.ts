@@ -13,6 +13,7 @@ import { authService } from '../auth/auth.service';
 import { referralService } from '../referrals/referral.service';
 import { turnstileService } from '../security/turnstile.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
+import { paymentSettingsService } from '../settings/payment-settings.service';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ const createOrderSchema = z.object({
 });
 
 const depositSchema = z.object({
-    amount: z.number().int().min(10000).max(10000000),
+    amount: z.number().int().min(1).max(10000000),
     telegramId: z.string().min(1).optional(),
 });
 
@@ -632,6 +633,15 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 qrisImageUrl: extractQrisImageUrl(invoice.gatewayPayload),
                 qrisImageDataUrl: await buildQrisImageDataUrl(invoice.qrisPayload),
             },
+        };
+    });
+
+    // GET /api/settings/payment
+    fastify.get('/settings/payment', async () => {
+        const settings = await paymentSettingsService.getSettings();
+        return {
+            success: true,
+            data: settings,
         };
     });
 

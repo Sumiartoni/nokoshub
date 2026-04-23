@@ -76,6 +76,7 @@
         }
         else if (pageId === 'referral') loadReferralSettings();
         else if (pageId === 'smtp') loadSmtpSettings();
+        else if (pageId === 'deposit-settings') loadPaymentSettings();
         else if (pageId === 'maintenance') loadMaintenanceDashboard();
         else if (pageId === 'users') loadUsers();
     }
@@ -89,6 +90,7 @@
         services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari HeroSMS' },
         referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
         smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
+        'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
         maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
         users:        { title: 'Users',       sub: 'Manajemen pengguna & penyesuaian saldo' },
     };
@@ -118,6 +120,7 @@
         }
         else if (page === 'referral') loadReferralSettings();
         else if (page === 'smtp') loadSmtpSettings();
+        else if (page === 'deposit-settings') loadPaymentSettings();
         else if (page === 'maintenance') loadMaintenanceDashboard();
         else if (page === 'users') loadUsers();
     };
@@ -822,6 +825,48 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Simpan Referral';
+        }
+    };
+
+    window.loadPaymentSettings = async function () {
+        const minimumInput = document.getElementById('minimumDepositInput');
+        const maximumInfo = document.getElementById('maximumDepositInfo');
+
+        try {
+            const res = await api('/api/admin/settings/payment');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat pengaturan deposit');
+            minimumInput.value = String(res.data?.minimumDeposit ?? 10000);
+            maximumInfo.value = formatRupiahFull(res.data?.maximumDeposit ?? 10000000);
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat pengaturan deposit', 'error');
+        }
+    };
+
+    window.savePaymentSettings = async function () {
+        const btn = document.getElementById('savePaymentSettingsBtn');
+        const minimumDeposit = Number(document.getElementById('minimumDepositInput')?.value || 0);
+
+        if (!Number.isInteger(minimumDeposit) || minimumDeposit < 1000) {
+            showToast('Minimum deposit harus minimal Rp 1.000', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/payment', {
+                method: 'PATCH',
+                body: JSON.stringify({ minimumDeposit }),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan minimum deposit');
+            showToast(res.message || 'Minimum deposit berhasil disimpan');
+            await loadPaymentSettings();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan minimum deposit', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Minimum';
         }
     };
 
