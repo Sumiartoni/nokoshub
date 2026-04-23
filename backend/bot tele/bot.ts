@@ -635,8 +635,6 @@ async function sendMainMenu(bot: TelegramBot, chatId: number) {
         chatId,
         `📱 *Menu Utama NokosHUB*\n\nPilih layanan atau gunakan perintah teks (e.g. /buy):`,
         {
-                `\n\nSaldo akan ditambahkan otomatis setelah pembayaran terdeteksi.` +
-                `${paymentUrl ? `\nLink bayar Pakasir: ${paymentUrl}` : ''}`,
             parse_mode: 'Markdown',
             reply_markup: mainMenuKeyboard(),
         }
