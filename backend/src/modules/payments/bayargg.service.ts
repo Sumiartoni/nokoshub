@@ -171,26 +171,26 @@ function normalizeCreatePaymentResponse(input: any): BayarGgPayment {
     const root = input?.data && typeof input.data === 'object' ? input.data : input;
     const payment = root?.payment || input?.payment || root || {};
     const qrisPayload = firstString(
+        root?.qris_converter?.converted_qris,
+        input?.qris_converter?.converted_qris,
+        payment.converted_qris,
+        root?.converted_qris,
         payment.qris_payload,
         payment.qris_string,
-        payment.converted_qris,
         root?.qris_payload,
         root?.qris_string,
-        root?.converted_qris,
-        root?.qris_converter?.converted_qris,
         input?.qris_payload,
         input?.qris_string,
-        input?.converted_qris,
-        input?.qris_converter?.converted_qris
+        input?.converted_qris
     );
     const qrisImageUrl = firstString(
+        root?.qris_converter?.qr_image_url,
+        input?.qris_converter?.qr_image_url,
         payment.qr_image_url,
         root?.qr_image_url,
         root?.qris_image_url,
-        root?.qris_converter?.qr_image_url,
         input?.qr_image_url,
-        input?.qris_image_url,
-        input?.qris_converter?.qr_image_url
+        input?.qris_image_url
     );
     const amount = parsePositiveInt(payment.amount || root?.amount, 'Nominal transaksi BAYAR GG tidak valid');
     const finalAmount = parsePositiveInt(payment.final_amount || root?.final_amount, 'Nominal akhir BAYAR GG tidak valid');

@@ -898,7 +898,7 @@ async function doTopup() {
     updateTopupInvoiceUi(invoice);
     const qrisImage = document.getElementById('topupQrisImage');
     if (qrisImage) {
-      qrisImage.src = invoice.qrisImageDataUrl || invoice.qrisImageUrl || '';
+      qrisImage.src = invoice.qrisImageUrl || invoice.qrisImageDataUrl || '';
     }
     startTopupCountdown(invoice.expiredAt);
     startTopupStatusPolling();
@@ -1025,7 +1025,7 @@ async function refreshTopupInvoiceStatus({ silent = false } = {}) {
     };
     const qrisImage = document.getElementById('topupQrisImage');
     if (qrisImage) {
-      qrisImage.src = S.topup.invoice.qrisImageDataUrl || S.topup.invoice.qrisImageUrl || '';
+      qrisImage.src = S.topup.invoice.qrisImageUrl || S.topup.invoice.qrisImageDataUrl || '';
     }
     updateTopupInvoiceUi(S.topup.invoice);
 

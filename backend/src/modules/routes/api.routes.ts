@@ -570,33 +570,33 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         });
         if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
 
-        if (invoice.qrisPayload) {
-            const png = await QRCode.toBuffer(invoice.qrisPayload, {
-                type: 'png',
-                width: 900,
-                margin: 4,
-                errorCorrectionLevel: 'H',
-                color: { dark: '#000000', light: '#FFFFFF' },
-            });
+        const qrisImageUrl = extractQrisImageUrl(invoice.gatewayPayload);
+        if (qrisImageUrl) {
+            const imageResponse = await fetch(qrisImageUrl);
+            if (!imageResponse.ok) {
+                return reply.status(502).send({ success: false, error: 'Failed to fetch QRIS image from gateway' });
+            }
 
+            const buffer = Buffer.from(await imageResponse.arrayBuffer());
             reply.header('Cache-Control', 'no-store');
-            reply.type('image/png').send(png);
+            reply.type(imageResponse.headers.get('content-type') || 'image/png').send(buffer);
             return;
         }
 
-        const qrisImageUrl = extractQrisImageUrl(invoice.gatewayPayload);
-        if (!qrisImageUrl) {
+        if (!invoice.qrisPayload) {
             return reply.status(404).send({ success: false, error: 'QRIS image not available' });
         }
 
-        const imageResponse = await fetch(qrisImageUrl);
-        if (!imageResponse.ok) {
-            return reply.status(502).send({ success: false, error: 'Failed to fetch QRIS image from gateway' });
-        }
+        const png = await QRCode.toBuffer(invoice.qrisPayload, {
+            type: 'png',
+            width: 900,
+            margin: 4,
+            errorCorrectionLevel: 'H',
+            color: { dark: '#000000', light: '#FFFFFF' },
+        });
 
-        const buffer = Buffer.from(await imageResponse.arrayBuffer());
         reply.header('Cache-Control', 'no-store');
-        reply.type(imageResponse.headers.get('content-type') || 'image/png').send(buffer);
+        reply.type('image/png').send(png);
     });
 
     // GET /api/deposit/:invoiceId/status?telegramId=

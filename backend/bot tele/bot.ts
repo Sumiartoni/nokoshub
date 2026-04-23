@@ -983,7 +983,12 @@ async function handleDepositWithAmount(
             `${paymentUrl ? `🌐 Link bayar: ${paymentUrl}\n\n` : ''}` +
             `_Saldo akan ditambahkan otomatis setelah pembayaran terdeteksi._`;
 
-        if (qrisPayload) {
+        if (qrisImageUrl) {
+            await bot.sendPhoto(chatId, qrisImageUrl, {
+                caption,
+                parse_mode: 'Markdown',
+            });
+        } else if (qrisPayload) {
             const qrBuffer = await QRCode.toBuffer(qrisPayload, {
                 type: 'png',
                 width: 900,
@@ -996,11 +1001,6 @@ async function handleDepositWithAmount(
             });
 
             await bot.sendPhoto(chatId, qrBuffer as any, {
-                caption,
-                parse_mode: 'Markdown',
-            });
-        } else if (qrisImageUrl) {
-            await bot.sendPhoto(chatId, qrisImageUrl, {
                 caption,
                 parse_mode: 'Markdown',
             });
