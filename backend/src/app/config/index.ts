@@ -35,11 +35,16 @@ const envSchema = z.object({
     USD_IDR_RATE_BUFFER_PERCENT: z.string().default('3').transform(Number),
     USD_IDR_RATE_REFRESH_MINUTES: z.string().default('360').transform(Number),
 
-    QRIS_STATIC_STRING: z.string().min(1, 'QRIS_STATIC_STRING is required'),
+    QRIS_STATIC_STRING: z.string().default(''),
     QRIS_DYNAMIC_ENABLED: z.string().default('true').transform((value) => {
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),
-    PAYMENT_WEBHOOK_SECRET: z.string().min(1, 'PAYMENT_WEBHOOK_SECRET is required'),
+    PAYMENT_WEBHOOK_SECRET: z.string().default(''),
+    PAKASIR_PROJECT_SLUG: z.string().default(''),
+    PAKASIR_API_KEY: z.string().default(''),
+    PAKASIR_PAYMENT_METHOD: z.string().default('qris'),
+    PAKASIR_WEBHOOK_TOKEN: z.string().default(''),
+    PAKASIR_REDIRECT_URL: z.string().default(''),
 
     ADMIN_API_KEY: z.string().min(1, 'ADMIN_API_KEY is required'),
     BACKOFFICE_USERNAME: z.string().default('admin'),

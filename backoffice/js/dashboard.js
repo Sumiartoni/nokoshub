@@ -76,6 +76,7 @@
             loadSmtpSettings();
             loadServices();
         }
+        else if (pageId === 'maintenance') loadMaintenanceDashboard();
         else if (pageId === 'users') loadUsers();
     }
 
@@ -83,9 +84,10 @@
     const pageMeta = {
         overview:     { title: 'Overview',    sub: 'Ringkasan sistem NokosHUB' },
         orders:       { title: 'Orders',      sub: 'Riwayat pembelian nomor virtual' },
-        invoices:     { title: 'Invoices',    sub: 'Riwayat deposit & pembayaran QRIS' },
+        invoices:     { title: 'Invoices',    sub: 'Riwayat deposit & pembayaran payment gateway' },
         transactions: { title: 'Transaksi',   sub: 'Semua aliran transaksi keuangan' },
         services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari HeroSMS' },
+        maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
         users:        { title: 'Users',       sub: 'Manajemen pengguna & penyesuaian saldo' },
     };
 
@@ -114,6 +116,7 @@
             loadSmtpSettings();
             loadServices();
         }
+        else if (page === 'maintenance') loadMaintenanceDashboard();
         else if (page === 'users') loadUsers();
     };
 
@@ -610,7 +613,7 @@
             <table class="data-table">
                 <thead><tr>
                     <th>ID</th><th>User</th><th>Jumlah Asli</th><th>Jumlah Final</th>
-                    <th>Status</th><th>Expired</th><th>Dibuat</th><th>Dibayar</th>
+                    <th>Gateway</th><th>Status</th><th>Expired</th><th>Dibuat</th><th>Dibayar</th>
                 </tr></thead>
                 <tbody>
                     ${data.map(i => {
@@ -620,6 +623,7 @@
                         <td class="mono text-indigo">${i.user?.telegramId || '—'}</td>
                         <td class="mono">${formatRupiahFull(i.baseAmount)}</td>
                         <td class="mono ${status === 'PAID' ? 'text-emerald fw-600' : 'text-amber'}">${formatRupiahFull(i.amount)}</td>
+                        <td class="text-sm">${escText(i.provider || 'â€”')}<br><span class="text-muted">${escText((i.paymentMethod || '').toUpperCase() || 'â€”')}</span></td>
                         <td>${statusBadge(status)}</td>
                         <td class="text-sm ${status === 'PENDING' ? 'text-amber' : status === 'EXPIRED' ? 'text-muted' : 'text-emerald'}">${invoiceExpiryText(i)}</td>
                         <td class="text-muted text-sm">${formatDateShort(i.createdAt)}</td>
@@ -1243,6 +1247,241 @@
     // ═══════════════════════════════════════════════════════════════════════════
     //  BOOT
     // ═══════════════════════════════════════════════════════════════════════════
+    window.loadMaintenanceDashboard = async function () {
+        const stats = document.getElementById('maintenanceSummaryStats');
+        const checksGrid = document.getElementById('maintenanceChecksGrid');
+        const alertsBody = document.getElementById('maintenanceAlertsBody');
+        if (!stats || !checksGrid || !alertsBody) return;
+
+        stats.style.display = 'none';
+        checksGrid.innerHTML = loadingHTML();
+        alertsBody.innerHTML = loadingHTML();
+
+        try {
+            const res = await api('/api/admin/maintenance');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat maintenance');
+            renderMaintenanceDashboard(res.data);
+        } catch (err) {
+            checksGrid.innerHTML = errorHTML(err.message);
+            alertsBody.innerHTML = errorHTML(err.message);
+        }
+    };
+
+    window.saveMaintenanceSettings = async function () {
+        const btn = document.getElementById('saveMaintenanceBtn');
+        const payload = {
+            enabled: document.getElementById('maintenanceEnabledInput')?.value === 'true',
+            title: document.getElementById('maintenanceTitleInput')?.value.trim() || '',
+            message: document.getElementById('maintenanceMessageInput')?.value.trim() || '',
+            expectedEndAt: maintenanceDateTimeToIso(document.getElementById('maintenanceExpectedEndInput')?.value || ''),
+            blockOrders: document.getElementById('maintenanceBlockOrdersInput')?.value === 'true',
+            blockDeposits: document.getElementById('maintenanceBlockDepositsInput')?.value === 'true',
+            blockRegistrations: document.getElementById('maintenanceBlockRegistrationsInput')?.value === 'true',
+        };
+
+        try {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-inline"></span> Menyimpan...';
+            }
+
+            const res = await api('/api/admin/maintenance/settings', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan maintenance');
+            showToast(res.message || 'Pengaturan maintenance berhasil disimpan');
+            await loadMaintenanceDashboard();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan maintenance', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Simpan Maintenance';
+            }
+        }
+    };
+
+    window.runMaintenanceAction = async function (action) {
+        openConfirm({
+            title: 'Jalankan Maintenance Action',
+            message: `Anda yakin ingin menjalankan aksi ${String(action).replace(/_/g, ' ')}?`,
+            okText: 'Jalankan',
+            color: action === 'run_full_routine' ? 'primary' : 'rose',
+            onOk: async () => {
+                try {
+                    const res = await api('/api/admin/maintenance/action', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action,
+                            limit: action === 'reconcile_payments' ? 50 : undefined,
+                        }),
+                    });
+                    if (!res.success) throw new Error(res.error || 'Aksi maintenance gagal');
+                    showToast(res.message || 'Aksi maintenance berhasil dijalankan');
+                    await loadMaintenanceDashboard();
+                    if (action === 'expire_invoices' || action === 'reconcile_payments') loadInvoices();
+                    if (action === 'sync_provider' || action === 'run_full_routine') loadServices();
+                } catch (err) {
+                    showToast(err.message || 'Aksi maintenance gagal', 'error');
+                }
+            },
+        });
+    };
+
+    function renderMaintenanceDashboard(data) {
+        const stats = document.getElementById('maintenanceSummaryStats');
+        if (stats) stats.style.display = 'grid';
+
+        document.getElementById('mt-pending-invoices').textContent = String(data.summary.invoicePending ?? 0);
+        document.getElementById('mt-overdue-invoices').textContent = String(data.summary.invoiceOverdue ?? 0);
+        document.getElementById('mt-paid-today').textContent = String(data.summary.invoicePaidToday ?? 0);
+        document.getElementById('mt-expired-registers').textContent = String(data.summary.pendingRegistrationsExpired ?? 0);
+        document.getElementById('mt-active-links').textContent = String(data.summary.linkCodesActive ?? 0);
+        document.getElementById('mt-pending-referrals').textContent = String(data.summary.pendingReferralRewards ?? 0);
+        document.getElementById('mt-active-services').textContent = String(data.summary.activeServiceCount ?? 0);
+        document.getElementById('mt-active-prices').textContent = String(data.summary.activePriceCount ?? 0);
+        document.getElementById('mt-web-users').textContent = String(data.summary.webUserCount ?? 0);
+
+        document.getElementById('maintenanceEnabledInput').value = String(Boolean(data.settings.enabled));
+        document.getElementById('maintenanceTitleInput').value = data.settings.title || '';
+        document.getElementById('maintenanceMessageInput').value = data.settings.message || '';
+        document.getElementById('maintenanceExpectedEndInput').value = isoToDateTimeLocal(data.settings.expectedEndAt);
+        document.getElementById('maintenanceBlockOrdersInput').value = String(Boolean(data.settings.blockOrders));
+        document.getElementById('maintenanceBlockDepositsInput').value = String(Boolean(data.settings.blockDeposits));
+        document.getElementById('maintenanceBlockRegistrationsInput').value = String(Boolean(data.settings.blockRegistrations));
+
+        const checks = [
+            {
+                label: 'Database',
+                state: data.checks.database?.ok ? 'ok' : 'fail',
+                value: data.checks.database?.ok ? 'Online' : 'Error',
+                meta: data.checks.database?.message || 'Koneksi query Prisma tersedia.',
+            },
+            {
+                label: 'Redis',
+                state: data.checks.redis?.ok ? 'ok' : 'warn',
+                value: String(data.checks.redis?.status || 'unknown'),
+                meta: 'Dipakai untuk rate limit dan queue.',
+            },
+            {
+                label: 'Pakasir',
+                state: data.checks.paymentGateway?.configured ? 'ok' : 'fail',
+                value: data.checks.paymentGateway?.configured ? 'Configured' : 'Belum lengkap',
+                meta: [
+                    data.checks.paymentGateway?.projectSlug ? `Project: ${data.checks.paymentGateway.projectSlug}` : '',
+                    data.checks.paymentGateway?.paymentMethod ? `Method: ${data.checks.paymentGateway.paymentMethod}` : '',
+                    data.checks.paymentGateway?.webhookUrl ? `Webhook: ${data.checks.paymentGateway.webhookUrl}` : '',
+                ].filter(Boolean).join('<br>'),
+            },
+            {
+                label: 'Email OTP',
+                state: data.checks.email?.configured ? 'ok' : 'warn',
+                value: data.checks.email?.transport || 'Belum set',
+                meta: [
+                    data.checks.email?.fromEmail ? `From: ${data.checks.email.fromEmail}` : '',
+                    data.checks.email?.envOverride ? 'Sumber config: .env VPS' : 'Sumber config: panel admin',
+                ].filter(Boolean).join('<br>'),
+            },
+            {
+                label: 'Auth & Protection',
+                state: data.checks.auth?.googleEnabled && data.checks.auth?.turnstileEnabled ? 'ok' : 'warn',
+                value: data.checks.auth?.googleEnabled ? 'Google aktif' : 'Google nonaktif',
+                meta: `Turnstile: ${data.checks.auth?.turnstileEnabled ? 'aktif' : 'nonaktif'}`,
+            },
+            {
+                label: 'Provider HeroSMS',
+                state: data.checks.provider?.ok ? 'ok' : 'warn',
+                value: data.checks.provider?.ok ? formatRupiahFull((Number(data.checks.provider.balanceUsd || 0) * Number(data.checks.provider.effectiveRate || 0))) : 'Tidak tersedia',
+                meta: data.checks.provider?.ok
+                    ? `$${Number(data.checks.provider.balanceUsd || 0).toFixed(2)} • Rate ${formatRupiahFull(data.checks.provider.effectiveRate || 0)}`
+                    : (data.checks.provider?.message || 'Gagal mengambil saldo provider'),
+            },
+        ];
+
+        document.getElementById('maintenanceChecksGrid').innerHTML = checks.map((item) => `
+            <div class="maintenance-check-card">
+                <div class="maintenance-check-label">${item.label}</div>
+                <div class="maintenance-check-value ${item.state}">${item.value}</div>
+                <div class="maintenance-check-meta">${item.meta || '—'}</div>
+            </div>
+        `).join('');
+
+        const alerts = Array.isArray(data.alerts) ? data.alerts : [];
+        document.getElementById('maintenanceAlertsBody').innerHTML = alerts.length
+            ? `<div class="maintenance-alert-list">${alerts.map((item) => `<div class="maintenance-alert-item">${item}</div>`).join('')}</div>`
+            : `<div class="maintenance-alert-item ok">Tidak ada alert kritis. Sistem terlihat sehat untuk saat ini.</div>`;
+
+        const operations = [
+            {
+                label: 'Invoice Pakasir pending > 15 menit',
+                value: String(data.summary.stalePakasir ?? 0),
+                tone: Number(data.summary.stalePakasir ?? 0) > 0 ? 'warn' : 'ok',
+                hint: 'Gunakan aksi Reconcile Pakasir untuk sinkron ulang status pembayaran.',
+            },
+            {
+                label: 'OTP register kadaluarsa',
+                value: String(data.summary.pendingRegistrationsExpired ?? 0),
+                tone: Number(data.summary.pendingRegistrationsExpired ?? 0) > 0 ? 'warn' : 'ok',
+                hint: 'Cleanup OTP Register akan menghapus request registrasi yang sudah lewat masa berlaku.',
+            },
+            {
+                label: 'Link Telegram usang/terpakai',
+                value: String(data.summary.linkCodesExpired ?? 0),
+                tone: Number(data.summary.linkCodesExpired ?? 0) > 0 ? 'warn' : 'ok',
+                hint: 'Cleanup Link Telegram membantu menjaga tabel pairing tetap ringan dan bersih.',
+            },
+            {
+                label: 'Referral menunggu bonus',
+                value: String(data.summary.pendingReferralRewards ?? 0),
+                tone: Number(data.summary.pendingReferralRewards ?? 0) > 0 ? 'warn' : 'ok',
+                hint: 'Naik jika user referral sudah lolos syarat deposit pertama tetapi bonus belum sempat diproses.',
+            },
+        ];
+
+        document.getElementById('maintenanceOperationsBody').innerHTML = `
+            <div class="maintenance-alert-list">
+                ${operations.map((item) => `
+                    <div class="maintenance-alert-item ${item.tone === 'ok' ? 'ok' : ''}">
+                        <strong>${item.label}:</strong> ${item.value}<br>
+                        <span style="opacity:.82">${item.hint}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        const playbook = [
+            data.settings.enabled
+                ? 'Maintenance mode sedang aktif. Pastikan pesan ke user jelas, durasi terisi, dan blokir hanya area yang memang terdampak.'
+                : 'Maintenance mode masih nonaktif. Anda bisa menyalakannya sebelum migrasi besar, sinkron provider massal, atau perubahan gateway.',
+            data.checks.paymentGateway?.configured
+                ? `Webhook Pakasir aktif di ${escText(data.checks.paymentGateway.webhookUrl || '-')}. Simpan URL ini agar tidak berubah saat deploy.`
+                : 'Lengkapi konfigurasi Pakasir di .env VPS sebelum membuka kembali deposit otomatis.',
+            'Urutan aman saat maintenance: aktifkan notice, blok deposit/pesanan bila perlu, jalankan full routine, cek alerts, lalu buka layanan bertahap.',
+            'Sesudah deploy, refresh halaman ini lalu pastikan Database, Redis, Pakasir, Email OTP, dan Auth Protection semuanya kembali sehat.',
+        ];
+
+        document.getElementById('maintenanceNotesBody').innerHTML = `
+            <div class="maintenance-alert-list">
+                ${playbook.map((item) => `<div class="maintenance-alert-item ok">${item}</div>`).join('')}
+            </div>
+        `;
+    }
+
+    function maintenanceDateTimeToIso(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        return Number.isFinite(date.getTime()) ? date.toISOString() : '';
+    }
+
+    function isoToDateTimeLocal(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime())) return '';
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
     loadOverview();
 
 })();

@@ -10,6 +10,7 @@ import { pricingService } from '../pricing/pricing.service';
 import { smtpSettingsService } from '../settings/smtp-settings.service';
 import { emailService } from '../email/email.service';
 import { referralService } from '../referrals/referral.service';
+import { maintenanceService } from '../maintenance/maintenance.service';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
@@ -70,6 +71,28 @@ const smtpSettingsSchema = z.object({
 
 const smtpTestSchema = z.object({
     to: z.string().email('Email tujuan test tidak valid'),
+});
+
+const maintenanceSettingsSchema = z.object({
+    enabled: z.boolean(),
+    title: z.string().min(3).max(120),
+    message: z.string().min(8).max(500),
+    expectedEndAt: z.string().optional().default(''),
+    blockOrders: z.boolean(),
+    blockDeposits: z.boolean(),
+    blockRegistrations: z.boolean(),
+});
+
+const maintenanceActionSchema = z.object({
+    action: z.enum([
+        'expire_invoices',
+        'reconcile_payments',
+        'cleanup_pending_registrations',
+        'cleanup_telegram_links',
+        'run_full_routine',
+        'sync_provider',
+    ]),
+    limit: z.number().int().min(1).max(100).optional(),
 });
 
 function requireAdmin(req: any, reply: any): boolean {
@@ -289,6 +312,73 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
         const invoices = await paymentService.getAllInvoices(limit);
         return { success: true, data: invoices };
+    });
+
+    // GET /api/admin/maintenance
+    fastify.get('/maintenance', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const data = await maintenanceService.getDashboard();
+        return { success: true, data };
+    });
+
+    // PATCH /api/admin/maintenance/settings
+    fastify.patch('/maintenance/settings', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = maintenanceSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await maintenanceService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'Pengaturan maintenance berhasil disimpan',
+            data: settings,
+        };
+    });
+
+    // POST /api/admin/maintenance/action
+    fastify.post('/maintenance/action', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = maintenanceActionSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            let result: unknown;
+            let message = 'Aksi maintenance berhasil dijalankan';
+
+            if (parsed.data.action === 'expire_invoices') {
+                result = await maintenanceService.expireOverdueInvoices();
+                message = 'Invoice overdue berhasil diproses';
+            } else if (parsed.data.action === 'reconcile_payments') {
+                result = await maintenanceService.reconcilePendingPayments(parsed.data.limit ?? 25);
+                message = 'Rekonsiliasi payment gateway selesai';
+            } else if (parsed.data.action === 'cleanup_pending_registrations') {
+                result = await maintenanceService.cleanupExpiredPendingRegistrations();
+                message = 'Pending OTP register kadaluarsa berhasil dibersihkan';
+            } else if (parsed.data.action === 'cleanup_telegram_links') {
+                result = await maintenanceService.cleanupTelegramLinkCodes();
+                message = 'Kode tautan Telegram kadaluarsa berhasil dibersihkan';
+            } else if (parsed.data.action === 'run_full_routine') {
+                result = await maintenanceService.runFullRoutine();
+                message = 'Full maintenance routine berhasil dijalankan';
+            } else {
+                logger.info('Admin triggered manual provider sync from maintenance page. Running in background...');
+                serviceService.syncFromProvider()
+                    .then(res => logger.info(res, 'Maintenance page provider sync success'))
+                    .catch(err => logger.error({ err }, 'Maintenance page provider sync failed'));
+                result = { started: true };
+                message = 'Sync provider dimulai di background';
+            }
+
+            return { success: true, message, data: result };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
+        }
     });
 
     // PATCH /api/admin/service - toggle service active state

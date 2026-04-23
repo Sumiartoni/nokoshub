@@ -406,10 +406,10 @@
                 <div class="f-group" style="margin-top:6px;">
                   <label class="f-label">💳 Metode Pembayaran</label>
                   <div class="pay-list">
-                    <div class="pay-item sel" onclick="selectPay(this,'QRIS',0)">
+                    <div class="pay-item sel" onclick="selectPay(this,'QRIS Pakasir',0)">
                       <div class="pay-radio"></div><div class="pay-ico">📱</div>
-                      <div><div class="pay-name">QRIS</div><div class="pay-desc">Scan QR, bayar nominal unik, upload bukti</div></div>
-                      <div class="pay-fee">Gratis</div>
+                      <div><div class="pay-name">QRIS Pakasir</div><div class="pay-desc">Scan QR, bayar otomatis, saldo masuk tanpa konfirmasi manual</div></div>
+                      <div class="pay-fee">Auto fee</div>
                     </div>
                   </div>
                 </div>
@@ -426,12 +426,12 @@
               <div class="card-title" style="margin-bottom:14px;">📊 Ringkasan</div>
               <div class="sum-row"><span class="sum-l">Saldo sekarang</span><span class="sum-v" id="sum-cur">Rp 0</span></div>
               <div class="sum-row"><span class="sum-l">Jumlah top up</span><span class="sum-v" id="sum-amt">Rp 0</span></div>
-              <div class="sum-row"><span class="sum-l">Metode</span><span class="sum-v" id="sum-met">QRIS</span></div>
-              <div class="sum-row"><span class="sum-l">Biaya admin</span><span class="sum-v" id="sum-fee">Gratis</span></div>
+              <div class="sum-row"><span class="sum-l">Metode</span><span class="sum-v" id="sum-met">QRIS Pakasir</span></div>
+              <div class="sum-row"><span class="sum-l">Biaya admin</span><span class="sum-v" id="sum-fee">Dihitung otomatis</span></div>
               <div class="sum-row total"><span class="sum-l" style="font-weight:800;color:var(--text);">Total bayar</span><span class="sum-v hi" id="sum-tot">Rp 0</span></div>
               <div style="padding:6px 0;font-size:0.78rem;font-weight:700;color:var(--muted);">Saldo setelah top up: <strong id="sum-aft" style="color:var(--primary);">Rp 0</strong></div>
               <button class="btn btn-primary btn-full btn-lg" onclick="doTopup()" style="margin-top:12px;">🚀 Konfirmasi Top Up</button>
-              <div class="topup-notice" style="margin-top:10px;">📸 Scan QRIS lalu upload bukti pembayaran. Admin akan konfirmasi saldo dari Telegram.</div>
+              <div class="topup-notice" style="margin-top:10px;">Pembayaran diproses otomatis melalui Pakasir. Setelah berhasil dibayar, saldo akan masuk tanpa konfirmasi manual admin.</div>
 
               <!-- Pay badges -->
               <div style="margin-top:14px;text-align:center;">
@@ -787,25 +787,40 @@
     <div class="modal-box" style="text-align:center;">
       <div style="font-size:4rem;margin-bottom:12px;animation:mascotFloat 2s ease-in-out infinite;">🎉</div>
       <div class="modal-title">Invoice Top Up Dibuat</div>
-      <div class="modal-sub" id="topupOkMsg">Silakan bayar nominal unik sesuai invoice.</div>
+      <div class="modal-sub" id="topupOkMsg">Invoice payment gateway berhasil dibuat.</div>
       <div class="invoice-countdown" id="topupInvoiceCountdown">Batas waktu: —</div>
       <div style="background:linear-gradient(135deg,var(--primary),#7C3AED);border:var(--bw) solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--shadow);margin:16px 0;">
         <div style="font-size:0.7rem;color:rgba(255,255,255,0.65);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Total Bayar</div>
         <div style="font-family:var(--font-h);font-size:2rem;color:#fff;" id="topupOkBal">Rp 0</div>
       </div>
+      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
+        <div class="invoice-qris-label">Saldo Masuk</div>
+        <code id="topupCreditAmount">Rp 0</code>
+      </div>
+      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
+        <div class="invoice-qris-label">Biaya Gateway</div>
+        <code id="topupGatewayFee">Rp 0</code>
+      </div>
+      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
+        <div class="invoice-qris-label">Metode Pembayaran</div>
+        <code id="topupPaymentMethod">QRIS</code>
+      </div>
+      <div class="invoice-qris-box" style="margin-bottom:14px;text-align:left;">
+        <div class="invoice-qris-label">Status Pembayaran</div>
+        <code id="topupPaymentStatus">Menunggu pembayaran</code>
+      </div>
       <div class="invoice-qris-scan">
         <img id="topupQrisImage" alt="QRIS pembayaran">
       </div>
-      <div class="proof-upload-box">
-        <label class="proof-upload-label" for="topupProofFile">Upload bukti pembayaran</label>
-        <input id="topupProofFile" class="proof-upload-input" type="file" accept="image/png,image/jpeg,image/webp" onchange="handleTopupProofChange(event)">
-        <div class="proof-file-name" id="topupProofName">Belum ada file dipilih</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+        <button class="btn btn-primary btn-lg btn-full" id="topupOpenGatewayBtn" onclick="openGatewayPaymentPage()">Buka Halaman Bayar</button>
+        <button class="btn btn-outline btn-full" onclick="copyInvoicePayload()">Salin String QRIS</button>
       </div>
-      <button class="btn btn-primary btn-lg btn-full" id="topupProofSubmitBtn" onclick="submitTopupProof()">📤 Kirim Bukti ke Admin</button>
+      <button class="btn btn-outline btn-full" onclick="refreshTopupInvoiceStatus()" style="margin-top:8px;">Cek Status Pembayaran</button>
       <button class="btn btn-outline btn-full" onclick="closeModal('modalTopupOk');nav('transactions');" style="margin-top:8px;">Lihat Riwayat</button>
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260423-3"></script>
+  <script src="assets/js/dashboard.js?v=20260423-5"></script>
 </body>
 </html>

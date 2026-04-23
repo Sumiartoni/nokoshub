@@ -438,6 +438,7 @@ html, body {
 .mini-stat-label { font-size: 0.68rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .mini-stat-value { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); }
 .mini-stat.indigo .mini-stat-value { color: var(--indigo-light); }
+.mini-stat.violet .mini-stat-value { color: #a78bfa; }
 .mini-stat.emerald .mini-stat-value { color: var(--emerald); }
 .mini-stat.amber .mini-stat-value { color: var(--amber); }
 .mini-stat.rose .mini-stat-value { color: var(--rose); }
@@ -940,6 +941,67 @@ html, body {
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; display: inline-block; vertical-align: middle; }
 .fw-600 { font-weight: 600; }
 .fw-700 { font-weight: 700; }
+
+.maintenance-checks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+.maintenance-check-card {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(15,23,42,0.9), rgba(15,23,42,0.72));
+}
+.maintenance-check-label {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+}
+.maintenance-check-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.maintenance-check-meta {
+    margin-top: 8px;
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+.maintenance-check-value.ok {
+    color: var(--emerald);
+}
+.maintenance-check-value.warn {
+    color: var(--amber);
+}
+.maintenance-check-value.fail {
+    color: var(--rose);
+}
+.maintenance-action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+.maintenance-alert-list {
+    display: grid;
+    gap: 10px;
+}
+.maintenance-alert-item {
+    padding: 14px 16px;
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    border-radius: 16px;
+    background: rgba(245, 158, 11, 0.08);
+    color: var(--text-primary);
+    line-height: 1.55;
+    font-size: 0.84rem;
+}
+.maintenance-alert-item.ok {
+    border-color: rgba(16, 185, 129, 0.18);
+    background: rgba(16, 185, 129, 0.08);
+}
 
 /* ─── Mobile Overlay ───────────────────────────────────────────────────────── */
 .mobile-overlay {

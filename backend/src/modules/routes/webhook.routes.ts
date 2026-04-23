@@ -5,7 +5,6 @@ import logger from '../../utils/logger';
 
 export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
     // POST /api/payment/webhook
-    // Body: { invoiceId, amount, signature }
     fastify.post('/webhook', {
         config: { rawBody: true }, // capture raw body for HMAC
     }, async (req, reply) => {
@@ -16,11 +15,14 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
                 signature?: string;
                 [key: string]: unknown;
             };
+            const query = req.query as { token?: string };
 
             // raw body for signature verification
             const rawBody = JSON.stringify(req.body);
 
-            const result = await paymentService.handleWebhook(body, rawBody);
+            const result = await paymentService.handleWebhook(body, rawBody, {
+                webhookToken: query.token,
+            });
 
             if (!result.success) {
                 return reply.status(400).send({ success: false, message: result.message });

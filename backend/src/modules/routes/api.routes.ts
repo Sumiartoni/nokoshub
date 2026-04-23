@@ -12,6 +12,7 @@ import { prisma } from '../../database/prisma.client';
 import { authService } from '../auth/auth.service';
 import { referralService } from '../referrals/referral.service';
 import { turnstileService } from '../security/turnstile.service';
+import { maintenanceService } from '../maintenance/maintenance.service';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
+            await maintenanceService.assertActionAllowed('registrations');
             await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
             const result = await authService.register(parsed.data);
             return { success: true, data: result };
@@ -204,6 +206,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
+            await maintenanceService.assertActionAllowed('registrations');
             await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
             const result = await authService.startGoogleRegistration(parsed.data);
             return { success: true, data: result };
@@ -440,6 +443,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
         try {
+            await maintenanceService.assertActionAllowed('orders');
             const user = await userService.findOrCreate(parsed.data.telegramId);
             const order = await orderService.createOrder(user.id, parsed.data.priceId);
             return {
@@ -501,6 +505,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
         try {
+            await maintenanceService.assertActionAllowed('deposits');
             const user = await userService.findOrCreate(parsed.data.telegramId);
             const invoice = await paymentService.createInvoice(user.id, parsed.data.amount);
             return {
@@ -508,6 +513,11 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 data: {
                     invoiceId: invoice.id,
                     amount: invoice.amount,
+                    baseAmount: invoice.baseAmount,
+                    fee: invoice.gatewayFee,
+                    provider: invoice.provider,
+                    paymentMethod: invoice.paymentMethod,
+                    paymentUrl: invoice.paymentUrl,
                     qrisPayload: invoice.qrisPayload,
                     expiredAt: invoice.expiredAt,
                 },
@@ -546,27 +556,35 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         reply.type('image/png').send(png);
     });
 
-    // POST /api/deposit/proof
-    fastify.post('/deposit/proof', {
-        bodyLimit: 8 * 1024 * 1024,
-        config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
-    }, async (req, reply) => {
-        const parsed = depositProofSchema.safeParse(req.body);
-        if (!parsed.success) {
-            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+    // GET /api/deposit/:invoiceId/status?telegramId=
+    fastify.get('/deposit/:invoiceId/status', async (req, reply) => {
+        const params = req.params as { invoiceId?: string };
+        const query = req.query as { telegramId?: string };
+        if (!params.invoiceId || !query.telegramId) {
+            return reply.status(400).send({ success: false, error: 'invoiceId and telegramId required' });
         }
 
-        try {
-            const webUser = await authService.requireUser(req.headers.authorization);
-            if (webUser.telegramId !== parsed.data.telegramId) {
-                return reply.status(403).send({ success: false, error: 'Akun Telegram belum tertaut ke akun web ini' });
-            }
-            const result = await handleWebDepositProof(parsed.data);
-            return { success: true, data: result };
-        } catch (err) {
-            const message = (err as Error).message;
-            return reply.status(message === 'Unauthorized' ? 401 : 400).send({ success: false, error: message });
-        }
+        const user = await userService.getByTelegramId(query.telegramId);
+        if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
+
+        const invoice = await paymentService.getInvoiceForUser(params.invoiceId, user.id);
+        if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
+
+        return {
+            success: true,
+            data: {
+                id: invoice.id,
+                status: invoice.status,
+                amount: invoice.amount,
+                baseAmount: invoice.baseAmount,
+                fee: invoice.gatewayFee,
+                paymentMethod: invoice.paymentMethod,
+                paymentUrl: invoice.paymentUrl,
+                expiredAt: invoice.expiredAt,
+                paidAt: invoice.paidAt,
+                qrisPayload: invoice.qrisPayload,
+            },
+        };
     });
 
     // GET /api/invoices?telegramId=

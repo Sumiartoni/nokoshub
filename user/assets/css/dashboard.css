@@ -1091,6 +1091,14 @@ input, textarea, select { user-select: text; }
   font-size: 0.72rem;
   line-height: 1.6;
 }
+.invoice-qris-box code.success {
+  color: var(--success);
+  font-weight: 900;
+}
+.invoice-qris-box code.expired {
+  color: var(--danger);
+  font-weight: 900;
+}
 .invoice-qris-scan {
   display: flex;
   align-items: center;

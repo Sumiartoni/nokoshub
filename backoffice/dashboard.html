@@ -80,6 +80,14 @@
                 <span>Layanan</span>
             </div>
 
+            <div class="nav-item" data-page="maintenance" id="nav-maintenance">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 7h-4v4H6v2h4v4h4v-4h4v-2h-4z"/>
+                    <circle cx="12" cy="12" r="9"/>
+                </svg>
+                <span>Maintenance</span>
+            </div>
+
             <div class="nav-item" data-page="users" id="nav-users">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -545,6 +553,179 @@
                     </div>
                 </div>
             </div>
+            <!-- ════════ MAINTENANCE PAGE ════════ -->
+            <div class="page-section" id="page-maintenance">
+                <div class="filter-bar">
+                    <div class="search-wrapper" style="pointer-events:none;opacity:.85">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 6v6l4 2"/>
+                            <circle cx="12" cy="12" r="9"/>
+                        </svg>
+                        <input type="text" class="search-input" value="Panel maintenance untuk stabilitas, housekeeping, dan operasional gateway" readonly>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="runMaintenanceAction('run_full_routine')">Full Routine</button>
+                    <button class="btn btn-sm btn-outline" onclick="runMaintenanceAction('sync_provider')">Sync Provider</button>
+                    <button class="btn btn-sm btn-outline" onclick="loadMaintenanceDashboard()">Refresh</button>
+                </div>
+
+                <div class="mini-stats" id="maintenanceSummaryStats" style="margin-bottom:16px;display:none">
+                    <div class="mini-stat indigo">
+                        <div class="mini-stat-label">Invoice Pending</div>
+                        <div class="mini-stat-value" id="mt-pending-invoices">—</div>
+                    </div>
+                    <div class="mini-stat amber">
+                        <div class="mini-stat-label">Overdue</div>
+                        <div class="mini-stat-value" id="mt-overdue-invoices">—</div>
+                    </div>
+                    <div class="mini-stat emerald">
+                        <div class="mini-stat-label">Paid Hari Ini</div>
+                        <div class="mini-stat-value" id="mt-paid-today">—</div>
+                    </div>
+                    <div class="mini-stat rose">
+                        <div class="mini-stat-label">OTP Kadaluarsa</div>
+                        <div class="mini-stat-value" id="mt-expired-registers">—</div>
+                    </div>
+                    <div class="mini-stat sky">
+                        <div class="mini-stat-label">Link Telegram Aktif</div>
+                        <div class="mini-stat-value" id="mt-active-links">—</div>
+                    </div>
+                    <div class="mini-stat violet">
+                        <div class="mini-stat-label">Reward Referral Pending</div>
+                        <div class="mini-stat-value" id="mt-pending-referrals">—</div>
+                    </div>
+                    <div class="mini-stat emerald">
+                        <div class="mini-stat-label">Layanan Aktif</div>
+                        <div class="mini-stat-value" id="mt-active-services">—</div>
+                    </div>
+                    <div class="mini-stat indigo">
+                        <div class="mini-stat-label">Harga Aktif</div>
+                        <div class="mini-stat-value" id="mt-active-prices">—</div>
+                    </div>
+                    <div class="mini-stat amber">
+                        <div class="mini-stat-label">User Web</div>
+                        <div class="mini-stat-value" id="mt-web-users">—</div>
+                    </div>
+                </div>
+
+                <div class="content-grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Maintenance Mode</div>
+                            <button class="btn btn-sm btn-outline" onclick="loadMaintenanceDashboard()">Reload</button>
+                        </div>
+                        <div class="panel-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceEnabledInput">Status Maintenance</label>
+                                    <select class="form-select" id="maintenanceEnabledInput">
+                                        <option value="false">Nonaktif</option>
+                                        <option value="true">Aktif</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceTitleInput">Judul Notifikasi</label>
+                                    <input class="form-input" id="maintenanceTitleInput" type="text" placeholder="Maintenance Sistem">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceExpectedEndInput">Perkiraan Selesai</label>
+                                    <input class="form-input" id="maintenanceExpectedEndInput" type="datetime-local">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:14px">
+                                <div class="form-group" style="flex:1 1 100%">
+                                    <label class="form-label" for="maintenanceMessageInput">Pesan ke Pengguna</label>
+                                    <textarea class="form-input" id="maintenanceMessageInput" rows="4" placeholder="Saat ini sedang dilakukan peningkatan sistem agar layanan tetap stabil."></textarea>
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:14px">
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceBlockOrdersInput">Blok Pembelian Nomor</label>
+                                    <select class="form-select" id="maintenanceBlockOrdersInput">
+                                        <option value="true">Ya</option>
+                                        <option value="false">Tidak</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceBlockDepositsInput">Blok Deposit Saldo</label>
+                                    <select class="form-select" id="maintenanceBlockDepositsInput">
+                                        <option value="true">Ya</option>
+                                        <option value="false">Tidak</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="maintenanceBlockRegistrationsInput">Blok Registrasi Baru</label>
+                                    <select class="form-select" id="maintenanceBlockRegistrationsInput">
+                                        <option value="true">Ya</option>
+                                        <option value="false">Tidak</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="align-self:end">
+                                    <button class="btn btn-sm btn-primary" id="saveMaintenanceBtn" onclick="saveMaintenanceSettings()">Simpan Maintenance</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Health & Diagnostics</div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="maintenanceChecksGrid" class="maintenance-checks-grid">
+                                <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="margin-top:16px">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Quick Actions</div>
+                        </div>
+                        <div class="panel-body">
+                            <div class="maintenance-action-grid">
+                                <button class="btn btn-outline" onclick="runMaintenanceAction('expire_invoices')">Expire Overdue Invoices</button>
+                                <button class="btn btn-outline" onclick="runMaintenanceAction('reconcile_payments')">Reconcile Pakasir</button>
+                                <button class="btn btn-outline" onclick="runMaintenanceAction('cleanup_pending_registrations')">Cleanup OTP Register</button>
+                                <button class="btn btn-outline" onclick="runMaintenanceAction('cleanup_telegram_links')">Cleanup Link Telegram</button>
+                                <button class="btn btn-outline" onclick="runMaintenanceAction('sync_provider')">Sync Provider</button>
+                                <button class="btn btn-primary" onclick="runMaintenanceAction('run_full_routine')">Jalankan Full Routine</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Alerts & Checklist</div>
+                        </div>
+                        <div class="panel-body" id="maintenanceAlertsBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="margin-top:16px">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Operational Snapshot</div>
+                        </div>
+                        <div class="panel-body" id="maintenanceOperationsBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Maintenance Playbook</div>
+                        </div>
+                        <div class="panel-body" id="maintenanceNotesBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
             <!-- ════════ USERS PAGE ════════ -->
             <div class="page-section" id="page-users">
@@ -696,6 +877,9 @@
 </div>
 
 <script src="js/auth.js?v=20260422-1"></script>
-<script src="js/dashboard.js?v=20260423-1"></script>
+<script src="js/dashboard.js?v=20260423-3"></script>
 </body>
 </html>
+
+
+

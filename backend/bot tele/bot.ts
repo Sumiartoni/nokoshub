@@ -12,7 +12,6 @@ const TELEGRAM_REQUEST_TIMEOUT_MS = Math.max(10000, config.TELEGRAM_REQUEST_TIME
 const TELEGRAM_NETWORK_WARNING_INTERVAL_MS = 60000;
 const TELEGRAM_COMMANDS_RETRY_MAX_MS = 300000;
 const TELEGRAM_ADMIN_IDS = parseTelegramAdminIds(config.TELEGRAM_ADMIN_IDS);
-
 const BOT_COMMANDS = [
     { command: '/start', description: 'Mulai bot NokosHUB' },
     { command: '/menu', description: 'Buka menu utama' },
@@ -290,9 +289,8 @@ export function createBot(): TelegramBot {
             `1️⃣ *Deposit Saldo*\n` +
             `• Wajib dilakukan sebelum membeli nomor.\n` +
             `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
-            `• Scan QR QRIS yang tampil\n` +
-            `• Upload bukti transfer di chat ini\n` +
-            `• Saldo masuk setelah admin mengonfirmasi pembayaran\n\n` +
+            `• Scan QR QRIS yang tampil atau buka link bayar Pakasir\n` +
+            `• Saldo masuk otomatis setelah pembayaran terdeteksi\n\n` +
             `2️⃣ *Beli Nomor*\n` +
             `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
             `• Sistem akan memberikan nomor virtual siap pakai\n` +
@@ -330,56 +328,11 @@ export function createBot(): TelegramBot {
         }
 
         if (session.step === 'AWAIT_PAYMENT_PROOF') {
-            const proof = getPaymentProofFromMessage(msg);
-
-            if (!proof) {
-                await bot.sendMessage(
-                    chatId,
-                    '❗ Upload bukti transfer berupa foto/screenshot di chat ini. Jangan kirim teks saja.'
-                );
-                return;
-            }
-
-            if (!session.pendingDeposit) {
-                session.step = undefined;
-                await bot.sendMessage(chatId, '❌ Data invoice tidak ditemukan. Silakan buat deposit baru dengan /deposit.');
-                return;
-            }
-
-            const pendingDeposit = session.pendingDeposit;
-            if (isDepositExpired(pendingDeposit)) {
-                session.step = undefined;
-                session.pendingDeposit = undefined;
-                await apiGet('/api/invoices', { telegramId }).catch(err => {
-                    logger.warn({ err, invoiceId: pendingDeposit.invoiceId }, 'Failed to refresh expired invoice after late proof');
-                });
-                await bot.sendMessage(
-                    chatId,
-                    `❌ Invoice \`${pendingDeposit.invoiceId}\` sudah expired.\n\n` +
-                    `Silakan buat invoice deposit baru dengan /deposit.`,
-                    { parse_mode: 'Markdown' }
-                );
-                return;
-            }
-
-            const adminNotified = await notifyAdminsManualDeposit(bot, pendingDeposit, proof);
             session.step = undefined;
-            session.pendingDeposit = undefined;
-
-            if (adminNotified) {
-                await bot.sendMessage(
-                    chatId,
-                    `✅ Bukti transfer diterima.\n\n` +
-                    `Invoice ID: \`${pendingDeposit.invoiceId}\`\n` +
-                    `Admin akan mengecek mutasi dan mengonfirmasi saldo secara manual.`,
-                    { parse_mode: 'Markdown' }
-                );
-            } else {
-                await bot.sendMessage(
-                    chatId,
-                    '⚠️ Bukti diterima, tetapi akun admin Telegram belum berhasil dikirimi notifikasi. Hubungi admin untuk pengecekan manual.'
-                );
-            }
+            await bot.sendMessage(
+                chatId,
+                'ℹ️ Bukti transfer tidak perlu dikirim lagi. Deposit sekarang diproses otomatis oleh Pakasir. Setelah pembayaran berhasil, saldo akan bertambah otomatis.'
+            );
             return;
         }
 
@@ -405,27 +358,10 @@ export function createBot(): TelegramBot {
         if (!chatId) return;
         await bot.answerCallbackQuery(query.id);
 
-        if (data.startsWith('pay_ok:')) {
-            const [, invoiceId, userTelegramId] = data.split(':');
-            return handleManualPaymentApproval(
-                bot,
+        if (data.startsWith('pay_ok:') || data.startsWith('pay_no:')) {
+            return bot.sendMessage(
                 chatId,
-                telegramId,
-                invoiceId,
-                userTelegramId,
-                query.message?.message_id
-            );
-        }
-
-        if (data.startsWith('pay_no:')) {
-            const [, invoiceId, userTelegramId] = data.split(':');
-            return handleManualPaymentReject(
-                bot,
-                chatId,
-                telegramId,
-                invoiceId,
-                userTelegramId,
-                query.message?.message_id
+                'ℹ️ Konfirmasi manual deposit sudah tidak dipakai lagi. Deposit sekarang diproses otomatis oleh Pakasir setelah pembayaran terdeteksi.'
             );
         }
 
@@ -699,6 +635,8 @@ async function sendMainMenu(bot: TelegramBot, chatId: number) {
         chatId,
         `📱 *Menu Utama NokosHUB*\n\nPilih layanan atau gunakan perintah teks (e.g. /buy):`,
         {
+                `\n\nSaldo akan ditambahkan otomatis setelah pembayaran terdeteksi.` +
+                `${paymentUrl ? `\nLink bayar Pakasir: ${paymentUrl}` : ''}`,
             parse_mode: 'Markdown',
             reply_markup: mainMenuKeyboard(),
         }
@@ -1034,8 +972,7 @@ async function handleDepositWithAmount(
             return bot.sendMessage(chatId, `❌ Gagal membuat invoice: ${res.error}`);
         }
 
-        const { invoiceId, qrisPayload, expiredAt } = res.data;
-        const payableAmount = res.data.amount ?? amount;
+        const { invoiceId, qrisPayload, expiredAt, amount: payableAmount, paymentUrl, fee, baseAmount } = res.data;
 
         // Generate QR code image
         const qrBuffer = await QRCode.toBuffer(qrisPayload, {
@@ -1052,18 +989,19 @@ async function handleDepositWithAmount(
         await bot.sendPhoto(chatId, qrBuffer as any, {
             caption:
                 `💳 *Invoice Deposit*\n\n` +
-                `Jumlah deposit: *${formatRupiah(amount)}*\n` +
+                `Jumlah deposit: *${formatRupiah(baseAmount ?? amount)}*\n` +
+                `Biaya gateway: *${formatRupiah(fee ?? 0)}*\n` +
                 `Nominal bayar: *${formatRupiah(payableAmount)}*\n` +
                 `Invoice ID: \`${invoiceId}\`\n` +
                 `Expires: ${new Date(expiredAt).toLocaleString('id-ID')}\n\n` +
                 `📌 Scan QR di atas, lalu bayar sesuai nominal bayar persis.\n` +
-                `📎 Setelah transfer, upload foto/screenshot bukti transfer di chat ini.\n\n` +
-                `_Saldo akan ditambahkan setelah admin mengecek dan menekan konfirmasi manual._`,
+                `${paymentUrl ? `🌐 Link bayar: ${paymentUrl}\n\n` : ''}` +
+                `_Saldo akan ditambahkan otomatis setelah pembayaran terdeteksi._`,
             parse_mode: 'Markdown',
         });
 
         const session = getSession(chatId);
-        session.step = 'AWAIT_PAYMENT_PROOF';
+        session.step = undefined;
         session.pendingDeposit = {
             invoiceId,
             telegramId,

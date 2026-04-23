@@ -157,17 +157,24 @@ model Transaction {
 }
 
 model Invoice {
-  id          String   @id @default(cuid())
-  user        User     @relation(fields: [userId], references: [id])
-  userId      String
-  amount      Int
-  baseAmount  Int      @default(0)
-  status      String   @default("PENDING") // PENDING | PAID | EXPIRED
-  qrisPayload String   @db.Text
-  paidAt      DateTime?
-  expiredAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  user               User     @relation(fields: [userId], references: [id])
+  userId             String
+  amount             Int
+  baseAmount         Int      @default(0)
+  gatewayFee         Int      @default(0)
+  provider           String   @default("MANUAL_QRIS")
+  paymentMethod      String?
+  gatewayOrderId     String?  @unique
+  paymentUrl         String?  @db.Text
+  gatewayPayload     String?  @db.Text
+  qrisPayload        String   @db.Text
+  status             String   @default("PENDING") // PENDING | PAID | EXPIRED
+  paidAt             DateTime?
+  gatewayCompletedAt DateTime?
+  expiredAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([userId])
   @@index([status])

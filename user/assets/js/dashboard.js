@@ -44,7 +44,7 @@ const S = {
     },
     invites: [],
   },
-  topup: { amount: 0, method: 'QRIS', fee: 0, invoice: null, proofFile: null },
+  topup: { amount: 0, method: 'QRIS Pakasir', fee: 0, invoice: null },
   buy: {
     step: 1,
     svc: null,
@@ -95,6 +95,7 @@ const ROUTE_ALIASES = {
 };
 
 let topupCountdownTimer = null;
+let topupStatusPoller = null;
 
 let SVC = [
   { id: 'wa', e: '📱', n: 'WhatsApp', cat: 'social', bg: '#FFF3D4', p: 1200, priceCount: 1 },
@@ -456,10 +457,11 @@ function updateUI() {
   const fee = S.topup.fee;
   const tot = amt + fee;
   const aft = b + amt;
+  const feeLabel = S.topup.method === 'QRIS Pakasir' && !fee ? 'Dihitung otomatis' : fee ? FMT(fee) : 'Gratis';
   set('sum-cur', fmtBal);
   set('sum-amt', amt ? FMT(amt) : 'Rp 0');
   set('sum-met', S.topup.method);
-  set('sum-fee', fee ? FMT(fee) : 'Gratis');
+  set('sum-fee', feeLabel);
   set('sum-tot', tot ? FMT(tot) : 'Rp 0');
   set('sum-aft', FMT(aft));
 }
@@ -901,17 +903,13 @@ async function doTopup() {
     S.topup.invoice = invoice;
     S.invoices.unshift(invoice);
 
-    set('topupOkMsg', `Invoice #${shortId(invoice.invoiceId)} berlaku sampai ${formatDate(invoice.expiredAt)}.`);
-    set('topupOkBal', FMT(invoice.amount));
+    updateTopupInvoiceUi(invoice);
     const qrisImage = document.getElementById('topupQrisImage');
     if (qrisImage) {
       qrisImage.src = apiUrl(`/deposit/${invoice.invoiceId}/qris.png`, { telegramId, t: Date.now() });
     }
-    S.topup.proofFile = null;
-    const proofInput = document.getElementById('topupProofFile');
-    if (proofInput) proofInput.value = '';
-    set('topupProofName', 'Belum ada file dipilih');
     startTopupCountdown(invoice.expiredAt);
+    startTopupStatusPolling();
     openModal('modalTopupOk');
 
     document.getElementById('topupAmt').value = '';
@@ -926,6 +924,10 @@ async function doTopup() {
 
 function copyInvoicePayload() {
   const payload = S.topup.invoice?.qrisPayload || '';
+  if (!payload) {
+    showToast('Kode QRIS belum tersedia.', 'warning');
+    return;
+  }
   copyText(payload);
 }
 
@@ -1014,6 +1016,83 @@ function fileToBase64(file) {
   });
 }
 
+async function refreshTopupInvoiceStatus({ silent = false } = {}) {
+  const invoice = S.topup.invoice;
+  const telegramId = getTelegramId({ promptUser: true });
+
+  if (!invoice?.invoiceId) {
+    if (!silent) showToast('Invoice belum dibuat atau sudah tidak tersedia', 'warning');
+    return null;
+  }
+  if (!telegramId) return null;
+
+  try {
+    const latest = await apiFetch(`/deposit/${invoice.invoiceId}/status`, {
+      params: { telegramId },
+    });
+    S.topup.invoice = {
+      ...invoice,
+      ...latest,
+      invoiceId: latest.id || invoice.invoiceId,
+    };
+    updateTopupInvoiceUi(S.topup.invoice);
+
+    if (latest.status === 'PAID') {
+      stopTopupCountdown();
+      stopTopupStatusPolling();
+      if (!silent) showToast('Pembayaran berhasil terdeteksi. Saldo sudah ditambahkan otomatis.', 'success');
+      await loadDashboardData({ silent: true });
+    } else if (latest.status === 'EXPIRED') {
+      stopTopupCountdown();
+      stopTopupStatusPolling();
+      if (!silent) showToast('Invoice sudah expired. Buat invoice top up baru untuk melanjutkan.', 'warning');
+      await loadDashboardData({ silent: true });
+    }
+
+    return latest;
+  } catch (err) {
+    if (!silent) showToast(`Gagal cek status pembayaran: ${err.message}`, 'error');
+    return null;
+  }
+}
+
+function updateTopupInvoiceUi(invoice) {
+  const status = String(invoice?.status || 'PENDING').toUpperCase();
+  set('topupOkMsg', `Invoice #${shortId(invoice.invoiceId)} dibuat melalui payment gateway Pakasir dan berlaku sampai ${formatDate(invoice.expiredAt)}.`);
+  set('topupOkBal', FMT(invoice.amount));
+  set('topupCreditAmount', FMT(invoice.baseAmount || 0));
+  set('topupGatewayFee', FMT(invoice.fee || 0));
+  set('topupPaymentMethod', String(invoice.paymentMethod || 'qris').toUpperCase());
+  set('topupPaymentStatus', status === 'PAID' ? 'Sudah dibayar' : status === 'EXPIRED' ? 'Expired' : 'Menunggu pembayaran');
+
+  const linkBtn = document.getElementById('topupOpenGatewayBtn');
+  if (linkBtn) linkBtn.disabled = !invoice.paymentUrl || status !== 'PENDING';
+
+  const statusEl = document.getElementById('topupPaymentStatus');
+  if (statusEl) {
+    statusEl.classList.toggle('success', status === 'PAID');
+    statusEl.classList.toggle('expired', status === 'EXPIRED');
+  }
+}
+
+function openGatewayPaymentPage() {
+  const url = S.topup.invoice?.paymentUrl;
+  if (!url) {
+    showToast('Link pembayaran belum tersedia.', 'warning');
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+function startTopupStatusPolling() {
+  stopTopupStatusPolling();
+  topupStatusPoller = setInterval(() => {
+    if (!document.getElementById('modalTopupOk')?.classList.contains('open')) return;
+    if (S.topup.invoice?.status && S.topup.invoice.status !== 'PENDING') return;
+    refreshTopupInvoiceStatus({ silent: true });
+  }, 5000);
+}
+
 function startTopupCountdown(expiredAt) {
   stopTopupCountdown();
   const el = document.getElementById('topupInvoiceCountdown');
@@ -1031,6 +1110,7 @@ function startTopupCountdown(expiredAt) {
       el.textContent = 'Invoice sudah expired';
       el.classList.add('expired');
       stopTopupCountdown();
+      stopTopupStatusPolling();
       loadDashboardData({ silent: true });
       return;
     }
@@ -1049,6 +1129,12 @@ function stopTopupCountdown() {
   if (!topupCountdownTimer) return;
   clearInterval(topupCountdownTimer);
   topupCountdownTimer = null;
+}
+
+function stopTopupStatusPolling() {
+  if (!topupStatusPoller) return;
+  clearInterval(topupStatusPoller);
+  topupStatusPoller = null;
 }
 
 function renderHomeOrders() {
@@ -1292,7 +1378,10 @@ function closeSidebar() {
 function openModal(id) { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
-  if (id === 'modalTopupOk') stopTopupCountdown();
+  if (id === 'modalTopupOk') {
+    stopTopupCountdown();
+    stopTopupStatusPolling();
+  }
 }
 
 document.querySelectorAll('.modal-ov').forEach(o => {
