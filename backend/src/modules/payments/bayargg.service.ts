@@ -3,10 +3,12 @@ import axios from 'axios';
 import { config } from '../../app/config';
 
 const bayarGgClient = axios.create({
-    baseURL: 'https://bayar.gg/api',
+    baseURL: 'https://www.bayar.gg/api',
     timeout: 15000,
     headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain, */*',
+        'User-Agent': 'NokosHUB/1.0 (+https://nokoshub.store)',
     },
 });
 
@@ -130,41 +132,67 @@ export const bayarGgService = {
 
     async checkPayment(invoiceId: string): Promise<BayarGgPaymentDetail> {
         this.assertConfigured();
+        const headers = {
+            'X-API-Key': config.BAYAR_GG_API_KEY,
+        };
 
-        const response = await bayarGgClient.get('/check-payment.php', {
-            headers: {
-                'X-API-Key': config.BAYAR_GG_API_KEY,
-            },
-            params: {
-                invoice: invoiceId,
-            },
-        });
+        try {
+            const response = await bayarGgClient.get('/check-payment.php', {
+                headers,
+                params: {
+                    invoice: invoiceId,
+                },
+            });
 
-        return normalizeCheckPaymentResponse(response.data);
+            return normalizeCheckPaymentResponse(response.data);
+        } catch (error) {
+            return checkPaymentFromList(invoiceId, headers, error);
+        }
     },
 
     verifyWebhookSignature(payload: BayarGgWebhookPayload, headers: Record<string, any>) {
-        if (!config.BAYAR_GG_WEBHOOK_SECRET) {
+        const secret = String(config.BAYAR_GG_WEBHOOK_SECRET || '').trim();
+        if (!secret) {
             return false;
         }
 
-        const signature = String(headers['x-webhook-signature'] || payload.signature || '').trim();
-        const timestamp = String(headers['x-webhook-timestamp'] || payload.timestamp || '').trim();
         const invoiceId = String(payload.invoice_id || '').trim();
-        const status = String(payload.status || '').trim().toLowerCase();
-        const finalAmount = Number(payload.final_amount || 0);
+        const rawStatus = String(payload.status || '').trim();
+        const normalizedStatus = rawStatus.toLowerCase();
+        const signature = normalizeSignatureValue(headers['x-webhook-signature'] || payload.signature);
+        const rawFinalAmount = String(payload.final_amount ?? '').trim();
+        const parsedFinalAmount = Number(payload.final_amount ?? Number.NaN);
+        const timestampCandidates = uniqueNonEmptyStrings(
+            headers['x-webhook-timestamp'],
+            payload.timestamp
+        );
+        const finalAmountCandidates = uniqueNonEmptyStrings(
+            rawFinalAmount,
+            Number.isFinite(parsedFinalAmount) && parsedFinalAmount > 0 ? String(Math.trunc(parsedFinalAmount)) : ''
+        );
+        const statusCandidates = uniqueNonEmptyStrings(rawStatus, normalizedStatus);
 
-        if (!signature || !timestamp || !invoiceId || !status || !Number.isFinite(finalAmount) || finalAmount <= 0) {
+        if (!signature || !invoiceId || !statusCandidates.length || !finalAmountCandidates.length || !timestampCandidates.length) {
             return false;
         }
 
-        const signatureData = `${invoiceId}|${status}|${Math.trunc(finalAmount)}|${timestamp}`;
-        const expectedSignature = crypto
-            .createHmac('sha256', config.BAYAR_GG_WEBHOOK_SECRET)
-            .update(signatureData)
-            .digest('hex');
+        for (const status of statusCandidates) {
+            for (const finalAmount of finalAmountCandidates) {
+                for (const timestamp of timestampCandidates) {
+                    const signatureData = `${invoiceId}|${status}|${finalAmount}|${timestamp}`;
+                    const expectedSignature = crypto
+                        .createHmac('sha256', secret)
+                        .update(signatureData)
+                        .digest('hex');
 
-        return safeEqual(signature.toLowerCase(), expectedSignature.toLowerCase());
+                    if (safeEqual(signature, expectedSignature.toLowerCase())) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     },
 };
 
@@ -215,17 +243,22 @@ function normalizeCreatePaymentResponse(input: any): BayarGgPayment {
 }
 
 function normalizeCheckPaymentResponse(input: any): BayarGgPaymentDetail {
+    if (input && typeof input === 'object' && input.success === false) {
+        throw new Error(extractRemoteMessage(input, 'BAYAR GG mengembalikan response gagal'));
+    }
+
     const root = input?.data && typeof input.data === 'object' ? input.data : input;
+    const payment = root?.payment && typeof root.payment === 'object' ? root.payment : root;
 
     return {
-        invoiceId: String(root?.invoice_id || '').trim(),
-        status: String(root?.status || '').trim().toLowerCase(),
-        amount: parsePositiveInt(root?.amount, 'Nominal detail BAYAR GG tidak valid'),
-        finalAmount: parsePositiveInt(root?.final_amount, 'Nominal akhir detail BAYAR GG tidak valid'),
-        paymentMethod: normalizeMethod(root?.payment_method || config.BAYAR_GG_PAYMENT_METHOD),
-        paidAt: root?.paid_at ? String(root.paid_at) : null,
-        paidReferenceNumber: root?.paid_reff_num ? String(root.paid_reff_num) : null,
-        expiresAt: root?.expires_at ? String(root.expires_at) : null,
+        invoiceId: String(payment?.invoice_id || root?.invoice_id || '').trim(),
+        status: String(payment?.status || root?.status || '').trim().toLowerCase(),
+        amount: parsePositiveInt(payment?.amount ?? root?.amount, 'Nominal detail BAYAR GG tidak valid'),
+        finalAmount: parsePositiveInt(payment?.final_amount ?? root?.final_amount, 'Nominal akhir detail BAYAR GG tidak valid'),
+        paymentMethod: normalizeMethod(payment?.payment_method || root?.payment_method || config.BAYAR_GG_PAYMENT_METHOD),
+        paidAt: payment?.paid_at ? String(payment.paid_at) : root?.paid_at ? String(root.paid_at) : null,
+        paidReferenceNumber: payment?.paid_reff_num ? String(payment.paid_reff_num) : root?.paid_reff_num ? String(root.paid_reff_num) : null,
+        expiresAt: payment?.expires_at ? String(payment.expires_at) : root?.expires_at ? String(root.expires_at) : null,
         raw: input,
     };
 }
@@ -263,6 +296,81 @@ function safeEqual(a: string, b: string) {
     const left = Buffer.from(a);
     const right = Buffer.from(b);
     return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function normalizeSignatureValue(value: unknown) {
+    return String(value || '')
+        .trim()
+        .replace(/^sha256=/i, '')
+        .toLowerCase();
+}
+
+function uniqueNonEmptyStrings(...values: unknown[]) {
+    const seen = new Set<string>();
+    const results: string[] = [];
+
+    for (const value of values) {
+        const text = String(value ?? '').trim();
+        if (!text || seen.has(text)) continue;
+        seen.add(text);
+        results.push(text);
+    }
+
+    return results;
+}
+
+function extractRemoteMessage(input: any, fallback: string) {
+    const message = firstString(
+        input?.message,
+        input?.error,
+        input?.errors?.[0]?.message,
+        input?.data?.message,
+        input?.data?.error
+    );
+    return message || fallback;
+}
+
+async function checkPaymentFromList(
+    invoiceId: string,
+    headers: Record<string, string>,
+    cause: unknown
+): Promise<BayarGgPaymentDetail> {
+    const response = await bayarGgClient.get('/list-payments.php', {
+        headers,
+        params: {
+            search: invoiceId,
+            limit: 10,
+        },
+    });
+    const payload: any = response.data;
+
+    if (payload && typeof payload === 'object' && payload.success === false) {
+        throw new Error(extractRemoteMessage(payload, 'BAYAR GG list-payments gagal'));
+    }
+
+    const rows = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload?.payments)
+          ? payload.payments
+          : [];
+
+    const exactMatch = rows.find((row: any) => String(row?.invoice_id || '').trim() === invoiceId);
+    if (!exactMatch) {
+        const originalError = extractAxiosErrorMessage(cause);
+        throw new Error(originalError || `Invoice ${invoiceId} tidak ditemukan di response BAYAR GG`);
+    }
+
+    return normalizeCheckPaymentResponse(exactMatch);
+}
+
+function extractAxiosErrorMessage(error: unknown) {
+    if (axios.isAxiosError(error)) {
+        return extractRemoteMessage(error.response?.data, error.message);
+    }
+    if (error instanceof Error) {
+        return error.message;
+    }
+    return '';
 }
 
 async function enrichHostedPaymentQr(payment: BayarGgPayment): Promise<BayarGgPayment> {

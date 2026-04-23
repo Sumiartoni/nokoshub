@@ -208,7 +208,18 @@ async function handleBayarGgWebhook(
     headers: Record<string, any>
 ): Promise<{ success: boolean; message: string }> {
     if (!bayarGgService.verifyWebhookSignature(body, headers)) {
-        logger.warn({ invoiceId: body.invoice_id }, 'Rejected BAYAR GG webhook because signature did not match');
+        logger.warn(
+            {
+                invoiceId: body.invoice_id,
+                hasHeaderSignature: Boolean(headers['x-webhook-signature']),
+                hasHeaderTimestamp: Boolean(headers['x-webhook-timestamp']),
+                hasBodySignature: Boolean(body.signature),
+                hasBodyTimestamp: Boolean(body.timestamp),
+                status: body.status,
+                finalAmount: body.final_amount,
+            },
+            'Rejected BAYAR GG webhook because signature did not match'
+        );
         return { success: false, message: 'Invalid webhook signature' };
     }
 
