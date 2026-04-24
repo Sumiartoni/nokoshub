@@ -1198,17 +1198,17 @@ function renderHomeOrders() {
     const meta = orderMeta(order);
     const amountClass = order.status === 'CANCELLED' ? 'amount-positive' : 'amount-negative';
     return `
-      <tr>
-        <td>
+      <tr class="home-order-row">
+        <td data-label="Layanan">
           <div class="svc-cell">
             <div class="svc-icon-sm" style="background:${meta.bg};">${meta.icon}</div>
             <div><div class="svc-n">${esc(meta.service)}</div><div class="svc-c">${esc(meta.country)}</div></div>
           </div>
         </td>
-        <td class="cell-meta cell-mono">${esc(maskPhone(order.phoneNumber))}</td>
-        <td>${order.otpCode ? `<span class="otp-chip" onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})">${esc(order.otpCode)} 📋</span>` : '<span class="cell-pending anim-pulse">Menunggu</span>'}</td>
-        <td>${statusBadge(order.status)}</td>
-        <td class="${amountClass}">${order.status === 'CANCELLED' ? '+' : '-'}${FMT(meta.price)}</td>
+        <td data-label="Nomor" class="cell-meta cell-mono">${esc(maskPhone(order.phoneNumber))}</td>
+        <td data-label="Kode OTP">${order.otpCode ? `<span class="otp-chip" onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})">${esc(order.otpCode)} 📋</span>` : '<span class="cell-pending anim-pulse">Menunggu</span>'}</td>
+        <td data-label="Status">${statusBadge(order.status)}</td>
+        <td data-label="Biaya" class="${amountClass}">${order.status === 'CANCELLED' ? '+' : '-'}${FMT(meta.price)}</td>
       </tr>
     `;
   }).join('');
