@@ -372,12 +372,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 result = await maintenanceService.runFullRoutine();
                 message = 'Full maintenance routine berhasil dijalankan';
             } else {
-                logger.info('Admin triggered manual provider sync from maintenance page. Running in background...');
-                serviceService.syncFromProvider()
-                    .then(res => logger.info(res, 'Maintenance page provider sync success'))
-                    .catch(err => logger.error({ err }, 'Maintenance page provider sync failed'));
-                result = { started: true };
-                message = 'Sync provider dimulai di background';
+                logger.info('Admin triggered manual provider sync from maintenance page');
+                result = await serviceService.syncFromProvider();
+                message = 'Sync provider selesai dijalankan';
             }
 
             return { success: true, message, data: result };
