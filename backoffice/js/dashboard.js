@@ -1095,14 +1095,18 @@
                 btn.innerHTML = '<span class="spinner-inline"></span> Syncing…';
 
                 try {
-                    const res = await api('/api/admin/sync');
-                    if (res.success) {
-                        showToast(res.message || 'Sync berhasil dimulai!', 'success');
-                    } else {
-                        showToast(res.error || 'Sync gagal', 'error');
-                    }
+                    const res = await api('/api/admin/maintenance/action', {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'sync_provider' }),
+                    });
+                    if (!res.success) throw new Error(res.error || 'Sync gagal');
+                    await Promise.all([
+                        loadPricingSettings(true),
+                        loadServices(),
+                    ]);
+                    showToast(res.message || 'Sync provider selesai dijalankan', 'success');
                 } catch (err) {
-                    showToast(err.message, 'error');
+                    showToast(err.message || 'Sync gagal', 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = `

@@ -70,7 +70,22 @@
                 ...(options.headers || {}),
             },
         });
-        const data = await res.json().catch(() => ({ success: false, error: 'Invalid response' }));
+        const text = await res.text();
+        let data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch {
+            const compact = String(text || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 160);
+            data = {
+                success: false,
+                error: compact
+                    ? `Invalid response (${res.status}): ${compact}`
+                    : `Invalid response (${res.status})`,
+            };
+        }
         if (!res.ok || data.success === false) {
             const error = new Error(data.error || 'Request failed');
             error.status = res.status;
