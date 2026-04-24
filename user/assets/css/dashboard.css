@@ -501,6 +501,12 @@ input, textarea, select { user-select: text; }
 .tbl td { padding:11px 10px; font-size:0.82rem; font-weight:700; border-bottom:1.5px solid #f0f0f0; vertical-align:middle; }
 .tbl tr:last-child td { border-bottom:none; }
 .tbl tbody tr:hover td { background:rgba(79,156,249,0.04); }
+.cell-meta { font-size:0.72rem; color:var(--muted); }
+.cell-mono { font-family:monospace; font-size:0.78rem; }
+.cell-balance { font-family:var(--font-h); }
+.cell-pending { color:var(--muted); font-size:0.78rem; font-weight:700; }
+.amount-positive { color:var(--success); font-weight:800; }
+.amount-negative { color:var(--danger); font-weight:800; }
 
 .svc-cell { display:flex; align-items:center; gap:9px; }
 .svc-icon-sm { width:32px; height:32px; border:var(--bw) solid var(--border); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; font-size:0.95rem; box-shadow:var(--shadow-xs); flex-shrink:0; }
@@ -519,6 +525,8 @@ input, textarea, select { user-select: text; }
 .act-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-sm); border:1.5px solid transparent; transition:var(--ease-fast); cursor:pointer; }
 .act-item:hover { background:#fafafa; border-color:#eee; }
 .act-icon { width:36px; height:36px; border:var(--bw) solid var(--border); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; font-size:1rem; box-shadow:var(--shadow-xs); flex-shrink:0; }
+.act-icon-in { background:#D4FFF0; }
+.act-icon-out { background:#FFF3D4; }
 .act-body { flex:1; min-width:0; }
 .act-t   { font-weight:800; font-size:0.82rem; }
 .act-s   { font-size:0.68rem; color:var(--muted); font-weight:600; }
@@ -973,6 +981,35 @@ input, textarea, select { user-select: text; }
 .oc-foot { display:flex; align-items:center; justify-content:space-between; }
 .oc-time { font-size:0.7rem; color:var(--muted); font-weight:600; }
 .oc-price { font-weight:800; font-size:0.88rem; }
+.oc-status-slot { margin-left:auto; flex-shrink:0; }
+.oc-status-note { color:var(--muted); font-size:0.84rem; font-weight:700; }
+.btn-disabled-soft { opacity:0.55; cursor:not-allowed; }
+.invoice-icon-paid { background:#D4FFF0; }
+.invoice-icon-expired { background:#FFE1E1; }
+.invoice-icon-pending { background:#FFF3D4; }
+.invoice-history-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+.invoice-history-item {
+  min-width:0;
+  font-size:0.8rem;
+  font-weight:700;
+  color:var(--muted);
+}
+.invoice-history-amount {
+  display:inline-block;
+  margin-top:4px;
+  color:var(--text);
+  font-size:0.95rem;
+}
+.invoice-history-amount-in { color:var(--success); }
+.invoice-history-actions {
+  margin-top:12px;
+  gap:8px;
+  flex-wrap:wrap;
+}
 
 /* Paginator */
 .paginator { display:flex; align-items:center; justify-content:space-between; margin-top:20px; padding-top:16px; border-top:var(--bw) solid var(--border); flex-wrap:wrap; gap:10px; }
@@ -1340,6 +1377,7 @@ input, textarea, select { user-select: text; }
    ============================================= */
 .toast-wrap { position:fixed; top:80px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
 .toast { display:flex; align-items:center; gap:10px; background:#fff; border:var(--bw) solid var(--border); border-radius:var(--r-md); padding:12px 16px; box-shadow:var(--shadow-s); font-weight:800; font-size:0.83rem; animation:toastIn 0.28s cubic-bezier(0.175,0.885,0.32,1.275); pointer-events:all; min-width:260px; max-width:340px; }
+.toast-icon { font-size:1.15rem; flex-shrink:0; }
 .toast.success { border-left:4px solid var(--success); }
 .toast.error   { border-left:4px solid var(--danger); }
 .toast.info    { border-left:4px solid var(--primary); }
@@ -1601,9 +1639,11 @@ input, textarea, select { user-select: text; }
   }
 
   .svc-row,
+  .act-item,
   .oc-top,
   .oc-mid,
   .oc-foot,
+  .act-r,
   .sum-row,
   .referral-banner,
   .referral-invite-row,
@@ -1622,6 +1662,14 @@ input, textarea, select { user-select: text; }
   .oc-mid,
   .oc-foot {
     gap: 10px;
+  }
+
+  .oc-status-slot {
+    margin-left: 0;
+  }
+
+  .invoice-history-actions .btn {
+    width: 100%;
   }
 
   .svc-row-right,
@@ -1744,7 +1792,8 @@ input, textarea, select { user-select: text; }
   .amount-presets,
   .referral-stats-grid,
   .profile-stats,
-  .api-stats-grid {
+  .api-stats-grid,
+  .invoice-history-grid {
     grid-template-columns: 1fr;
   }
 

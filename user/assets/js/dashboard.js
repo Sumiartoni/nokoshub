@@ -1196,6 +1196,7 @@ function renderHomeOrders() {
 
   body.innerHTML = orders.map(order => {
     const meta = orderMeta(order);
+    const amountClass = order.status === 'CANCELLED' ? 'amount-positive' : 'amount-negative';
     return `
       <tr>
         <td>
@@ -1204,10 +1205,10 @@ function renderHomeOrders() {
             <div><div class="svc-n">${esc(meta.service)}</div><div class="svc-c">${esc(meta.country)}</div></div>
           </div>
         </td>
-        <td style="font-family:monospace;font-size:0.78rem;color:var(--muted);">${esc(maskPhone(order.phoneNumber))}</td>
-        <td>${order.otpCode ? `<span class="otp-chip" onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})">${esc(order.otpCode)} 📋</span>` : '<span class="anim-pulse" style="color:var(--muted);font-size:0.78rem;font-weight:700;">Menunggu</span>'}</td>
+        <td class="cell-meta cell-mono">${esc(maskPhone(order.phoneNumber))}</td>
+        <td>${order.otpCode ? `<span class="otp-chip" onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})">${esc(order.otpCode)} 📋</span>` : '<span class="cell-pending anim-pulse">Menunggu</span>'}</td>
         <td>${statusBadge(order.status)}</td>
-        <td style="color:${order.status === 'CANCELLED' ? 'var(--success)' : 'var(--danger)'};font-weight:800;">${order.status === 'CANCELLED' ? '+' : '-'}${FMT(meta.price)}</td>
+        <td class="${amountClass}">${order.status === 'CANCELLED' ? '+' : '-'}${FMT(meta.price)}</td>
       </tr>
     `;
   }).join('');
@@ -1226,9 +1227,10 @@ function renderActivity() {
     const isIn = Number(tx.amount) > 0;
     const icon = tx.type === 'DEPOSIT' ? '💰' : tx.type === 'REFUND' ? '🔄' : '📱';
     const cls = isIn ? (tx.type === 'REFUND' ? 'act-ref' : 'act-in') : 'act-out';
+    const iconBgClass = isIn ? 'act-icon-in' : 'act-icon-out';
     return `
       <div class="act-item">
-        <div class="act-icon" style="background:${isIn ? '#D4FFF0' : '#FFF3D4'};">${icon}</div>
+        <div class="act-icon ${iconBgClass}">${icon}</div>
         <div class="act-body"><div class="act-t">${esc(typeLabel(tx.type))}</div><div class="act-s">${esc(tx.description || '-')}</div></div>
         <div class="act-r"><div class="act-amt ${cls}">${isIn ? '+' : ''}${FMT(tx.amount)}</div><div class="act-time">${esc(formatDate(tx.createdAt))}</div></div>
       </div>
@@ -1248,19 +1250,19 @@ function renderOrders() {
     const meta = orderMeta(order);
     const canCancel = canUserCancelOrder(order);
     const cancelBtn = !order.otpCode && ['ACTIVE', 'PENDING'].includes(String(order.status || '').toUpperCase())
-      ? `<button class="btn btn-danger btn-xs" ${canCancel ? `onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})"` : 'disabled'} style="${canCancel ? '' : 'opacity:0.55;cursor:not-allowed;'}">${esc(getOrderCancelButtonLabel(order))}</button>`
+      ? `<button class="btn btn-danger btn-xs ${canCancel ? '' : 'btn-disabled-soft'}" ${canCancel ? `onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})"` : 'disabled'}>${esc(getOrderCancelButtonLabel(order))}</button>`
       : '';
     return `
       <div class="order-card-big" ${order.otpCode ? `onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})"` : ''}>
         <div class="oc-top">
           <div class="oc-icon" style="background:${meta.bg};">${meta.icon}</div>
           <div><div class="oc-svc">${esc(meta.service)}</div><div class="oc-id">#${shortId(order.id)} · ${esc(order.phoneNumber || '-')} · ${esc(meta.country)}</div></div>
-          <div style="margin-left:auto;flex-shrink:0;">${statusBadge(order.status)}</div>
+          <div class="oc-status-slot">${statusBadge(order.status)}</div>
         </div>
         <div class="oc-mid">
           ${order.otpCode
             ? `<div class="oc-otp">${esc(order.otpCode)}</div><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();copyText(${jsArg(order.otpCode)})">📋 Salin</button>`
-            : `<div style="color:var(--muted);font-size:0.84rem;font-weight:700;">${esc(order.failReason || getOrderCancelHint(order) || 'Menunggu SMS masuk...')}</div>${canCancel ? `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})">❌ Batalkan</button>` : ''}`}
+            : `<div class="oc-status-note">${esc(order.failReason || getOrderCancelHint(order) || 'Menunggu SMS masuk...')}</div>${canCancel ? `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})">❌ Batalkan</button>` : ''}`}
         </div>
         <div class="oc-foot">
           <div class="oc-time">📅 ${esc(formatDate(order.createdAt))}</div>
@@ -1287,14 +1289,14 @@ function renderTransactions() {
     runningBalance -= amount;
     return `
       <tr>
-        <td style="font-family:monospace;font-size:0.72rem;color:var(--muted);">#${shortId(tx.id)}</td>
+        <td class="cell-meta cell-mono">#${shortId(tx.id)}</td>
         <td>${transactionBadge(tx.type)}</td>
         <td>${esc(tx.description || '-')}</td>
         <td>${tx.type === 'DEPOSIT' ? '💰 Deposit' : tx.type === 'REFUND' ? '🔄 Sistem' : '📱 Saldo'}</td>
-        <td style="color:${isIn ? 'var(--success)' : 'var(--danger)'};font-weight:800;">${isIn ? '+' : ''}${FMT(amount)}</td>
-        <td style="font-family:var(--font-h);">${FMT(balanceAfter)}</td>
+        <td class="${isIn ? 'amount-positive' : 'amount-negative'}">${isIn ? '+' : ''}${FMT(amount)}</td>
+        <td class="cell-balance">${FMT(balanceAfter)}</td>
         <td><span class="badge badge-success"><span class="badge-dot"></span>OK</span></td>
-        <td style="font-size:0.72rem;color:var(--muted);">${esc(formatDate(tx.createdAt))}</td>
+        <td class="cell-meta">${esc(formatDate(tx.createdAt))}</td>
       </tr>
     `;
   }).join('');
@@ -1317,6 +1319,7 @@ function renderInvoiceHistory() {
     const expired = status === 'EXPIRED';
     const badgeClass = paid ? 'badge-success' : expired ? 'badge-danger' : 'badge-warning';
     const badgeLabel = paid ? 'Lunas' : expired ? 'Expired' : 'Menunggu Bayar';
+    const iconBgClass = paid ? 'invoice-icon-paid' : expired ? 'invoice-icon-expired' : 'invoice-icon-pending';
     const fee = Number(invoice.gatewayFee || invoice.fee || 0);
     const baseAmount = Number(invoice.baseAmount || Math.max(0, Number(invoice.amount || 0) - fee));
     const totalAmount = Number(invoice.amount || 0);
@@ -1326,20 +1329,20 @@ function renderInvoiceHistory() {
     return `
       <div class="order-card-big">
         <div class="oc-top">
-          <div class="oc-icon" style="background:${paid ? '#D4FFF0' : expired ? '#FFE1E1' : '#FFF3D4'};">${paid ? '💰' : expired ? '⌛' : '📲'}</div>
+          <div class="oc-icon ${iconBgClass}">${paid ? '💰' : expired ? '⌛' : '📲'}</div>
           <div>
             <div class="oc-svc">Top Up ${esc(invoice.paymentMethod || invoice.provider || 'QRIS')}</div>
             <div class="oc-id">#${shortId(invoice.id)} · ${esc(invoice.provider || 'BAYAR_GG')}</div>
           </div>
-          <div style="margin-left:auto;flex-shrink:0;"><span class="badge ${badgeClass}"><span class="badge-dot"></span>${badgeLabel}</span></div>
+          <div class="oc-status-slot"><span class="badge ${badgeClass}"><span class="badge-dot"></span>${badgeLabel}</span></div>
         </div>
-        <div class="oc-mid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Saldo Masuk<br><strong style="color:var(--success);font-size:0.95rem;">${FMT(baseAmount)}</strong></div>
-          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Total Dibayar<br><strong style="color:var(--text);font-size:0.95rem;">${FMT(totalAmount)}</strong></div>
-          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">Biaya / Kode Unik<br><strong style="color:var(--text);font-size:0.95rem;">${FMT(fee)}</strong></div>
-          <div style="font-size:0.8rem;font-weight:700;color:var(--muted);">${paid ? 'Dibayar Pada' : 'Berlaku Sampai'}<br><strong style="color:var(--text);font-size:0.95rem;">${esc(paid ? paidAt : expiredAt)}</strong></div>
+        <div class="oc-mid invoice-history-grid">
+          <div class="invoice-history-item">Saldo Masuk<br><strong class="invoice-history-amount invoice-history-amount-in">${FMT(baseAmount)}</strong></div>
+          <div class="invoice-history-item">Total Dibayar<br><strong class="invoice-history-amount">${FMT(totalAmount)}</strong></div>
+          <div class="invoice-history-item">Biaya / Kode Unik<br><strong class="invoice-history-amount">${FMT(fee)}</strong></div>
+          <div class="invoice-history-item">${paid ? 'Dibayar Pada' : 'Berlaku Sampai'}<br><strong class="invoice-history-amount">${esc(paid ? paidAt : expiredAt)}</strong></div>
         </div>
-        <div class="oc-foot" style="margin-top:12px;gap:8px;flex-wrap:wrap;">
+        <div class="oc-foot invoice-history-actions">
           ${status === 'PENDING'
             ? `<button class="btn btn-primary btn-sm" onclick="reopenInvoicePayment(${jsArg(invoice.id)})">Bayar Sekarang</button>
                <button class="btn btn-outline btn-sm" onclick="reopenInvoicePayment(${jsArg(invoice.id)})">Lihat QRIS</button>`
@@ -1728,7 +1731,7 @@ function showToast(msg, type = 'info') {
   const wrap = document.getElementById('toastWrap');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span style="font-size:1.15rem;">${ICONS[type]}</span><span>${esc(msg)}</span>`;
+  el.innerHTML = `<span class="toast-icon">${ICONS[type]}</span><span>${esc(msg)}</span>`;
   wrap.appendChild(el);
   setTimeout(() => { el.classList.add('hide'); setTimeout(() => el.remove(), 300); }, 3200);
 }
