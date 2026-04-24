@@ -336,7 +336,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const user = telegramId
             ? await userService.findOrCreate(telegramId)
             : webUser?.id
-                ? await userService.getWebWalletByWebUserId(webUser.id)
+                ? await userService.findOrCreateWebWallet(webUser.id, {
+                    firstName: webUser.firstName,
+                    lastName: webUser.lastName,
+                })
                 : null;
 
         if (!user) {
