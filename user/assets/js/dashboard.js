@@ -605,6 +605,7 @@ function resetBuySteps() {
   if (received) received.style.display = 'none';
   if (expired) expired.style.display = 'none';
   set('timerCount', '20:00');
+  updateWaitCancelControls(null);
 }
 
 function goStep(n) {
@@ -781,6 +782,7 @@ function startOtpWatch(orderId) {
     ring.style.strokeDashoffset = 0;
   }
   set('timerCount', '20:00');
+  updateWaitCancelControls(S.buy.order);
 
   S.timer = setInterval(() => {
     remaining = Math.max(0, remaining - 1);
@@ -788,6 +790,7 @@ function startOtpWatch(orderId) {
     const sec = String(remaining % 60).padStart(2, '0');
     set('timerCount', `${m}:${sec}`);
     if (ring) ring.style.strokeDashoffset = circumference * ((OTP_WAIT_SECONDS - remaining) / OTP_WAIT_SECONDS);
+    updateWaitCancelControls(S.buy.order);
     if (remaining <= 0) stopOtpWatch(false);
   }, 1000);
 
@@ -801,6 +804,7 @@ function stopOtpWatch(clearOrder = true) {
   S.timer = null;
   S.poller = null;
   if (clearOrder) S.buy.order = null;
+  updateWaitCancelControls(S.buy.order);
 }
 
 async function refreshOrderStatus(orderId) {
@@ -811,6 +815,7 @@ async function refreshOrderStatus(orderId) {
     if (!order) return;
 
     S.buy.order = order;
+    updateWaitCancelControls(order);
     if (order.status === 'SUCCESS' && order.otpCode) {
       stopOtpWatch(false);
       showOtpReceived(order.otpCode);
@@ -846,24 +851,28 @@ async function cancelOrder() {
     resetBuySteps();
     return;
   }
-  await cancelExistingOrder(orderId);
-  goStep(1);
+  const cancelled = await cancelExistingOrder(orderId);
+  if (cancelled) {
+    goStep(1);
+  }
 }
 
 async function cancelExistingOrder(orderId) {
   const order = (Array.isArray(S.orders) ? S.orders.find(item => item.id === orderId) : null) || S.buy.order;
   if (order && !canUserCancelOrder(order)) {
     showToast(getOrderCancelHint(order) || 'Order belum bisa dibatalkan.', 'warning');
-    return;
+    return false;
   }
-  if (!confirm('Yakin batalkan pesanan? Saldo akan direfund jika order masih aktif.')) return;
+  if (!confirm('Yakin batalkan pesanan? Saldo akan direfund jika order masih aktif.')) return false;
   try {
-    await apiFetch('/order/cancel', { body: { orderId } });
+    const result = await apiFetch('/order/cancel', { body: { orderId } });
     stopOtpWatch(false);
-    showToast('Pesanan dibatalkan. Refund diproses otomatis.', 'success');
+    showToast(result?.refunded === false ? 'Pesanan sudah dibatalkan sebelumnya.' : 'Pesanan dibatalkan. Refund diproses otomatis.', 'success');
     await loadDashboardData({ silent: true });
+    return true;
   } catch (err) {
     showToast(`Gagal batalkan: ${err.message}`, 'error');
+    return false;
   }
 }
 
@@ -1224,6 +1233,9 @@ function renderOrders() {
   list.innerHTML = S.orders.map(order => {
     const meta = orderMeta(order);
     const canCancel = canUserCancelOrder(order);
+    const cancelBtn = !order.otpCode && ['ACTIVE', 'PENDING'].includes(String(order.status || '').toUpperCase())
+      ? `<button class="btn btn-danger btn-xs" ${canCancel ? `onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})"` : 'disabled'} style="${canCancel ? '' : 'opacity:0.55;cursor:not-allowed;'}">${esc(getOrderCancelButtonLabel(order))}</button>`
+      : '';
     return `
       <div class="order-card-big" ${order.otpCode ? `onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})"` : ''}>
         <div class="oc-top">
@@ -1406,6 +1418,55 @@ function canUserCancelOrder(order) {
   const createdAt = new Date(order?.createdAt || 0).getTime();
   if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
   return Date.now() - createdAt >= ORDER_CANCEL_DELAY_MS;
+}
+
+function getOrderCancelRemainingMs(order) {
+  const status = String(order?.status || '').toUpperCase();
+  if (!['ACTIVE', 'PENDING'].includes(status) || order?.otpCode) return 0;
+  const createdAt = new Date(order?.createdAt || 0).getTime();
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return ORDER_CANCEL_DELAY_MS;
+  return Math.max(0, createdAt + ORDER_CANCEL_DELAY_MS - Date.now());
+}
+
+function getOrderCancelButtonLabel(order) {
+  if (canUserCancelOrder(order)) return '❌ Batalkan';
+  const remainingMs = getOrderCancelRemainingMs(order);
+  if (remainingMs <= 0) return '❌ Batalkan';
+  const minutes = Math.floor(remainingMs / 60000);
+  const seconds = Math.ceil((remainingMs % 60000) / 1000);
+  return `⏳ ${minutes}:${String(Math.max(0, seconds)).padStart(2, '0')}`;
+}
+
+function getWaitCancelButton() {
+  return document.getElementById('waitCancelBtn')
+    || document.querySelector('#otpStateWaiting button[onclick="cancelOrder()"]');
+}
+
+function updateWaitCancelControls(order) {
+  const btn = getWaitCancelButton();
+  if (!btn) return;
+
+  if (!btn.id) btn.id = 'waitCancelBtn';
+
+  const canCancel = canUserCancelOrder(order);
+  btn.disabled = !canCancel;
+  btn.style.opacity = canCancel ? '1' : '0.55';
+  btn.style.cursor = canCancel ? 'pointer' : 'not-allowed';
+  btn.textContent = getOrderCancelButtonLabel(order);
+
+  let hint = document.getElementById('waitCancelHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'waitCancelHint';
+    hint.style.marginTop = '8px';
+    hint.style.fontSize = '0.8rem';
+    hint.style.fontWeight = '700';
+    hint.style.color = 'rgba(255,255,255,0.78)';
+    hint.style.textAlign = 'center';
+    btn.parentElement?.insertAdjacentElement('afterend', hint);
+  }
+
+  hint.textContent = getOrderCancelHint(order) || 'Pembatalan manual tersedia setelah 2 menit jika OTP belum masuk.';
 }
 
 function getOrderCancelHint(order) {
