@@ -1591,6 +1591,22 @@ input, textarea, select { user-select: text; }
     overflow-x: hidden;
   }
 
+  #page-home,
+  #page-home .dash-grid,
+  #page-home .table-card,
+  #page-home .card-hdr,
+  #page-home .tbl,
+  #page-home .tbl tbody,
+  #page-home .act-list,
+  #page-home .act-item,
+  #page-home .svc-cell,
+  #page-home .svc-cell > div,
+  #page-home .act-body,
+  #page-home .act-r {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .hero-banner,
   .table-card,
   .sum-card,
@@ -1635,6 +1651,21 @@ input, textarea, select { user-select: text; }
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  #page-home .table-card {
+    padding: 14px;
+    overflow: hidden;
+  }
+
+  #page-home .card-title {
+    font-size: 0.96rem;
+    line-height: 1.3;
+  }
+
+  #page-home .card-hdr .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
   #page-home .tbl-wrap {
     overflow: visible;
     margin: 0;
@@ -1647,8 +1678,8 @@ input, textarea, select { user-select: text; }
 
   #homeRecentOrdersBody tr.home-order-row {
     display: grid;
-    gap: 10px;
-    padding: 14px;
+    gap: 8px;
+    padding: 12px;
     border: var(--bw) solid var(--border);
     border-radius: var(--r-md);
     box-shadow: var(--shadow-xs);
@@ -1663,14 +1694,14 @@ input, textarea, select { user-select: text; }
     padding: 0;
     border: 0;
     background: transparent;
-    font-size: 0.8rem;
+    font-size: 0.77rem;
   }
 
   #homeRecentOrdersBody tr.home-order-row td::before {
     content: attr(data-label);
     flex-shrink: 0;
-    min-width: 72px;
-    font-size: 0.68rem;
+    min-width: 64px;
+    font-size: 0.64rem;
     font-weight: 900;
     letter-spacing: 0.5px;
     text-transform: uppercase;
@@ -1691,6 +1722,41 @@ input, textarea, select { user-select: text; }
 
   #page-home .svc-cell {
     align-items: flex-start;
+    gap: 8px;
+  }
+
+  #page-home .svc-icon-sm {
+    width: 28px;
+    height: 28px;
+    font-size: 0.84rem;
+  }
+
+  #page-home .svc-n {
+    font-size: 0.78rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  #page-home .svc-c {
+    font-size: 0.64rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  #page-home .badge,
+  #page-home .otp-chip {
+    max-width: 100%;
+  }
+
+  #page-home .badge {
+    white-space: normal;
+    text-align: left;
+  }
+
+  #page-home .otp-chip {
+    font-size: 0.84rem;
+    padding: 2px 8px;
+    word-break: break-word;
   }
 
   .country-card {
@@ -1747,6 +1813,33 @@ input, textarea, select { user-select: text; }
     justify-content: space-between;
     gap: 12px;
     text-align: left;
+  }
+
+  #page-home .act-item {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  #page-home .act-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 0.92rem;
+  }
+
+  #page-home .act-t {
+    font-size: 0.76rem;
+    line-height: 1.3;
+  }
+
+  #page-home .act-s,
+  #page-home .act-time {
+    font-size: 0.64rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  #page-home .act-amt {
+    font-size: 0.78rem;
   }
 
   .svc-row-right,
@@ -1923,6 +2016,15 @@ input, textarea, select { user-select: text; }
     padding: 11px 12px;
   }
 
+  #page-home .table-card {
+    padding: 12px;
+    border-radius: var(--r-sm);
+  }
+
+  #page-home .card-hdr {
+    margin-bottom: 12px;
+  }
+
   #homeRecentOrdersBody tr.home-order-row td {
     flex-direction: column;
     align-items: flex-start;
@@ -1930,6 +2032,24 @@ input, textarea, select { user-select: text; }
 
   #homeRecentOrdersBody tr.home-order-row td::before {
     min-width: 0;
+  }
+
+  #homeRecentOrdersBody tr.home-order-row {
+    padding: 10px;
+  }
+
+  #page-home .act-r {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  #page-home .badge,
+  #page-home .otp-chip,
+  #page-home .cell-meta,
+  #page-home .amount-positive,
+  #page-home .amount-negative {
+    font-size: 0.74rem;
   }
 
   .profile-stats {
