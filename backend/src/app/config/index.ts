@@ -80,7 +80,7 @@ const envSchema = z.object({
     PROVIDER_SYNC_INTERVAL_MINUTES: z.string().default('360').transform(Number),
     PROVIDER_SYNC_STARTUP_DELAY_MS: z.string().default('10000').transform(Number),
     OTP_POLL_INTERVAL_MS: z.string().default('5000').transform(Number),
-    OTP_POLL_MAX_MS: z.string().default('120000').transform(Number),
+    OTP_POLL_MAX_MS: z.string().default('1200000').transform(Number),
 });
 
 const parsed = envSchema.safeParse(process.env);

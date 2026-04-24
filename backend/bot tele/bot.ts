@@ -186,7 +186,7 @@ export function createBot(): TelegramBot {
             await bot.sendMessage(
                 chatId,
                 `⚠️ *OTP tidak diterima*\n\n` +
-                `SMS tidak masuk dalam 2 menit.\n` +
+                `SMS tidak masuk dalam 20 menit.\n` +
                 `📦 Order ID: \`${orderId}\`\n\n` +
                 `Order otomatis dibatalkan dan saldo sudah dikembalikan.`,
                 { parse_mode: 'Markdown' }
@@ -916,13 +916,13 @@ async function handlePriceSelected(
             `📞 Nomor Anda:\n\`${phoneNumber}\`\n\n` +
             `🆔 Order ID: \`${orderId}\`\n\n` +
             `⏳ Sistem sedang menunggu OTP. Kode akan dikirim otomatis ke sini.\n` +
-            `_Maksimal menunggu 2 menit._\n\n` +
+            `_Maksimal menunggu 20 menit._\n` +
+            `_Pembatalan manual tersedia setelah 2 menit jika OTP belum masuk._\n\n` +
             `Untuk membatalkan: /status ${orderId}`,
             {
                 parse_mode: 'Markdown',
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: '🚫 Batalkan Order', callback_data: `cancel_order:${orderId}` }],
                         [{ text: '🏠 Menu Utama', callback_data: 'menu' }],
                     ],
                 },
@@ -1217,7 +1217,7 @@ async function handleOrderStatus(bot: TelegramBot, chatId: number, orderId: stri
             {
                 parse_mode: 'Markdown',
                 reply_markup:
-                    order.status === 'ACTIVE'
+                    order.status === 'ACTIVE' && !order.otpCode && Date.now() - new Date(order.createdAt).getTime() >= 120000
                         ? {
                             inline_keyboard: [
                                 [{ text: '🚫 Batalkan', callback_data: `cancel_order:${order.id}` }],

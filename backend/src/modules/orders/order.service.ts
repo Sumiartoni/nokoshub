@@ -8,6 +8,8 @@ import { formatRupiah } from '../../utils/helpers';
 
 export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
 
+const ORDER_CANCEL_DELAY_MS = 2 * 60 * 1000;
+
 interface CancelAndRefundOptions {
     userId?: string;
     cancelProvider: boolean;
@@ -140,16 +142,39 @@ export const orderService = {
 
     /** Cancel an ACTIVE order and refund user */
     async cancelOrder(orderId: string, userId: string) {
+        const order = await prisma.order.findUnique({
+            where: { id: orderId },
+            select: {
+                id: true,
+                userId: true,
+                status: true,
+                otpCode: true,
+                createdAt: true,
+            },
+        });
+
+        if (!order) throw new Error('Order not found');
+        if (order.userId !== userId) throw new Error('Unauthorized');
+        if (order.status !== 'ACTIVE') {
+            throw new Error(`Only ACTIVE orders can be cancelled. Current status: ${order.status}`);
+        }
+        if (order.otpCode) {
+            throw new Error('Order tidak bisa dibatalkan karena OTP sudah diterima');
+        }
+
+        const now = Date.now();
+        const cancelAllowedAt = order.createdAt.getTime() + ORDER_CANCEL_DELAY_MS;
+        if (now < cancelAllowedAt) {
+            const remainingSeconds = Math.ceil((cancelAllowedAt - now) / 1000);
+            throw new Error(`Order baru bisa dibatalkan setelah 2 menit. Tunggu ${remainingSeconds} detik lagi.`);
+        }
+
         const result = await orderService.cancelAndRefundActiveOrder(orderId, {
             userId,
             cancelProvider: true,
             failReason: 'Cancelled by user',
             refundDescription: 'Refund order cancelled',
         });
-
-        if (!result.cancelled) {
-            throw new Error(`Only ACTIVE orders can be cancelled. Current status: ${result.status}`);
-        }
 
         return result;
     },

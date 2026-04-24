@@ -21,7 +21,7 @@ const worker = new Worker<OtpJobData>(
     async (job: Job<OtpJobData>) => {
         const { orderId, providerOrderId, telegramId } = job.data;
         const startTime = Date.now();
-        const maxDuration = config.OTP_POLL_MAX_MS; // 120s
+        const maxDuration = config.OTP_POLL_MAX_MS; // 20 minutes by default
         const interval = config.OTP_POLL_INTERVAL_MS; // 5s
 
         logger.info({ orderId, providerOrderId }, 'OTP polling started');
@@ -79,7 +79,7 @@ const worker = new Worker<OtpJobData>(
 
         const result = await orderService.cancelAndRefundActiveOrder(orderId, {
             cancelProvider: true,
-            failReason: 'OTP not received within 120 seconds',
+            failReason: 'OTP not received within 20 minutes',
             refundDescription: 'Refund OTP timeout',
         });
 

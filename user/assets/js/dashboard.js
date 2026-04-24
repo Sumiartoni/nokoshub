@@ -9,7 +9,8 @@ const STORE_KEYS = {
 };
 
 const API_BASE = detectApiBase();
-const OTP_WAIT_SECONDS = 120;
+const OTP_WAIT_SECONDS = 1200;
+const ORDER_CANCEL_DELAY_MS = 2 * 60 * 1000;
 const POLL_MS = 5000;
 
 const S = {
@@ -603,7 +604,7 @@ function resetBuySteps() {
   if (waiting) waiting.style.display = '';
   if (received) received.style.display = 'none';
   if (expired) expired.style.display = 'none';
-  set('timerCount', '2:00');
+  set('timerCount', '20:00');
 }
 
 function goStep(n) {
@@ -779,7 +780,7 @@ function startOtpWatch(orderId) {
     ring.style.strokeDasharray = circumference;
     ring.style.strokeDashoffset = 0;
   }
-  set('timerCount', '2:00');
+  set('timerCount', '20:00');
 
   S.timer = setInterval(() => {
     remaining = Math.max(0, remaining - 1);
@@ -850,6 +851,11 @@ async function cancelOrder() {
 }
 
 async function cancelExistingOrder(orderId) {
+  const order = (Array.isArray(S.orders) ? S.orders.find(item => item.id === orderId) : null) || S.buy.order;
+  if (order && !canUserCancelOrder(order)) {
+    showToast(getOrderCancelHint(order) || 'Order belum bisa dibatalkan.', 'warning');
+    return;
+  }
   if (!confirm('Yakin batalkan pesanan? Saldo akan direfund jika order masih aktif.')) return;
   try {
     await apiFetch('/order/cancel', { body: { orderId } });
@@ -1217,7 +1223,7 @@ function renderOrders() {
 
   list.innerHTML = S.orders.map(order => {
     const meta = orderMeta(order);
-    const canCancel = ['ACTIVE', 'PENDING'].includes(order.status);
+    const canCancel = canUserCancelOrder(order);
     return `
       <div class="order-card-big" ${order.otpCode ? `onclick="openOtpModal(${jsArg(order.otpCode)}, ${jsArg(meta.service)})"` : ''}>
         <div class="oc-top">
@@ -1228,7 +1234,7 @@ function renderOrders() {
         <div class="oc-mid">
           ${order.otpCode
             ? `<div class="oc-otp">${esc(order.otpCode)}</div><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();copyText(${jsArg(order.otpCode)})">📋 Salin</button>`
-            : `<div style="color:var(--muted);font-size:0.84rem;font-weight:700;">${esc(order.failReason || 'Menunggu SMS masuk...')}</div>${canCancel ? `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})">❌ Batalkan</button>` : ''}`}
+            : `<div style="color:var(--muted);font-size:0.84rem;font-weight:700;">${esc(order.failReason || getOrderCancelHint(order) || 'Menunggu SMS masuk...')}</div>${canCancel ? `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})">❌ Batalkan</button>` : ''}`}
         </div>
         <div class="oc-foot">
           <div class="oc-time">📅 ${esc(formatDate(order.createdAt))}</div>
@@ -1395,6 +1401,36 @@ function normalizeInvoiceRecord(invoice) {
     id,
     invoiceId: invoice.invoiceId || id,
   };
+}
+
+function canUserCancelOrder(order) {
+  const status = String(order?.status || '').toUpperCase();
+  if (!['ACTIVE', 'PENDING'].includes(status)) return false;
+  if (order?.otpCode) return false;
+  const createdAt = new Date(order?.createdAt || 0).getTime();
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
+  return Date.now() - createdAt >= ORDER_CANCEL_DELAY_MS;
+}
+
+function getOrderCancelHint(order) {
+  const status = String(order?.status || '').toUpperCase();
+  if (!['ACTIVE', 'PENDING'].includes(status)) return '';
+  if (order?.otpCode) return 'OTP sudah diterima dan order tidak bisa dibatalkan.';
+
+  const createdAt = new Date(order?.createdAt || 0).getTime();
+  if (!Number.isFinite(createdAt) || createdAt <= 0) {
+    return 'Pembatalan manual tersedia setelah 2 menit jika OTP belum masuk.';
+  }
+
+  const cancelAllowedAt = createdAt + ORDER_CANCEL_DELAY_MS;
+  const remainingMs = cancelAllowedAt - Date.now();
+  if (remainingMs <= 0) {
+    return 'OTP belum masuk. Anda bisa membatalkan order ini sendiri.';
+  }
+
+  const minutes = Math.floor(remainingMs / 60000);
+  const seconds = Math.ceil((remainingMs % 60000) / 1000);
+  return `Pembatalan manual tersedia dalam ${minutes}:${String(Math.max(0, seconds)).padStart(2, '0')} jika OTP belum masuk.`;
 }
 
 function schedulePendingInvoiceRefresh() {
