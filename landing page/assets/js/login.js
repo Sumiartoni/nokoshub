@@ -369,7 +369,21 @@ async function apiGet(path) {
 
 async function unwrapApiResponse(response) {
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : {};
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    const compact = String(text || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+    payload = {
+      success: false,
+      error: compact
+        ? `Invalid response (${response.status}): ${compact}`
+        : `Invalid response (${response.status})`,
+    };
+  }
   if (!response.ok || payload.success === false) {
     const err = payload.error || payload.message || `HTTP ${response.status}`;
     throw new Error(typeof err === 'string' ? err : JSON.stringify(err));

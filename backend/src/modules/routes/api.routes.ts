@@ -195,6 +195,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await authService.loginWithGoogle(parsed.data.credential);
             return { success: true, data: result };
         } catch (err) {
+            logger.warn({ err, route: '/api/auth/google' }, 'Google login failed');
             return reply.status(401).send({ success: false, error: (err as Error).message });
         }
     });
@@ -212,6 +213,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await authService.startGoogleRegistration(parsed.data);
             return { success: true, data: result };
         } catch (err) {
+            logger.warn({ err, route: '/api/auth/google/register' }, 'Google register failed');
             return reply.status(400).send({ success: false, error: (err as Error).message });
         }
     });
