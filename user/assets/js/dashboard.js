@@ -1368,11 +1368,7 @@ async function reopenInvoicePayment(invoiceId) {
 }
 
 function updateInvoiceHistoryPolling() {
-  const hasPendingInvoices = Array.isArray(S.invoices)
-    && S.invoices.some(invoice => {
-      const status = String(invoice?.status || '').toUpperCase();
-      return status === 'PENDING' && !shouldHidePendingInvoice(invoice);
-    });
+  const hasPendingInvoices = hasSyncablePendingInvoices();
 
   if (!hasPendingInvoices) {
     stopInvoiceHistoryPolling();
@@ -1434,11 +1430,7 @@ function getOrderCancelHint(order) {
 }
 
 function schedulePendingInvoiceRefresh() {
-  const hasPendingInvoices = Array.isArray(S.invoices)
-    && S.invoices.some(invoice => {
-      const status = String(invoice?.status || '').toUpperCase();
-      return status === 'PENDING' && !shouldHidePendingInvoice(invoice);
-    });
+  const hasPendingInvoices = hasSyncablePendingInvoices();
   if (!hasPendingInvoices) return;
   setTimeout(() => {
     refreshVisiblePendingInvoices({ silent: true });
@@ -1450,7 +1442,7 @@ async function refreshVisiblePendingInvoices({ silent = false } = {}) {
     ? S.invoices
         .filter(invoice => {
           const status = String(invoice?.status || '').toUpperCase();
-          return status === 'PENDING' && !shouldHidePendingInvoice(invoice);
+          return status === 'PENDING' && isPendingInvoiceStillSyncable(invoice);
         })
         .slice(0, 2)
     : [];
@@ -1493,6 +1485,28 @@ async function refreshVisiblePendingInvoices({ silent = false } = {}) {
   renderInvoiceHistory();
   updateInvoiceHistoryPolling();
   return false;
+}
+
+function hasSyncablePendingInvoices() {
+  return Array.isArray(S.invoices)
+    && S.invoices.some(invoice => {
+      const status = String(invoice?.status || '').toUpperCase();
+      return status === 'PENDING' && isPendingInvoiceStillSyncable(invoice);
+    });
+}
+
+function isPendingInvoiceStillSyncable(invoice) {
+  const status = String(invoice?.status || '').toUpperCase();
+  if (status !== 'PENDING') return false;
+
+  const expiredAt = new Date(invoice?.expiredAt || 0).getTime();
+  if (Number.isFinite(expiredAt) && expiredAt > 0) {
+    return expiredAt > Date.now();
+  }
+
+  const createdAt = new Date(invoice?.createdAt || invoice?.updatedAt || 0).getTime();
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return true;
+  return Date.now() - createdAt <= 30 * 60 * 1000;
 }
 
 function openOtpModal(code, svc) {
