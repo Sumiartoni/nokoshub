@@ -125,6 +125,22 @@ function textFromResponse(data: unknown): string {
 
 function smsActivateMessage(data: unknown, fallback: string): string {
     const text = textFromResponse(data);
+    try {
+        const parsed = JSON.parse(text);
+        if (isRecord(parsed)) {
+            const title = toStringValue(parsed.title);
+            const details = toStringValue(parsed.details ?? parsed.message);
+            const min = toStringValue(isRecord(parsed.info) ? parsed.info.min : null);
+            if (title === 'WRONG_MAX_PRICE') {
+                return min
+                    ? `Harga provider sudah berubah. Minimum provider saat ini ${min} USD. Jalankan sync provider lalu coba lagi.`
+                    : 'Harga provider sudah berubah. Jalankan sync provider lalu coba lagi.';
+            }
+            return details ?? title ?? fallback;
+        }
+    } catch {
+        // ignore JSON parse failure and fall back to raw text
+    }
     return text && text !== '{}' ? text : fallback;
 }
 
@@ -254,6 +270,10 @@ class HeroSMSProvider {
                 service: params.serviceCode,
                 country: params.countryCode,
             };
+            if (params.providerId && params.providerId !== 'default') {
+                requestParams.provider = params.providerId;
+                requestParams.provider_id = params.providerId;
+            }
 
             const rateInfo = await pricingService.getUsdIdrRate();
             const maxPrice = this.toProviderPrice(params.maxPrice, rateInfo.effectiveRate);

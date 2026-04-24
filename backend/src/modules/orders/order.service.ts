@@ -57,7 +57,7 @@ export const orderService = {
             maxPrice: price.providerPrice,
         });
         if (!result.success || !result.phone_number || !result.order_id) {
-            throw new Error(result.message || 'Failed to get number from provider');
+            throw new Error(result.message || 'Harga/provider HeroSMS berubah. Sync provider lalu coba lagi.');
         }
 
         // Deduct user balance
