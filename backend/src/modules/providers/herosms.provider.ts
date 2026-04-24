@@ -144,6 +144,36 @@ function smsActivateMessage(data: unknown, fallback: string): string {
     return text && text !== '{}' ? text : fallback;
 }
 
+function humanizeProviderRequestError(err: any): string {
+    const status = Number(err?.response?.status || 0);
+    const rawMessage = err?.response?.data
+        ? smsActivateMessage(err.response.data, err.message)
+        : String(err?.message || 'Provider request failed');
+    const normalized = rawMessage.toLowerCase();
+
+    if (
+        status === 402
+        || normalized.includes('payment required')
+        || normalized.includes('insufficient balance')
+        || normalized.includes('low balance')
+        || normalized.includes('not enough balance')
+    ) {
+        return 'Saldo akun HeroSMS tidak mencukupi. Isi saldo provider HeroSMS lalu coba lagi.';
+    }
+
+    if (
+        status === 401
+        || status === 403
+        || normalized.includes('unauthorized')
+        || normalized.includes('forbidden')
+        || normalized.includes('invalid api key')
+    ) {
+        return 'API key HeroSMS tidak valid atau akses ditolak. Periksa konfigurasi provider di VPS.';
+    }
+
+    return rawMessage;
+}
+
 function normalizeStatus(data: unknown): ProviderStatusResult {
     const text = textFromResponse(data);
 
@@ -316,7 +346,7 @@ class HeroSMSProvider {
                 success: false,
                 order_id: null,
                 phone_number: null,
-                message: err.response?.data ? smsActivateMessage(err.response.data, err.message) : err.message,
+                message: humanizeProviderRequestError(err),
             };
         }
     }
