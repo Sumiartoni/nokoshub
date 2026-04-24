@@ -336,10 +336,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const user = telegramId
             ? await userService.findOrCreate(telegramId)
             : webUser?.id
-                ? await userService.findOrCreateWebWallet(webUser.id, {
-                    firstName: webUser.firstName,
-                    lastName: webUser.lastName,
-                })
+                ? await resolveUserForWebSession(webUser, true)
                 : null;
 
         if (!user) {
@@ -821,18 +818,39 @@ async function resolveOwnedUserFromRequest(
     }
 
     const webUser = await authService.requireUser(req.headers.authorization);
-    const user = webUser.telegramId
-        ? input.createIfMissing
-            ? await userService.findOrCreate(webUser.telegramId)
-            : await userService.getByTelegramId(webUser.telegramId)
-        : input.createIfMissing
-            ? await userService.findOrCreateWebWallet(webUser.id, {
-                firstName: webUser.firstName,
-                lastName: webUser.lastName,
-            })
-            : await userService.getWebWalletByWebUserId(webUser.id);
+    const user = await resolveUserForWebSession(webUser, input.createIfMissing);
 
     return { user, webUser };
+}
+
+async function resolveUserForWebSession(
+    webUser: {
+        id: string;
+        telegramId: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+    },
+    createIfMissing: boolean
+) {
+    if (webUser.telegramId) {
+        const targetUser = createIfMissing
+            ? await userService.findOrCreate(webUser.telegramId)
+            : await userService.getByTelegramId(webUser.telegramId);
+
+        if (targetUser) {
+            await userService.mergeWebWalletIntoUser(webUser.id, targetUser.id);
+            return userService.getById(targetUser.id);
+        }
+
+        return null;
+    }
+
+    return createIfMissing
+        ? userService.findOrCreateWebWallet(webUser.id, {
+            firstName: webUser.firstName,
+            lastName: webUser.lastName,
+        })
+        : userService.getWebWalletByWebUserId(webUser.id);
 }
 
 async function buildQrisImageDataUrl(payload: string) {
