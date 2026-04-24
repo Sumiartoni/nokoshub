@@ -1430,6 +1430,247 @@ input, textarea, select { user-select: text; }
   .referral-stats-grid { grid-template-columns:1fr 1fr; }
 }
 
+@media (max-width: 768px) {
+  .page-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .hero-banner,
+  .table-card,
+  .sum-card,
+  .profile-card,
+  .order-card-big,
+  .otp-waiting-card,
+  .otp-received-card,
+  .otp-expired-card,
+  .modal-box {
+    padding: 16px;
+  }
+
+  .stats-grid,
+  .quick-grid,
+  .referral-stats-grid,
+  .profile-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .buy-steps {
+    align-items: stretch;
+  }
+
+  .buy-step {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .buy-controls > *,
+  .country-search,
+  .svc-search {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .country-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .country-card {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .country-flag {
+    font-size: 1.25rem;
+  }
+
+  .svc-row,
+  .oc-top,
+  .oc-mid,
+  .oc-foot,
+  .sum-row,
+  .referral-banner,
+  .referral-invite-row,
+  .login-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .oc-mid,
+  .oc-foot {
+    gap: 10px;
+  }
+
+  .svc-row-right,
+  .pay-fee {
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .otp-svc-badge,
+  .wait-phone,
+  .number-display {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .timer-ring-wrap {
+    margin-bottom: 16px;
+  }
+
+  .timer-svg {
+    width: 132px;
+    height: 132px;
+  }
+
+  .timer-count {
+    font-size: 1.75rem;
+  }
+
+  .otp-code-big,
+  .otp-res-code {
+    font-size: 2.2rem;
+    letter-spacing: 6px;
+  }
+
+  .invoice-qris-scan {
+    padding: 10px;
+  }
+
+  .invoice-qris-scan img {
+    width: min(240px, 100%);
+  }
+
+  .modal-ov {
+    padding: 12px;
+  }
+
+  .modal-box {
+    border-radius: var(--r-lg);
+    max-height: 85vh;
+  }
+
+  .tbl-wrap {
+    margin: 0 -4px;
+    padding-bottom: 2px;
+  }
+
+  .tbl-wrap table {
+    min-width: 640px;
+  }
+
+  .api-key-box,
+  .proof-upload-box {
+    padding: 12px;
+  }
+
+  .link-code-box span {
+    font-size: 1.4rem;
+    letter-spacing: 3px;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    padding: 0 8px;
+  }
+
+  .topbar-title {
+    max-width: 92px;
+    font-size: 0.84rem;
+  }
+
+  .topbar-balance {
+    padding: 4px 7px;
+  }
+
+  .topbar-balance .ta {
+    font-size: 0.72rem;
+  }
+
+  .page-wrap {
+    padding: 12px 12px 18px;
+  }
+
+  .buy-steps {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .step-line {
+    width: 2px;
+    height: 16px;
+    margin: 0 0 0 15px;
+    min-width: 0;
+  }
+
+  .step-info .step-sub {
+    display: block;
+    font-size: 0.7rem;
+  }
+
+  .stats-grid,
+  .quick-grid,
+  .country-grid,
+  .amount-presets,
+  .referral-stats-grid,
+  .profile-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-card {
+    min-height: 92px;
+  }
+
+  .hero-actions,
+  .login-otp-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-actions .btn,
+  .login-otp-actions .btn {
+    width: 100%;
+  }
+
+  .toast {
+    font-size: 0.76rem;
+    padding: 11px 12px;
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar-user {
+    padding: 2px;
+  }
+
+  .topbar-user-av,
+  .topbar-notif {
+    width: 30px;
+    height: 30px;
+  }
+
+  .ph h1 {
+    font-size: 1.25rem;
+  }
+
+  .ph p,
+  .wait-desc,
+  .topup-notice,
+  .oc-id {
+    font-size: 0.72rem;
+  }
+
+  .otp-code-big,
+  .otp-res-code {
+    font-size: 1.8rem;
+    letter-spacing: 4px;
+  }
+}
+
 /* ─── Misc animations ─── */
 @keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
 @keyframes mascotFloat { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
