@@ -84,6 +84,10 @@ export const orderService = {
             },
         });
 
+        // SMS-Activate style providers may require an explicit "ready" signal
+        // after the number is obtained so the activation stays open for incoming OTP.
+        await heroSMSProvider.markActivationReady(result.order_id);
+
         // Update transaction reference
         await prisma.transaction.updateMany({
             where: { userId, type: 'DEDUCT', reference: null },

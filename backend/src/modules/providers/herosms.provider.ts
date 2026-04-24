@@ -326,6 +326,14 @@ class HeroSMSProvider {
         }
     }
 
+    async markActivationReady(orderId: string): Promise<void> {
+        try {
+            await this.request('setStatus', { id: orderId, status: 1 });
+        } catch (err: any) {
+            logger.warn({ err: this.errorSummary(err), orderId }, 'HeroSMS setStatus=1 failed');
+        }
+    }
+
     async cancelActivation(orderId: string): Promise<void> {
         try {
             await this.request('cancelActivation', { id: orderId });

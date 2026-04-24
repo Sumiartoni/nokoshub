@@ -58,8 +58,9 @@ const worker = new Worker<OtpJobData>(
                 return;
             }
 
-            // If status is cancelled/expired by provider
-            if (statusResult.status === 'cancelled' || statusResult.status === 'expiring') {
+            // Only treat explicit provider cancellation as terminal here.
+            // Some providers report "expiring" before the OTP window is actually over.
+            if (statusResult.status === 'cancelled' || statusResult.status === 'expired') {
                 const result = await orderService.cancelAndRefundActiveOrder(orderId, {
                     cancelProvider: statusResult.status !== 'cancelled',
                     failReason: `Provider status: ${statusResult.status}`,
@@ -72,6 +73,10 @@ const worker = new Worker<OtpJobData>(
                 );
                 await notifyOtpTimeout(telegramId, orderId);
                 return;
+            }
+
+            if (statusResult.status === 'expiring') {
+                logger.info({ orderId, providerOrderId, status: statusResult.status }, 'Provider reported expiring; continue polling');
             }
 
             await sleep(interval);
