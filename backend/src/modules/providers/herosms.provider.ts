@@ -152,13 +152,17 @@ function humanizeProviderRequestError(err: any): string {
     const normalized = rawMessage.toLowerCase();
 
     if (
-        status === 402
-        || normalized.includes('payment required')
-        || normalized.includes('insufficient balance')
+        normalized.includes('insufficient balance')
         || normalized.includes('low balance')
         || normalized.includes('not enough balance')
     ) {
         return 'Saldo akun HeroSMS tidak mencukupi. Isi saldo provider HeroSMS lalu coba lagi.';
+    }
+
+    if (status === 402 || normalized.includes('payment required')) {
+        return rawMessage && rawMessage !== 'Payment Required'
+            ? `Provider HeroSMS menolak request (402): ${rawMessage}`
+            : 'Provider HeroSMS menolak request (402). Ini tidak selalu berarti saldo habis; bisa karena limit akun, provider/country sedang tidak tersedia, atau pembatasan dari HeroSMS.';
     }
 
     if (
