@@ -687,6 +687,116 @@ input, textarea, select { user-select: text; }
   min-width: 0;
 }
 
+.buy-selection-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.buy-selected-service {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+  background: #fff;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-full);
+  padding: 6px 16px;
+  box-shadow: var(--shadow-xs);
+}
+
+.wait-actions,
+.otp-result-actions,
+.otp-expired-actions,
+.profile-form-actions,
+.profile-inline-actions,
+.topup-availability-badges,
+.modal-actions-row,
+.orders-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wait-actions {
+  justify-content: center;
+}
+
+.wait-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wait-info-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.otp-result-note {
+  padding: 14px;
+  background: #D4FFF0;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.otp-expired-refund-box {
+  background: rgba(255,255,255,0.1);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  border-radius: var(--r-md);
+  padding: 14px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.topup-availability {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.orders-search {
+  min-width: 160px;
+}
+
+.orders-filter-select,
+.tx-filter-select {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+}
+
+.tx-filter-select {
+  font-size: 0.8rem;
+  padding: 7px 12px;
+}
+
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.api-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-actions-wrap {
+  flex-wrap: wrap;
+}
+
 /* OTP Waiting */
 .otp-waiting-card {
   background: linear-gradient(135deg, #1A1A2E, #2a2a60);
@@ -1467,7 +1577,11 @@ input, textarea, select { user-select: text; }
 
   .buy-controls > *,
   .country-search,
-  .svc-search {
+  .svc-search,
+  .buy-selected-service,
+  .orders-search,
+  .orders-filter-select,
+  .tx-filter-select {
     width: 100%;
     max-width: none;
     min-width: 0;
@@ -1493,7 +1607,14 @@ input, textarea, select { user-select: text; }
   .sum-row,
   .referral-banner,
   .referral-invite-row,
-  .login-row {
+  .login-row,
+  .buy-selection-head,
+  .orders-toolbar,
+  .profile-form-actions,
+  .profile-inline-actions,
+  .otp-result-actions,
+  .otp-expired-actions,
+  .modal-actions-row {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1567,6 +1688,11 @@ input, textarea, select { user-select: text; }
     padding: 12px;
   }
 
+  .api-stats-grid,
+  .profile-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .link-code-box span {
     font-size: 1.4rem;
     letter-spacing: 3px;
@@ -1617,12 +1743,18 @@ input, textarea, select { user-select: text; }
   .country-grid,
   .amount-presets,
   .referral-stats-grid,
-  .profile-stats {
+  .profile-stats,
+  .api-stats-grid {
     grid-template-columns: 1fr;
   }
 
   .quick-card {
     min-height: 92px;
+  }
+
+  .wait-info-list li {
+    align-items: flex-start;
+    font-size: 0.78rem;
   }
 
   .hero-actions,
@@ -1668,6 +1800,11 @@ input, textarea, select { user-select: text; }
   .otp-res-code {
     font-size: 1.8rem;
     letter-spacing: 4px;
+  }
+
+  .buy-selected-service {
+    padding: 10px 12px;
+    border-radius: var(--r-md);
   }
 }
 

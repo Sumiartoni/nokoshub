@@ -1999,6 +1999,18 @@ img { max-width: 100%; display: block; }
   color: #C2410C;
 }
 
+.landing-payment-section {
+  margin-top: 40px;
+  text-align: center;
+}
+
+.landing-payment-grid {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .login-turnstile-box {
   display: grid;
   gap: 8px;
@@ -2581,6 +2593,11 @@ img { max-width: 100%; display: block; }
   .steps-container,
   .login-gate-grid,
   .footer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-payment-grid {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
