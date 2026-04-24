@@ -105,7 +105,6 @@ export const paymentService = {
 
     async getInvoices(userId: string, limit = 10) {
         await paymentService.expireOverdueInvoices();
-        await paymentService.syncPendingInvoicesForUser(userId, Math.min(limit, 10));
 
         return prisma.invoice.findMany({
             where: { userId },

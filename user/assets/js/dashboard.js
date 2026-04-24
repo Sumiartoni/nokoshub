@@ -419,6 +419,7 @@ function renderDashboardData() {
   renderTransactions();
   renderInvoiceHistory();
   updateInvoiceHistoryPolling();
+  schedulePendingInvoiceRefresh();
   renderReferralPage();
   updateDashboardStats();
   updateProfileFields();
@@ -1376,7 +1377,7 @@ function updateInvoiceHistoryPolling() {
   invoiceHistoryPoller = setInterval(async () => {
     const route = getHashRoute();
     if (!['transactions', 'topup'].includes(route)) return;
-    await loadDashboardData({ silent: true });
+    await refreshVisiblePendingInvoices({ silent: true });
   }, 5000);
 }
 
@@ -1394,6 +1395,68 @@ function normalizeInvoiceRecord(invoice) {
     id,
     invoiceId: invoice.invoiceId || id,
   };
+}
+
+function schedulePendingInvoiceRefresh() {
+  const hasPendingInvoices = Array.isArray(S.invoices)
+    && S.invoices.some(invoice => {
+      const status = String(invoice?.status || '').toUpperCase();
+      return status === 'PENDING' && !shouldHidePendingInvoice(invoice);
+    });
+  if (!hasPendingInvoices) return;
+  setTimeout(() => {
+    refreshVisiblePendingInvoices({ silent: true });
+  }, 250);
+}
+
+async function refreshVisiblePendingInvoices({ silent = false } = {}) {
+  const pendingInvoices = Array.isArray(S.invoices)
+    ? S.invoices
+        .filter(invoice => {
+          const status = String(invoice?.status || '').toUpperCase();
+          return status === 'PENDING' && !shouldHidePendingInvoice(invoice);
+        })
+        .slice(0, 2)
+    : [];
+
+  if (!pendingInvoices.length) return false;
+
+  let changed = false;
+
+  for (const invoice of pendingInvoices) {
+    try {
+      const latest = normalizeInvoiceRecord(await apiFetch(`/deposit/${invoice.id || invoice.invoiceId}/status`));
+      const currentStatus = String(invoice.status || '').toUpperCase();
+      const nextStatus = String(latest.status || '').toUpperCase();
+
+      S.invoices = S.invoices.map(item => {
+        const itemId = item.id || item.invoiceId;
+        if (itemId !== (latest.id || latest.invoiceId)) return item;
+        return { ...item, ...latest };
+      });
+
+      if (S.topup.invoice && (S.topup.invoice.id || S.topup.invoice.invoiceId) === (latest.id || latest.invoiceId)) {
+        S.topup.invoice = { ...S.topup.invoice, ...latest };
+      }
+
+      if (currentStatus !== nextStatus) {
+        changed = true;
+      }
+    } catch (err) {
+      if (!silent) {
+        showToast(`Gagal sinkron status top up: ${err.message}`, 'error');
+      }
+    }
+  }
+
+  if (changed) {
+    await loadDashboardData({ silent: true });
+    return true;
+  }
+
+  renderInvoiceHistory();
+  updateInvoiceHistoryPolling();
+  return false;
 }
 
 function openOtpModal(code, svc) {

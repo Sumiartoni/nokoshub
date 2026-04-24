@@ -364,16 +364,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             };
         }
 
-        await paymentService.syncPendingInvoicesForUser(user.id, 10);
-        const freshUser = await prisma.user.findUnique({
-            where: { id: user.id },
-        });
-        const profileUser = freshUser || user;
-
         const [orders, transactions, invoices] = await Promise.all([
-            orderService.getOrders(profileUser.id, 100),
-            userService.getTransactions(profileUser.id, 100),
-            paymentService.getInvoices(profileUser.id, 50),
+            orderService.getOrders(user.id, 100),
+            userService.getTransactions(user.id, 100),
+            paymentService.getInvoices(user.id, 50),
         ]);
 
         const successOrders = orders.filter((order) => order.status === 'SUCCESS').length;
@@ -391,14 +385,14 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             success: true,
             data: {
                 user: {
-                    id: profileUser.id,
+                    id: user.id,
                     telegramId: telegramId || null,
-                    username: profileUser.username,
-                    firstName: profileUser.firstName,
-                    lastName: profileUser.lastName,
-                    balance: profileUser.balance,
-                    isActive: profileUser.isActive,
-                    createdAt: profileUser.createdAt,
+                    username: user.username,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    balance: user.balance,
+                    isActive: user.isActive,
+                    createdAt: user.createdAt,
                 },
                 webUser,
                 referral,
