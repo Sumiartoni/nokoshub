@@ -43,6 +43,8 @@ async function apiPost<T = any>(path: string, data?: object): Promise<T> {
 
 interface Session {
     step?: string;
+    panelMessageId?: number;
+    replyPromptMessageId?: number;
     selectedServiceId?: string;
     selectedServiceName?: string;
     selectedCountryId?: string;
@@ -88,9 +90,135 @@ function clearSession(chatId: number) {
     sessions.set(chatId, {});
 }
 
+function buildReplyOptions(messageId?: number) {
+    if (!messageId) return {};
+    return {
+        reply_to_message_id: messageId,
+        allow_sending_without_reply: true,
+    };
+}
+
+function isMessageNotModifiedError(err: any): boolean {
+    const message = String(err?.response?.body?.description ?? err?.message ?? '').toLowerCase();
+    return message.includes('message is not modified');
+}
+
+async function deleteMessageSafe(bot: TelegramBot, chatId: number, messageId?: number) {
+    if (!messageId) return;
+    try {
+        await bot.deleteMessage(chatId, messageId);
+    } catch {
+        // Ignore cleanup errors; message may already be gone or not deletable anymore.
+    }
+}
+
+async function clearReplyPrompt(bot: TelegramBot, chatId: number) {
+    const session = getSession(chatId);
+    const promptId = session.replyPromptMessageId;
+    session.replyPromptMessageId = undefined;
+    await deleteMessageSafe(bot, chatId, promptId);
+}
+
+async function upsertTextPanel(
+    bot: TelegramBot,
+    chatId: number,
+    text: string,
+    options: TelegramBot.SendMessageOptions = {},
+    panelOptions: {
+        sourceMessageId?: number;
+        targetMessageId?: number;
+        forceNew?: boolean;
+    } = {}
+) {
+    const session = getSession(chatId);
+    const panelMessageId = panelOptions.forceNew
+        ? undefined
+        : (panelOptions.targetMessageId ?? session.panelMessageId);
+
+    if (panelMessageId) {
+        try {
+            const editOptions: TelegramBot.EditMessageTextOptions = {
+                chat_id: chatId,
+                message_id: panelMessageId,
+                parse_mode: options.parse_mode,
+                disable_web_page_preview: options.disable_web_page_preview,
+                reply_markup: options.reply_markup && 'inline_keyboard' in options.reply_markup
+                    ? options.reply_markup
+                    : undefined,
+            };
+            await bot.editMessageText(text, {
+                ...editOptions,
+            });
+            session.panelMessageId = panelMessageId;
+            return panelMessageId;
+        } catch (err) {
+            if (isMessageNotModifiedError(err)) {
+                session.panelMessageId = panelMessageId;
+                return panelMessageId;
+            }
+            await deleteMessageSafe(bot, chatId, panelMessageId);
+            if (session.panelMessageId === panelMessageId) {
+                session.panelMessageId = undefined;
+            }
+        }
+    }
+
+    const sent = await bot.sendMessage(chatId, text, {
+        ...options,
+        ...buildReplyOptions(panelOptions.sourceMessageId),
+    });
+    session.panelMessageId = sent.message_id;
+    return sent.message_id;
+}
+
+async function upsertPhotoPanel(
+    bot: TelegramBot,
+    chatId: number,
+    photo: any,
+    options: TelegramBot.SendPhotoOptions = {},
+    panelOptions: {
+        sourceMessageId?: number;
+    } = {}
+) {
+    const session = getSession(chatId);
+    await deleteMessageSafe(bot, chatId, session.panelMessageId);
+
+    const sent = await bot.sendPhoto(chatId, photo as any, {
+        ...options,
+        ...buildReplyOptions(panelOptions.sourceMessageId),
+    });
+    session.panelMessageId = sent.message_id;
+    return sent.message_id;
+}
+
+async function sendReplyPrompt(
+    bot: TelegramBot,
+    chatId: number,
+    text: string,
+    inputPlaceholder: string,
+    sourceMessageId?: number
+) {
+    const session = getSession(chatId);
+    await clearReplyPrompt(bot, chatId);
+
+    const prompt = await bot.sendMessage(chatId, text, {
+        parse_mode: 'Markdown',
+        ...buildReplyOptions(sourceMessageId),
+        reply_markup: {
+            force_reply: true,
+            selective: true,
+            input_field_placeholder: inputPlaceholder,
+        },
+    });
+
+    session.replyPromptMessageId = prompt.message_id;
+    return prompt.message_id;
+}
+
 async function handleWebLinkCode(bot: TelegramBot, msg: TelegramBot.Message, code: string) {
     const chatId = msg.chat.id;
     const telegramId = String(msg.from?.id ?? msg.chat.id);
+    const currentPanelMessageId = getSession(chatId).panelMessageId;
 
     try {
         const res = await apiPost('/api/auth/telegram-link/confirm', {
@@ -104,20 +232,25 @@ async function handleWebLinkCode(bot: TelegramBot, msg: TelegramBot.Message, cod
         clearSession(chatId);
 
         const email = res.data?.user?.email ?? 'akun web';
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `✅ *Akun Telegram berhasil ditautkan!*\n\n` +
             `Telegram ID: \`${telegramId}\`\n` +
             `Akun web: *${email}*\n\n` +
             `Sekarang saldo dan riwayat bot bisa dipakai juga di dashboard web.`,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'Markdown' },
+            { sourceMessageId: msg.message_id, targetMessageId: currentPanelMessageId }
         );
     } catch (err: any) {
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Kode tidak valid';
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `❌ Gagal menautkan akun.\n\n${errMsg}\n\n` +
-            `Buat kode baru dari dashboard web jika kode sudah kadaluarsa.`
+            `Buat kode baru dari dashboard web jika kode sudah kadaluarsa.`,
+            undefined,
+            { sourceMessageId: msg.message_id, targetMessageId: currentPanelMessageId }
         );
     }
 }
@@ -199,8 +332,10 @@ export function createBot(): TelegramBot {
         const chatId = msg.chat.id;
         const firstName = msg.from?.first_name ?? 'Pengguna';
         clearSession(chatId);
+        await deleteMessageSafe(bot, chatId, msg.message_id);
 
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `🎉 *Selamat datang di NokosHUB!*\n\n` +
             `Halo, *${firstName}*! 👋\n\n` +
@@ -211,24 +346,29 @@ export function createBot(): TelegramBot {
             {
                 parse_mode: 'Markdown',
                 reply_markup: mainMenuKeyboard(),
-            }
+            },
+            { sourceMessageId: msg.message_id }
         );
     });
 
     // ─── /menu ────────────────────────────────────────────────────────────────
     bot.onText(/\/menu/, async (msg) => {
+        const existingPanelId = getSession(msg.chat.id).panelMessageId;
         clearSession(msg.chat.id);
-        await sendMainMenu(bot, msg.chat.id);
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await sendMainMenu(bot, msg.chat.id, existingPanelId);
     });
 
     // ─── /balance ─────────────────────────────────────────────────────────────
     bot.onText(/\/balance/, async (msg) => {
-        await handleBalance(bot, msg.chat.id, String(msg.from?.id));
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await handleBalance(bot, msg.chat.id, String(msg.from?.id), msg.message_id);
     });
 
     // ─── /history ─────────────────────────────────────────────────────────────
     bot.onText(/\/history/, async (msg) => {
-        await handleHistory(bot, msg.chat.id, String(msg.from?.id));
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await handleHistory(bot, msg.chat.id, String(msg.from?.id), msg.message_id);
     });
 
     // ─── /linked ──────────────────────────────────────────────────────────────
@@ -242,39 +382,54 @@ export function createBot(): TelegramBot {
         const session = getSession(msg.chat.id);
         session.pendingWebLink = true;
         session.step = 'AWAIT_WEB_LINK_CODE';
-
-        await bot.sendMessage(
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await upsertTextPanel(
+            bot,
             msg.chat.id,
             `🔗 *Tautkan Akun Web NokosHUB*\n\n` +
-            `Buka dashboard web, masuk ke menu *Profil*, lalu tekan *Buat Kode Link Telegram*.\n\n` +
-            `Kirim kode 6 digit yang muncul di web ke chat ini.\n\n` +
-            `Contoh: \`123456\``,
-            { parse_mode: 'Markdown' }
+            `1. Buka dashboard web.\n` +
+            `2. Masuk ke menu *Profil / Setelan*.\n` +
+            `3. Tekan *Buat Kode Link Telegram*.\n` +
+            `4. Balas prompt di bawah dengan kode 6 digit dari web.`,
+            { parse_mode: 'Markdown' },
+            { sourceMessageId: msg.message_id }
+        );
+        await sendReplyPrompt(
+            bot,
+            msg.chat.id,
+            '🔢 Balas pesan ini dengan kode link 6 digit dari dashboard web.',
+            'Ketik kode 6 digit',
+            msg.message_id
         );
     });
 
     // ─── /myid ────────────────────────────────────────────────────────────────
     bot.onText(/\/myid/, async (msg) => {
         const telegramId = String(msg.from?.id ?? msg.chat.id);
-        await bot.sendMessage(
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await upsertTextPanel(
+            bot,
             msg.chat.id,
             `Telegram ID Anda:\n\`${telegramId}\``,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'Markdown' },
+            { sourceMessageId: msg.message_id }
         );
     });
 
     // ─── /buy ─────────────────────────────────────────────────────────────────
     bot.onText(/\/buy/, async (msg) => {
-        await handleBuyStart(bot, msg.chat.id);
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await handleBuyStart(bot, msg.chat.id, 0, undefined, msg.message_id);
     });
 
     // ─── /deposit ─────────────────────────────────────────────────────────────
     bot.onText(/\/deposit(?:\s+(\d+))?/, async (msg, match) => {
         const amountStr = match?.[1];
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         if (amountStr) {
-            await handleDepositWithAmount(bot, msg.chat.id, String(msg.from?.id), parseInt(amountStr));
+            await handleDepositWithAmount(bot, msg.chat.id, String(msg.from?.id), parseInt(amountStr), msg.message_id);
         } else {
-            await askDepositAmount(bot, msg.chat.id);
+            await askDepositAmount(bot, msg.chat.id, msg.message_id);
         }
     });
 
@@ -282,14 +437,23 @@ export function createBot(): TelegramBot {
     bot.onText(/\/status(?:\s+(.+))?/, async (msg, match) => {
         const orderId = match?.[1];
         if (!orderId) {
-            return bot.sendMessage(msg.chat.id, 'Gunakan: /status <orderId>');
+            return upsertTextPanel(
+                bot,
+                msg.chat.id,
+                'Gunakan: `/status <orderId>`',
+                { parse_mode: 'Markdown' },
+                { sourceMessageId: msg.message_id }
+            );
         }
-        await handleOrderStatus(bot, msg.chat.id, orderId);
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await handleOrderStatus(bot, msg.chat.id, orderId, msg.message_id);
     });
 
     // ─── /help ────────────────────────────────────────────────────────────────
     bot.onText(/\/help/, async (msg) => {
-        await bot.sendMessage(
+        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
+        await upsertTextPanel(
+            bot,
             msg.chat.id,
             `📖 *Panduan NokosHUB*\n\n` +
             `1️⃣ *Deposit Saldo*\n` +
@@ -313,7 +477,8 @@ export function createBot(): TelegramBot {
             `/status [orderId] - Status order\n\n` +
             `📞 *Butuh bantuan?*\n` +
             `Hubungi admin @nokosadmin`,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'Markdown' },
+            { sourceMessageId: msg.message_id }
         );
     });
 
@@ -326,18 +491,38 @@ export function createBot(): TelegramBot {
         if (session.step === 'AWAIT_WEB_LINK_CODE' && msg.text && !msg.text.startsWith('/')) {
             const code = msg.text.replace(/[^\d]/g, '');
             if (!/^\d{6}$/.test(code)) {
-                await bot.sendMessage(chatId, '❗ Kode harus 6 digit. Cek kode di dashboard web lalu kirim ulang.');
+                await upsertTextPanel(
+                    bot,
+                    chatId,
+                    `❗ *Kode belum valid*\n\nKodenya harus *6 digit angka*.\nSilakan balas prompt sekali lagi dengan kode dari dashboard web.`,
+                    { parse_mode: 'Markdown' },
+                    { sourceMessageId: msg.message_id }
+                );
+                await clearReplyPrompt(bot, chatId);
+                await sendReplyPrompt(
+                    bot,
+                    chatId,
+                    '🔢 Balas pesan ini dengan kode link 6 digit dari dashboard web.',
+                    'Ketik kode 6 digit',
+                    msg.message_id
+                );
                 return;
             }
+            await deleteMessageSafe(bot, chatId, msg.message_id);
+            await clearReplyPrompt(bot, chatId);
             await handleWebLinkCode(bot, msg, code);
             return;
         }
 
         if (session.step === 'AWAIT_PAYMENT_PROOF') {
             session.step = undefined;
-            await bot.sendMessage(
+            await deleteMessageSafe(bot, chatId, msg.message_id);
+            await upsertTextPanel(
+                bot,
                 chatId,
-                'ℹ️ Bukti transfer tidak perlu dikirim lagi. Deposit sekarang diproses otomatis oleh BAYAR GG. Setelah pembayaran berhasil, saldo akan bertambah otomatis.'
+                'ℹ️ Bukti transfer tidak perlu dikirim lagi. Deposit sekarang diproses otomatis oleh BAYAR GG. Setelah pembayaran berhasil, saldo akan bertambah otomatis.',
+                undefined,
+                { sourceMessageId: msg.message_id }
             );
             return;
         }
@@ -348,11 +533,27 @@ export function createBot(): TelegramBot {
             const paymentSettings = await getPaymentSettings();
             const amount = parseInt(msg.text.replace(/[^\d]/g, ''));
             if (isNaN(amount) || amount < paymentSettings.minimumDeposit) {
-                await bot.sendMessage(chatId, `❗ Masukkan jumlah minimal ${formatRupiah(paymentSettings.minimumDeposit)}\nContoh: 50000`);
+                await upsertTextPanel(
+                    bot,
+                    chatId,
+                    `❗ *Nominal belum valid*\n\nMasukkan jumlah minimal *${formatRupiah(paymentSettings.minimumDeposit)}*.\nContoh: \`50000\``,
+                    { parse_mode: 'Markdown' },
+                    { sourceMessageId: msg.message_id }
+                );
+                await clearReplyPrompt(bot, chatId);
+                await sendReplyPrompt(
+                    bot,
+                    chatId,
+                    `💬 Balas pesan ini dengan nominal deposit.\nMinimal ${formatRupiah(paymentSettings.minimumDeposit)}.`,
+                    'Ketik nominal deposit',
+                    msg.message_id
+                );
                 return;
             }
             session.step = undefined;
-            await handleDepositWithAmount(bot, chatId, telegramId, amount);
+            await deleteMessageSafe(bot, chatId, msg.message_id);
+            await clearReplyPrompt(bot, chatId);
+            await handleDepositWithAmount(bot, chatId, telegramId, amount, msg.message_id);
         }
     });
 
@@ -373,24 +574,60 @@ export function createBot(): TelegramBot {
         }
 
         if (data === 'menu') {
+            const existingPanelId = getSession(chatId).panelMessageId ?? query.message?.message_id;
             clearSession(chatId);
-            return sendMainMenu(bot, chatId);
+            return sendMainMenu(bot, chatId, existingPanelId);
         }
 
-        if (data === 'buy') return handleBuyStart(bot, chatId);
-        if (data === 'balance') return handleBalance(bot, chatId, telegramId);
-        if (data === 'history') return handleHistory(bot, chatId, telegramId);
-        if (data === 'deposit') return askDepositAmount(bot, chatId);
-        if (data === 'help') return bot.sendMessage(chatId, '/help');
+        if (data === 'buy') return handleBuyStart(bot, chatId, 0, query.message?.message_id);
+        if (data === 'balance') return handleBalance(bot, chatId, telegramId, undefined, query.message?.message_id);
+        if (data === 'history') return handleHistory(bot, chatId, telegramId, undefined, query.message?.message_id);
+        if (data === 'deposit') return askDepositAmount(bot, chatId, undefined, query.message?.message_id);
+        if (data === 'help') {
+            return upsertTextPanel(
+                bot,
+                chatId,
+                `📖 *Panduan NokosHUB*\n\n` +
+                `1️⃣ *Deposit Saldo*\n` +
+                `• Wajib dilakukan sebelum membeli nomor.\n` +
+                `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
+                `• Scan QR QRIS yang tampil atau buka link bayar BAYAR GG\n` +
+                `• Saldo masuk otomatis setelah pembayaran terdeteksi\n\n` +
+                `2️⃣ *Beli Nomor*\n` +
+                `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
+                `• Sistem akan memberikan nomor virtual siap pakai\n` +
+                `• OTP akan otomatis dikirim ke sini\n\n` +
+                `3️⃣ *Perintah*\n` +
+                `/start - Mulai bot\n` +
+                `/menu - Menu utama\n` +
+                `/buy - Beli nomor\n` +
+                `/deposit [jumlah] - Deposit saldo\n` +
+                `/balance - Lihat saldo\n` +
+                `/history - Riwayat order\n` +
+                `/linked - Tautkan akun web\n` +
+                `/myid - Lihat Telegram ID\n` +
+                `/status [orderId] - Status order\n\n` +
+                `📞 *Butuh bantuan?*\n` +
+                `Hubungi admin @nokosadmin`,
+                { parse_mode: 'Markdown' },
+                { targetMessageId: query.message?.message_id }
+            );
+        }
 
         // Quick deposit amount buttons
         if (data.startsWith('DEPOSIT_')) {
             const paymentSettings = await getPaymentSettings();
             const amount = parseInt(data.replace('DEPOSIT_', ''));
             if (!isNaN(amount) && amount >= paymentSettings.minimumDeposit) {
-                return handleDepositWithAmount(bot, chatId, telegramId, amount);
+                return handleDepositWithAmount(bot, chatId, telegramId, amount, undefined, query.message?.message_id);
             }
-            return bot.sendMessage(chatId, `❗ Minimum deposit saat ini ${formatRupiah(paymentSettings.minimumDeposit)}.`);
+            return upsertTextPanel(
+                bot,
+                chatId,
+                `❗ Minimum deposit saat ini ${formatRupiah(paymentSettings.minimumDeposit)}.`,
+                {},
+                { targetMessageId: query.message?.message_id }
+            );
         }
 
         // Pagination for services
@@ -404,7 +641,7 @@ export function createBot(): TelegramBot {
             const [, pageStr] = data.split(':');
             const session = getSession(chatId);
             if (!session.selectedServiceId || !session.selectedServiceName) {
-                return bot.sendMessage(chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy');
+                return upsertTextPanel(bot, chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy', {}, { targetMessageId: query.message?.message_id });
             }
             return handleServiceSelected(
                 bot,
@@ -421,7 +658,7 @@ export function createBot(): TelegramBot {
             const [, pageStr] = data.split(':');
             const session = getSession(chatId);
             if (!session.selectedCountryId || !session.selectedCountryName) {
-                return bot.sendMessage(chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy');
+                return upsertTextPanel(bot, chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy', {}, { targetMessageId: query.message?.message_id });
             }
             return handleCountrySelected(
                 bot,
@@ -437,23 +674,23 @@ export function createBot(): TelegramBot {
         if (data.startsWith('service:')) {
             const [, serviceId, ...nameParts] = data.split(':');
             const serviceName = nameParts.join(':');
-            return handleServiceSelected(bot, chatId, serviceId, serviceName);
+            return handleServiceSelected(bot, chatId, serviceId, serviceName, 0, query.message?.message_id);
         }
 
         if (data.startsWith('country:')) {
             const [, countryId, ...nameParts] = data.split(':');
             const countryName = nameParts.join(':');
-            return handleCountrySelected(bot, chatId, telegramId, countryId, countryName);
+            return handleCountrySelected(bot, chatId, telegramId, countryId, countryName, 0, query.message?.message_id);
         }
 
         if (data.startsWith('price:')) {
             const [, priceId] = data.split(':');
-            return handlePriceSelected(bot, chatId, telegramId, priceId);
+            return handlePriceSelected(bot, chatId, telegramId, priceId, undefined, query.message?.message_id);
         }
 
         if (data.startsWith('cancel_order:')) {
             const [, orderId] = data.split(':');
-            return handleCancelOrder(bot, chatId, telegramId, orderId);
+            return handleCancelOrder(bot, chatId, telegramId, orderId, query.message?.message_id);
         }
     });
 
@@ -639,40 +876,56 @@ function mainMenuKeyboard() {
     };
 }
 
-async function sendMainMenu(bot: TelegramBot, chatId: number) {
-    await bot.sendMessage(
+async function sendMainMenu(bot: TelegramBot, chatId: number, messageId?: number) {
+    await upsertTextPanel(
+        bot,
         chatId,
         `📱 *Menu Utama NokosHUB*\n\nPilih layanan atau gunakan perintah teks (e.g. /buy):`,
         {
             parse_mode: 'Markdown',
             reply_markup: mainMenuKeyboard(),
-        }
+        },
+        { targetMessageId: messageId }
     );
 }
 
 // ─── Flow Handlers ────────────────────────────────────────────────────────────
 
-async function handleBalance(bot: TelegramBot, chatId: number, telegramId: string) {
+async function handleBalance(
+    bot: TelegramBot,
+    chatId: number,
+    telegramId: string,
+    sourceMessageId?: number,
+    messageId?: number
+) {
     try {
         const res = await apiGet('/api/user/balance', { telegramId });
         const balance = res.data?.balance ?? 0;
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `💰 *Saldo Anda*\n\n${formatRupiah(balance)}\n\nGunakan /deposit untuk menambah saldo.`,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'Markdown' },
+            { sourceMessageId, targetMessageId: messageId }
         );
     } catch {
-        await bot.sendMessage(chatId, '❌ Gagal mengambil saldo. Coba lagi.');
+        await upsertTextPanel(bot, chatId, '❌ Gagal mengambil saldo. Coba lagi.', {}, { sourceMessageId, targetMessageId: messageId });
     }
 }
 
-async function handleHistory(bot: TelegramBot, chatId: number, telegramId: string) {
+async function handleHistory(
+    bot: TelegramBot,
+    chatId: number,
+    telegramId: string,
+    sourceMessageId?: number,
+    messageId?: number
+) {
     try {
         const res = await apiGet('/api/orders', { telegramId });
         const orders: any[] = res.data ?? [];
 
         if (!orders.length) {
-            return bot.sendMessage(chatId, 'Belum ada riwayat order.');
+            return upsertTextPanel(bot, chatId, 'Belum ada riwayat order.', {}, { sourceMessageId, targetMessageId: messageId });
         }
 
         const statusEmoji: Record<string, string> = {
@@ -692,23 +945,31 @@ async function handleHistory(bot: TelegramBot, chatId: number, telegramId: strin
             return `${i + 1}. ${emoji} ${service} (${country})\n   📞 ${phone}${otp}\n   ID: \`${o.id}\``;
         });
 
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `📋 *Riwayat 5 Order Terakhir*\n\n${lines.join('\n\n')}`,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'Markdown' },
+            { sourceMessageId, targetMessageId: messageId }
         );
     } catch {
-        await bot.sendMessage(chatId, '❌ Gagal mengambil riwayat. Coba lagi.');
+        await upsertTextPanel(bot, chatId, '❌ Gagal mengambil riwayat. Coba lagi.', {}, { sourceMessageId, targetMessageId: messageId });
     }
 }
 
-async function handleBuyStart(bot: TelegramBot, chatId: number, page: number = 0, messageId?: number) {
+async function handleBuyStart(
+    bot: TelegramBot,
+    chatId: number,
+    page: number = 0,
+    messageId?: number,
+    sourceMessageId?: number
+) {
     try {
         const res = await apiGet('/api/services');
         const services: any[] = res.data ?? [];
 
         if (!services.length) {
-            return bot.sendMessage(chatId, '❌ Tidak ada layanan tersedia saat ini.');
+            return upsertTextPanel(bot, chatId, '❌ Tidak ada layanan tersedia saat ini.', {}, { sourceMessageId, targetMessageId: messageId });
         }
 
         const ITEMS_PER_PAGE = 10;
@@ -739,16 +1000,9 @@ async function handleBuyStart(bot: TelegramBot, chatId: number, page: number = 0
 
         const text = `📲 *Pilih Aplikasi*\n\nPilih aplikasi yang ingin kamu verifikasi:\n\n_Halaman ${page + 1} dari ${totalPages}_`;
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
-
-        if (messageId) {
-            options.chat_id = chatId;
-            options.message_id = messageId;
-            await bot.editMessageText(text, options);
-        } else {
-            await bot.sendMessage(chatId, text, options);
-        }
+        await upsertTextPanel(bot, chatId, text, options, { sourceMessageId, targetMessageId: messageId });
     } catch {
-        await bot.sendMessage(chatId, '❌ Gagal memuat daftar layanan. Coba lagi.');
+        await upsertTextPanel(bot, chatId, '❌ Gagal memuat daftar layanan. Coba lagi.', {}, { sourceMessageId, targetMessageId: messageId });
     }
 }
 
@@ -769,7 +1023,7 @@ async function handleServiceSelected(
         const countries: any[] = res.data ?? [];
 
         if (!countries.length) {
-            return bot.sendMessage(chatId, `❌ Tidak ada negara tersedia untuk ${serviceName}.`);
+                return upsertTextPanel(bot, chatId, `❌ Tidak ada negara tersedia untuk ${serviceName}.`, {}, { targetMessageId: messageId });
         }
 
         const ITEMS_PER_PAGE = 16;
@@ -799,16 +1053,9 @@ async function handleServiceSelected(
 
         const text = `🌍 *Pilih Negara*\n\nLayanan: *${serviceName}*\n_Halaman ${page + 1} dari ${totalPages}_\n\nPilih negara yang tersedia:`;
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
-
-        if (messageId) {
-            options.chat_id = chatId;
-            options.message_id = messageId;
-            await bot.editMessageText(text, options);
-        } else {
-            await bot.sendMessage(chatId, text, options);
-        }
+        await upsertTextPanel(bot, chatId, text, options, { targetMessageId: messageId });
     } catch {
-        await bot.sendMessage(chatId, '❌ Gagal memuat daftar negara. Coba lagi.');
+        await upsertTextPanel(bot, chatId, '❌ Gagal memuat daftar negara. Coba lagi.', {}, { targetMessageId: messageId });
     }
 }
 
@@ -826,7 +1073,7 @@ async function handleCountrySelected(
     const serviceName = session.selectedServiceName;
 
     if (!serviceId) {
-        return bot.sendMessage(chatId, '❌ Sesi tidak valid. Mulai ulang dari /buy');
+        return upsertTextPanel(bot, chatId, '❌ Sesi tidak valid. Mulai ulang dari /buy', {}, { targetMessageId: messageId });
     }
 
     session.selectedCountryId = countryId;
@@ -837,7 +1084,7 @@ async function handleCountrySelected(
         const prices: Array<{ id: string; sellPrice: number }> = res.data ?? [];
 
         if (!prices.length) {
-            return bot.sendMessage(chatId, `❌ Tidak ada harga tersedia untuk ${serviceName} di ${countryName}.`);
+            return upsertTextPanel(bot, chatId, `❌ Tidak ada harga tersedia untuk ${serviceName} di ${countryName}.`, {}, { targetMessageId: messageId });
         }
 
         // Store prices in session
@@ -876,16 +1123,9 @@ async function handleCountrySelected(
             `Pilih harga nomor (termurah ke termahal):`;
 
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
-
-        if (messageId) {
-            options.chat_id = chatId;
-            options.message_id = messageId;
-            await bot.editMessageText(text, options);
-        } else {
-            await bot.sendMessage(chatId, text, options);
-        }
+        await upsertTextPanel(bot, chatId, text, options, { targetMessageId: messageId });
     } catch {
-        await bot.sendMessage(chatId, '❌ Gagal memuat harga. Coba lagi.');
+        await upsertTextPanel(bot, chatId, '❌ Gagal memuat harga. Coba lagi.', {}, { targetMessageId: messageId });
     }
 }
 
@@ -893,24 +1133,31 @@ async function handlePriceSelected(
     bot: TelegramBot,
     chatId: number,
     telegramId: string,
-    priceId: string
+    priceId: string,
+    sourceMessageId?: number,
+    messageId?: number
 ) {
-    const loadingMsg = await bot.sendMessage(chatId, '⏳ Memproses pesanan...');
+    await upsertTextPanel(
+        bot,
+        chatId,
+        '⏳ *Memproses pesanan...*\n\nMohon tunggu sebentar, kami sedang memesan nomor untuk kamu.',
+        { parse_mode: 'Markdown' },
+        { sourceMessageId, targetMessageId: messageId }
+    );
 
     try {
         const res = await apiPost('/api/order', { priceId, telegramId });
 
         if (!res.success) {
-            await bot.deleteMessage(chatId, loadingMsg.message_id);
-            return bot.sendMessage(chatId, `❌ Gagal memesan: ${res.error}`);
+            return upsertTextPanel(bot, chatId, `❌ Gagal memesan: ${res.error}`);
         }
 
         const { orderId, phoneNumber } = res.data;
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
 
         clearSession(chatId);
 
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `✅ *Nomor berhasil dipesan!*\n\n` +
             `📞 Nomor Anda:\n\`${phoneNumber}\`\n\n` +
@@ -926,25 +1173,32 @@ async function handlePriceSelected(
                         [{ text: '🏠 Menu Utama', callback_data: 'menu' }],
                     ],
                 },
-            }
+            },
+            { sourceMessageId, targetMessageId: messageId }
         );
     } catch (err: any) {
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Error tidak diketahui';
-        await bot.sendMessage(chatId, `❌ Gagal: ${errMsg}`);
+        await upsertTextPanel(bot, chatId, `❌ Gagal: ${errMsg}`);
     }
 }
 
-async function askDepositAmount(bot: TelegramBot, chatId: number) {
+async function askDepositAmount(
+    bot: TelegramBot,
+    chatId: number,
+    sourceMessageId?: number,
+    messageId?: number
+) {
     const paymentSettings = await getPaymentSettings();
     const session = getSession(chatId);
     session.step = 'AWAIT_DEPOSIT_AMOUNT';
 
-    await bot.sendMessage(
+    await upsertTextPanel(
+        bot,
         chatId,
         `💳 *Deposit Saldo*\n\n` +
-        `Masukkan jumlah deposit (min. ${formatRupiah(paymentSettings.minimumDeposit)}):\n\n` +
-        `Contoh: \`50000\``,
+        `Pilih nominal cepat di bawah atau balas prompt dengan jumlah deposit.\n\n` +
+        `Minimal deposit: *${formatRupiah(paymentSettings.minimumDeposit)}*\n` +
+        `Contoh balasan: \`50000\``,
         {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -959,7 +1213,15 @@ async function askDepositAmount(bot: TelegramBot, chatId: number) {
                     ],
                 ],
             },
-        }
+        },
+        { sourceMessageId, targetMessageId: messageId }
+    );
+    await sendReplyPrompt(
+        bot,
+        chatId,
+        `💬 Balas pesan ini dengan nominal deposit.\nMinimal ${formatRupiah(paymentSettings.minimumDeposit)}.`,
+        'Ketik nominal deposit',
+        sourceMessageId
     );
 }
 
@@ -967,17 +1229,23 @@ async function handleDepositWithAmount(
     bot: TelegramBot,
     chatId: number,
     telegramId: string,
-    amount: number
+    amount: number,
+    sourceMessageId?: number,
+    messageId?: number
 ) {
-    const loadingMsg = await bot.sendMessage(chatId, `⏳ Membuat invoice ${formatRupiah(amount)}...`);
+    await upsertTextPanel(
+        bot,
+        chatId,
+        `⏳ *Membuat invoice ${formatRupiah(amount)}...*\n\nMohon tunggu sebentar.`,
+        { parse_mode: 'Markdown' },
+        { sourceMessageId, targetMessageId: messageId }
+    );
 
     try {
         const res = await apiPost('/api/deposit', { amount, telegramId });
 
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
-
         if (!res.success) {
-            return bot.sendMessage(chatId, `❌ Gagal membuat invoice: ${res.error}`);
+            return upsertTextPanel(bot, chatId, `❌ Gagal membuat invoice: ${res.error}`);
         }
 
         const { invoiceId, qrisPayload, qrisImageUrl, expiredAt, amount: payableAmount, paymentUrl, fee, baseAmount } = res.data;
@@ -994,10 +1262,10 @@ async function handleDepositWithAmount(
             `_Saldo akan ditambahkan otomatis setelah pembayaran terdeteksi._`;
 
         if (qrisImageUrl) {
-            await bot.sendPhoto(chatId, qrisImageUrl, {
+            await upsertPhotoPanel(bot, chatId, qrisImageUrl, {
                 caption,
                 parse_mode: 'Markdown',
-            });
+            }, { sourceMessageId });
         } else if (qrisPayload) {
             const qrBuffer = await QRCode.toBuffer(qrisPayload, {
                 type: 'png',
@@ -1010,14 +1278,14 @@ async function handleDepositWithAmount(
                 },
             });
 
-            await bot.sendPhoto(chatId, qrBuffer as any, {
+            await upsertPhotoPanel(bot, chatId, qrBuffer as any, {
                 caption,
                 parse_mode: 'Markdown',
-            });
+            }, { sourceMessageId });
         } else {
-            await bot.sendMessage(chatId, caption, {
+            await upsertTextPanel(bot, chatId, caption, {
                 parse_mode: 'Markdown',
-            });
+            }, { sourceMessageId });
         }
 
         const session = getSession(chatId);
@@ -1030,9 +1298,8 @@ async function handleDepositWithAmount(
             expiredAt,
         };
     } catch (err: any) {
-        await bot.deleteMessage(chatId, loadingMsg.message_id);
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Error';
-        await bot.sendMessage(chatId, `❌ Gagal: ${errMsg}`);
+        await upsertTextPanel(bot, chatId, `❌ Gagal: ${errMsg}`);
     }
 }
 
@@ -1189,16 +1456,26 @@ function formatIndonesianDateTime(value: string | Date): string {
     return new Date(value).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 }
 
-async function handleOrderStatus(bot: TelegramBot, chatId: number, orderId: string) {
+async function handleOrderStatus(
+    bot: TelegramBot,
+    chatId: number,
+    orderId: string,
+    sourceMessageId?: number,
+    messageId?: number
+) {
     try {
         const res = await apiGet(`/api/orders`);
         const orders: any[] = res.data ?? [];
         const order = orders.find((o: any) => o.id === orderId || o.id.startsWith(orderId));
 
         if (!order) {
-            return bot.sendMessage(chatId, `❌ Order \`${orderId}\` tidak ditemukan.`, {
-                parse_mode: 'Markdown',
-            });
+            return upsertTextPanel(
+                bot,
+                chatId,
+                `❌ Order \`${orderId}\` tidak ditemukan.`,
+                { parse_mode: 'Markdown' },
+                { sourceMessageId, targetMessageId: messageId }
+            );
         }
 
         const statusEmoji: Record<string, string> = {
@@ -1208,7 +1485,8 @@ async function handleOrderStatus(bot: TelegramBot, chatId: number, orderId: stri
         const emoji = statusEmoji[order.status] ?? '❓';
         const otpLine = order.otpCode ? `\n📟 OTP: \`${order.otpCode}\`` : '';
 
-        await bot.sendMessage(
+        await upsertTextPanel(
+            bot,
             chatId,
             `📦 *Status Order*\n\n` +
             `${emoji} Status: *${order.status}*\n` +
@@ -1225,9 +1503,11 @@ async function handleOrderStatus(bot: TelegramBot, chatId: number, orderId: stri
                         }
                         : undefined,
             }
+            ,
+            { sourceMessageId, targetMessageId: messageId }
         );
     } catch {
-        await bot.sendMessage(chatId, '❌ Gagal mengambil status order.');
+        await upsertTextPanel(bot, chatId, '❌ Gagal mengambil status order.', {}, { sourceMessageId, targetMessageId: messageId });
     }
 }
 
@@ -1235,22 +1515,25 @@ async function handleCancelOrder(
     bot: TelegramBot,
     chatId: number,
     telegramId: string,
-    orderId: string
+    orderId: string,
+    messageId?: number
 ) {
     try {
         const res = await apiPost('/api/order/cancel', { orderId, telegramId });
         if (res.success) {
-            await bot.sendMessage(
+            await upsertTextPanel(
+                bot,
                 chatId,
                 `✅ Order \`${orderId}\` berhasil dibatalkan.\n\n_Refund telah dikreditkan ke saldo kamu._`,
-                { parse_mode: 'Markdown' }
+                { parse_mode: 'Markdown' },
+                { targetMessageId: messageId }
             );
         } else {
-            await bot.sendMessage(chatId, `❌ Gagal membatalkan: ${res.error ?? 'Unknown error'}`);
+            await upsertTextPanel(bot, chatId, `❌ Gagal membatalkan: ${res.error ?? 'Unknown error'}`, {}, { targetMessageId: messageId });
         }
     } catch (err: any) {
         const errMsg = err?.response?.data?.error ?? err.message ?? 'Error';
-        await bot.sendMessage(chatId, `❌ Gagal membatalkan order: ${errMsg}`);
+        await upsertTextPanel(bot, chatId, `❌ Gagal membatalkan order: ${errMsg}`, {}, { targetMessageId: messageId });
     }
 }
 async function getPaymentSettings(): Promise<PaymentSettings> {
