@@ -101,7 +101,7 @@ const maintenanceActionSchema = z.object({
 });
 
 function requireAdmin(req: any, reply: any): boolean {
-    const key = req.headers['x-admin-key'] || (req.query && req.query.key);
+    const key = req.headers['x-admin-key'];
     if (key !== config.ADMIN_API_KEY && !hasBackofficeSession(req)) {
         reply.status(401).send({ success: false, error: 'Unauthorized' });
         return false;

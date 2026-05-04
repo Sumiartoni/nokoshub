@@ -63,6 +63,10 @@ export const smtpSettingsService = {
         return normalized;
     },
 
+    hasEnvOverride() {
+        return Boolean(getEnvEmailSettings());
+    },
+
     async requireSettings(): Promise<SmtpSettings> {
         const settings = await this.getSettings();
         if (!settings.fromEmail) {
@@ -86,7 +90,7 @@ export const smtpSettingsService = {
 function getEnvEmailSettings(): SmtpSettings | null {
     if (!config.EMAIL_TRANSPORT) return null;
 
-    return normalizeSmtpSettings({
+    const settings = normalizeSmtpSettings({
         transport: config.EMAIL_TRANSPORT,
         host: config.SMTP_HOST,
         port: config.SMTP_PORT,
@@ -97,6 +101,8 @@ function getEnvEmailSettings(): SmtpSettings | null {
         fromName: config.EMAIL_FROM_NAME,
         fromEmail: config.EMAIL_FROM_EMAIL,
     });
+
+    return isConfiguredSmtpSettings(settings) ? settings : null;
 }
 
 function normalizeSmtpSettings(input: Partial<SmtpSettings>): SmtpSettings {
@@ -113,4 +119,13 @@ function normalizeSmtpSettings(input: Partial<SmtpSettings>): SmtpSettings {
         fromName: String(input.fromName ?? DEFAULT_SMTP_SETTINGS.fromName).trim() || DEFAULT_SMTP_SETTINGS.fromName,
         fromEmail: String(input.fromEmail ?? DEFAULT_SMTP_SETTINGS.fromEmail).trim().toLowerCase(),
     };
+}
+
+function isConfiguredSmtpSettings(settings: SmtpSettings) {
+    if (!settings.fromEmail) return false;
+    if (settings.transport === 'brevo_api') {
+        return Boolean(settings.apiKey);
+    }
+
+    return Boolean(settings.host && settings.username && settings.password);
 }

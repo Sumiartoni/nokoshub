@@ -82,16 +82,12 @@ export const bayarGgService = {
         };
     },
 
-    buildWebhookUrl(includeAuthToken = false) {
+    buildWebhookUrl() {
         const publicBase = String(config.PUBLIC_API_BASE_URL || '').trim().replace(/\/+$/, '');
         if (!publicBase) return '';
 
         const apiBase = publicBase.endsWith('/api') ? publicBase : `${publicBase}/api`;
-        const url = new URL(`${apiBase}/payment/webhook`);
-        if (includeAuthToken && config.BAYAR_GG_WEBHOOK_SECRET) {
-            url.searchParams.set('token', String(config.BAYAR_GG_WEBHOOK_SECRET).trim());
-        }
-        return url.toString();
+        return `${apiBase}/payment/webhook`;
     },
 
     async createPayment(input: {
@@ -117,7 +113,7 @@ export const bayarGgService = {
             }
         }
 
-        const callbackUrl = this.buildWebhookUrl(true);
+        const callbackUrl = this.buildWebhookUrl();
         if (callbackUrl) body.callback_url = callbackUrl;
         if (config.BAYAR_GG_REDIRECT_URL) body.redirect_url = config.BAYAR_GG_REDIRECT_URL;
         if (input.customerName) body.customer_name = input.customerName;
@@ -199,11 +195,6 @@ export const bayarGgService = {
         return false;
     },
 
-    verifyWebhookToken(token?: string) {
-        const secret = String(config.BAYAR_GG_WEBHOOK_SECRET || '').trim();
-        if (!secret) return false;
-        return safeEqual(String(token || '').trim(), secret);
-    },
 };
 
 function normalizeCreatePaymentResponse(input: any): BayarGgPayment {

@@ -55,6 +55,7 @@ const S = {
     svc: null,
     country: null,
     price: null,
+    priceOptions: [],
     order: null,
     countries: [],
     busy: false,
@@ -611,7 +612,9 @@ function resetBuySteps() {
   stopOtpWatch();
   S.buy.country = null;
   S.buy.price = null;
+  S.buy.priceOptions = [];
   S.buy.order = null;
+  clearServerOptions();
   const waiting = document.getElementById('otpStateWaiting');
   const received = document.getElementById('otpStateReceived');
   const expired = document.getElementById('otpStateExpired');
@@ -638,6 +641,16 @@ function goStep(n) {
   });
 }
 
+function clearServerOptions() {
+  S.buy.priceOptions = [];
+  const wrap = document.getElementById('serverOptionsWrap');
+  const list = document.getElementById('serverOptionsList');
+  const sub = document.getElementById('serverOptionsSub');
+  if (list) list.innerHTML = '';
+  if (sub) sub.textContent = 'Pilih server yang ingin dipakai untuk order.';
+  if (wrap) wrap.style.display = 'none';
+}
+
 async function selectSvc(id) {
   const s = SVC.find(x => x.id === id);
   if (!s) return;
@@ -645,10 +658,12 @@ async function selectSvc(id) {
   S.buy.countries = [];
   S.buy.country = null;
   S.buy.price = null;
+  S.buy.priceOptions = [];
 
   set('selSvcIcon', s.e);
   set('selSvcName', s.n);
   set('selSvcPrice', s.p ? `Mulai ${FMT(s.p)}` : 'Cek harga');
+  clearServerOptions();
   const countrySearch = document.getElementById('countrySearch');
   if (countrySearch) countrySearch.value = '';
 
@@ -712,32 +727,36 @@ async function selectCountry(countryId, el) {
   if (!country || !svc) return;
 
   S.buy.country = country;
+  S.buy.price = null;
+  clearServerOptions();
   S.buy.busy = true;
   el?.classList.add('loading');
 
   try {
-    let price = country.priceId && country.minSellPrice
-      ? { id: country.priceId, sellPrice: country.minSellPrice, isActive: true }
-      : null;
+    const prices = await apiFetch('/prices', { params: { serviceId: svc.id, countryId: country.id } });
+    const options = (Array.isArray(prices) ? prices : [])
+      .filter(p => p.isActive !== false)
+      .map(p => ({
+        id: p.id,
+        sellPrice: Number(p.sellPrice || 0),
+        providerKey: p.providerKey || '',
+        providerLabel: p.providerLabel || 'Provider',
+        serverLabel: p.serverLabel || 'Server',
+      }))
+      .sort((a, b) => Number(a.sellPrice) - Number(b.sellPrice));
 
-    if (!price) {
-      const prices = await apiFetch('/prices', { params: { serviceId: svc.id, countryId: country.id } });
-      price = (Array.isArray(prices) ? prices : [])
-        .filter(p => p.isActive !== false)
-        .sort((a, b) => Number(a.sellPrice) - Number(b.sellPrice))[0];
-    }
+    if (!options.length) throw new Error('Harga untuk negara ini belum tersedia');
 
-    if (!price) throw new Error('Harga untuk negara ini belum tersedia');
-    S.buy.price = { id: price.id, sellPrice: Number(price.sellPrice || 0) };
+    S.buy.priceOptions = options;
 
-    if (S.user.balance < S.buy.price.sellPrice) {
-      showToast('Saldo tidak cukup. Silakan top up dulu.', 'error');
-      setTimeout(() => nav('topup'), 900);
+    if (options.length === 1) {
+      await chooseServerOption(options[0]);
       return;
     }
 
-    set('selSvcPrice', FMT(S.buy.price.sellPrice));
-    await createOrder();
+    set('selSvcPrice', `Mulai ${FMT(options[0].sellPrice)}`);
+    renderServerOptions();
+    showToast('Pilih server yang ingin digunakan.', 'info');
   } catch (err) {
     console.error(err);
     showToast(`Gagal order: ${err.message}`, 'error');
@@ -745,6 +764,74 @@ async function selectCountry(countryId, el) {
     S.buy.busy = false;
     el?.classList.remove('loading');
   }
+}
+
+function renderServerOptions() {
+  const wrap = document.getElementById('serverOptionsWrap');
+  const list = document.getElementById('serverOptionsList');
+  const sub = document.getElementById('serverOptionsSub');
+  if (!wrap || !list) return;
+
+  const options = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions : [];
+  if (!options.length) {
+    wrap.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  if (sub) {
+    sub.textContent = S.buy.country
+      ? `Tersedia ${options.length} opsi server untuk ${S.buy.country.n}.`
+      : 'Pilih server yang ingin dipakai untuk order.';
+  }
+
+  list.innerHTML = options.map((option, index) => `
+    <div class="server-option-card" onclick="selectServerOption(${index}, this)">
+      <div class="server-option-top">
+        <span class="server-option-badge">${esc(option.serverLabel || `Server ${index + 1}`)}</span>
+        <span class="server-option-provider">${esc(option.providerLabel || option.providerKey || 'Provider')}</span>
+      </div>
+      <div class="server-option-price">${FMT(option.sellPrice)}</div>
+      <div class="server-option-note">Pilih server ini untuk lanjut membuat nomor OTP.</div>
+    </div>
+  `).join('');
+}
+
+async function selectServerOption(index, el) {
+  const option = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions[index] : null;
+  if (!option || S.buy.busy) return;
+
+  S.buy.busy = true;
+  el?.classList.add('loading');
+  try {
+    await chooseServerOption(option);
+  } catch (err) {
+    console.error(err);
+    showToast(`Gagal order: ${err.message}`, 'error');
+  } finally {
+    S.buy.busy = false;
+    el?.classList.remove('loading');
+  }
+}
+
+async function chooseServerOption(option) {
+  S.buy.price = {
+    id: option.id,
+    sellPrice: Number(option.sellPrice || 0),
+    providerKey: option.providerKey || '',
+    providerLabel: option.providerLabel || 'Provider',
+    serverLabel: option.serverLabel || 'Server',
+  };
+
+  if (S.user.balance < S.buy.price.sellPrice) {
+    showToast('Saldo tidak cukup. Silakan top up dulu.', 'error');
+    setTimeout(() => nav('topup'), 900);
+    return;
+  }
+
+  set('selSvcPrice', `${S.buy.price.serverLabel} • ${FMT(S.buy.price.sellPrice)}`);
+  await createOrder();
 }
 
 async function createOrder() {
@@ -756,12 +843,15 @@ async function createOrder() {
 
   const svc = S.buy.svc;
   const country = S.buy.country;
+  const serverLabel = S.buy.price.serverLabel || 'Server';
   S.buy.order = {
     id: order.orderId,
     phoneNumber: order.phoneNumber,
     status: order.status,
     price: {
       sellPrice: S.buy.price.sellPrice,
+      serverLabel,
+      providerLabel: S.buy.price.providerLabel || '',
       service: { name: svc?.n },
       country: { name: country?.n },
     },
@@ -773,7 +863,7 @@ async function createOrder() {
   const phone = order.phoneNumber || '-';
   set('waitIcon', svc?.e || '📱');
   set('waitSvc', svc?.n || 'OTP');
-  set('waitCountry', `${country?.f || '🌍'} ${country?.n || ''}`.trim());
+  set('waitCountry', `${country?.f || '🌍'} ${country?.n || ''} • ${serverLabel}`.trim());
   set('waitPhone', phone);
   set('refundAmount', FMT(S.buy.price.sellPrice));
   set('receivedPhone', phone);
@@ -994,13 +1084,11 @@ function handleTopupProofChange(event) {
 async function submitTopupProof() {
   const invoice = S.topup.invoice;
   const file = S.topup.proofFile;
-  const telegramId = getTelegramId({ promptUser: true });
 
   if (!invoice?.invoiceId) {
     showToast('Invoice belum dibuat atau sudah tidak tersedia', 'warning');
     return;
   }
-  if (!telegramId) return;
   if (!file) {
     showToast('Upload bukti pembayaran terlebih dahulu', 'warning');
     return;
@@ -1018,7 +1106,6 @@ async function submitTopupProof() {
     await apiFetch('/deposit/proof', {
       body: {
         invoiceId: invoice.invoiceId,
-        telegramId,
         fileName: file.name,
         mimeType: file.type,
         dataBase64,

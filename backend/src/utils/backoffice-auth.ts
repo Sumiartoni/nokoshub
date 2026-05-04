@@ -100,7 +100,7 @@ export function clearBackofficeSessionCookie(reply: FastifyReply) {
 
 function sign(encodedPayload: string): string {
     return crypto
-        .createHmac('sha256', config.BACKOFFICE_SESSION_SECRET || config.JWT_SECRET)
+        .createHmac('sha256', config.BACKOFFICE_SESSION_SECRET)
         .update(encodedPayload)
         .digest('base64url');
 }

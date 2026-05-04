@@ -29,12 +29,21 @@ let lastTelegramNetworkWarningAt = 0;
 // ─── API Helpers ──────────────────────────────────────────────────────────────
 
 async function apiGet<T = any>(path: string, params?: object): Promise<T> {
-    const res = await axios.get(`${BASE_URL}${path}`, { params });
+    const res = await axios.get(`${BASE_URL}${path}`, {
+        params,
+        headers: {
+            'x-internal-secret': config.INTERNAL_API_SECRET,
+        },
+    });
     return res.data;
 }
 
 async function apiPost<T = any>(path: string, data?: object): Promise<T> {
-    const res = await axios.post(`${BASE_URL}${path}`, data);
+    const res = await axios.post(`${BASE_URL}${path}`, data, {
+        headers: {
+            'x-internal-secret': config.INTERNAL_API_SECRET,
+        },
+    });
     return res.data;
 }
 
@@ -1378,13 +1387,15 @@ async function handleManualPaymentApproval(
             `✅ Invoice ${invoiceId} sudah dikonfirmasi.\nStatus: ${result.message ?? 'Payment confirmed'}`
         );
 
-        await bot.sendMessage(
-            Number(userTelegramId),
-            `✅ Pembayaran deposit Anda sudah dikonfirmasi admin.\n\n` +
-            `Invoice ID: \`${invoiceId}\`\n` +
-            `Saldo sudah ditambahkan ke akun Anda. Cek saldo dengan /balance.`,
-            { parse_mode: 'Markdown' }
-        );
+        if (/^\d+$/.test(String(userTelegramId || '').trim())) {
+            await bot.sendMessage(
+                Number(userTelegramId),
+                `✅ Pembayaran deposit Anda sudah dikonfirmasi admin.\n\n` +
+                `Invoice ID: \`${invoiceId}\`\n` +
+                `Saldo sudah ditambahkan ke akun Anda. Cek saldo dengan /balance.`,
+                { parse_mode: 'Markdown' }
+            );
+        }
     } catch (err: any) {
         const errMsg = err?.response?.data?.message ?? err?.response?.data?.error ?? err.message ?? 'Error';
         await bot.sendMessage(adminChatId, `❌ Gagal konfirmasi invoice ${invoiceId}: ${errMsg}`);
@@ -1414,15 +1425,17 @@ async function handleManualPaymentReject(
         `Invoice ${invoiceId} ditandai belum masuk. Invoice tetap pending dan saldo belum ditambahkan.`
     );
 
-    try {
-        await bot.sendMessage(
-            Number(userTelegramId),
-            `⚠️ Pembayaran untuk invoice \`${invoiceId}\` belum bisa dikonfirmasi admin.\n\n` +
-            `Pastikan nominal transfer sesuai QRIS dan bukti transfer jelas. Jika sudah benar, hubungi admin.`,
-            { parse_mode: 'Markdown' }
-        );
-    } catch (err) {
-        logger.warn({ err, invoiceId, userTelegramId }, 'Failed to notify user about rejected manual payment');
+    if (/^\d+$/.test(String(userTelegramId || '').trim())) {
+        try {
+            await bot.sendMessage(
+                Number(userTelegramId),
+                `⚠️ Pembayaran untuk invoice \`${invoiceId}\` belum bisa dikonfirmasi admin.\n\n` +
+                `Pastikan nominal transfer sesuai QRIS dan bukti transfer jelas. Jika sudah benar, hubungi admin.`,
+                { parse_mode: 'Markdown' }
+            );
+        } catch (err) {
+            logger.warn({ err, invoiceId, userTelegramId }, 'Failed to notify user about rejected manual payment');
+        }
     }
 }
 
@@ -1451,7 +1464,7 @@ async function handleOrderStatus(
     messageId?: number
 ) {
     try {
-        const res = await apiGet(`/api/orders`);
+        const res = await apiGet(`/api/orders`, { telegramId: String(chatId) });
         const orders: any[] = res.data ?? [];
         const order = orders.find((o: any) => o.id === orderId || o.id.startsWith(orderId));
 

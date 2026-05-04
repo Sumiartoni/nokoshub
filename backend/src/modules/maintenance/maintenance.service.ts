@@ -196,7 +196,7 @@ export const maintenanceService = {
                             ? Boolean(smtpSettings.apiKey)
                             : Boolean(smtpSettings?.host && smtpSettings?.username && smtpSettings?.password)
                     ),
-                    envOverride: Boolean(config.EMAIL_TRANSPORT),
+                    envOverride: smtpSettingsService.hasEnvOverride(),
                 },
                 auth: {
                     googleEnabled: Boolean(config.GOOGLE_CLIENT_ID),

@@ -92,14 +92,13 @@ export const paymentService = {
     async handleWebhook(
         body: PaymentWebhookBody,
         rawBody: string,
-        input: { headers?: Record<string, any>; webhookToken?: string } = {}
+        input: { headers?: Record<string, any> } = {}
     ): Promise<{ success: boolean; message: string }> {
         await paymentService.expireOverdueInvoices();
 
         if (isBayarGgWebhook(body)) {
             return handleBayarGgWebhook(body, {
                 headers: input.headers || {},
-                webhookToken: input.webhookToken,
             });
         }
 
@@ -289,13 +288,19 @@ async function handleBayarGgWebhook(
     body: BayarGgWebhookPayload,
     input: {
         headers: Record<string, any>;
-        webhookToken?: string;
     }
 ): Promise<{ success: boolean; message: string }> {
-    const signatureValid = bayarGgService.verifyWebhookSignature(body, input.headers);
-    const tokenValid = bayarGgService.verifyWebhookToken(input.webhookToken);
+    if (!config.BAYAR_GG_WEBHOOK_SECRET) {
+        logger.error(
+            { invoiceId: body.invoice_id, status: body.status },
+            'Rejected BAYAR GG webhook because BAYAR_GG_WEBHOOK_SECRET is not configured'
+        );
+        return { success: false, message: 'Webhook secret not configured' };
+    }
 
-    if (!signatureValid && !tokenValid) {
+    const signatureValid = bayarGgService.verifyWebhookSignature(body, input.headers);
+
+    if (!signatureValid) {
         logger.warn(
             {
                 invoiceId: body.invoice_id,
@@ -303,7 +308,6 @@ async function handleBayarGgWebhook(
                 hasHeaderTimestamp: Boolean(input.headers['x-webhook-timestamp']),
                 hasBodySignature: Boolean(body.signature),
                 hasBodyTimestamp: Boolean(body.timestamp),
-                hasQueryToken: Boolean(input.webhookToken),
                 status: body.status,
                 finalAmount: body.final_amount,
             },

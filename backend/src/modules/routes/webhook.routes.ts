@@ -15,14 +15,12 @@ export const webhookRoutes: FastifyPluginAsync = async (fastify) => {
                 signature?: string;
                 [key: string]: unknown;
             };
-            const query = req.query as { token?: string };
 
             // raw body for signature verification
             const rawBody = JSON.stringify(req.body);
 
             const result = await paymentService.handleWebhook(body, rawBody, {
                 headers: req.headers as Record<string, any>,
-                webhookToken: query.token,
             });
 
             if (!result.success) {

@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma.client';
 import { buildHeroSMSPriceId, heroSMSProvider } from '../providers/herosms.provider';
+import { getProviderDescriptor, parseProviderKeyFromPriceId } from '../providers/provider-registry';
 import { calculateSellPrice } from '../../utils/helpers';
 import logger from '../../utils/logger';
 import { pricingService } from '../pricing/pricing.service';
@@ -192,10 +193,28 @@ export const serviceService = {
 
     /** Get prices for a service + country combination */
     async getPrices(serviceId: string, countryId: string) {
-        return prisma.price.findMany({
+        const prices = await prisma.price.findMany({
             where: { serviceId, countryId, isActive: true },
             orderBy: { sellPrice: 'asc' },
         });
+
+        return prices
+            .map((price) => {
+                const providerKey = parseProviderKeyFromPriceId(price.priceId);
+                const provider = getProviderDescriptor(providerKey);
+                return {
+                    ...price,
+                    providerKey,
+                    providerLabel: provider.displayName,
+                    serverLabel: provider.serverLabel,
+                    providerSortOrder: provider.sortOrder,
+                };
+            })
+            .sort((a, b) => {
+                if (a.sellPrice !== b.sellPrice) return a.sellPrice - b.sellPrice;
+                if (a.providerSortOrder !== b.providerSortOrder) return a.providerSortOrder - b.providerSortOrder;
+                return a.providerLabel.localeCompare(b.providerLabel);
+            });
     },
 
     /** Get a single price by its internal id */

@@ -34,21 +34,20 @@ const depositSchema = z.object({
 
 const depositProofSchema = z.object({
     invoiceId: z.string().min(1),
-    telegramId: z.string().min(1),
     fileName: z.string().min(1).max(160),
     mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
     dataBase64: z.string().min(100).max(7_000_000),
 });
 
 const userSessionSchema = z.object({
-    telegramId: z.string().min(1),
+    telegramId: z.string().min(1).optional(),
     username: z.string().optional(),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
 });
 
 const telegramQuerySchema = z.object({
-    telegramId: z.string().min(1),
+    telegramId: z.string().min(1).optional(),
     limit: z.string().optional(),
 });
 
@@ -247,6 +246,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
 
+        if (!hasInternalAccess(req)) {
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
+        }
+
         try {
             const user = await authService.confirmTelegramLink(parsed.data);
             return { success: true, data: { user } };
@@ -289,11 +292,25 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
 
-        const user = await userService.findOrCreate(parsed.data.telegramId, {
-            username: parsed.data.username,
-            firstName: parsed.data.firstName,
-            lastName: parsed.data.lastName,
-        });
+        let user = null;
+
+        if (hasInternalAccess(req)) {
+            if (!parsed.data.telegramId) {
+                return reply.status(400).send({ success: false, error: 'telegramId required for internal session sync' });
+            }
+            user = await userService.findOrCreate(parsed.data.telegramId, {
+                username: parsed.data.username,
+                firstName: parsed.data.firstName,
+                lastName: parsed.data.lastName,
+            });
+        } else if (req.headers.authorization) {
+            const webUser = await authService.requireUser(req.headers.authorization);
+            user = await resolveUserForWebSession(webUser, true);
+        }
+
+        if (!user) {
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
+        }
 
         return {
             success: true,
@@ -313,11 +330,12 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/user/profile?telegramId= or Authorization: Bearer <token>
     fastify.get('/user/profile', async (req, reply) => {
         const query = req.query as { telegramId?: string };
-        let telegramId = query.telegramId;
+        const internalAccess = hasInternalAccess(req);
+        let telegramId = internalAccess ? query.telegramId : undefined;
         let webUser = null;
         let referral = null;
 
-        if (!telegramId && req.headers.authorization) {
+        if (req.headers.authorization) {
             try {
                 webUser = await authService.getUserFromAuthHeader(req.headers.authorization);
                 if (webUser?.id) {
@@ -335,10 +353,14 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             telegramId = webUser?.telegramId ?? undefined;
         }
 
-        const user = telegramId
-            ? await userService.findOrCreate(telegramId)
-            : webUser?.id
-                ? await resolveUserForWebSession(webUser, true)
+        if (!webUser && !telegramId) {
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
+        }
+
+        const user = webUser?.id
+            ? await resolveUserForWebSession(webUser, true)
+            : telegramId && internalAccess
+                ? await userService.findOrCreate(telegramId)
                 : null;
 
         if (!user) {
@@ -435,11 +457,14 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
         const prices = await serviceService.getPrices(parsed.data.serviceId, parsed.data.countryId);
-        // Never expose priceId to clients - only id and sellPrice
+        // Never expose provider raw priceId to clients. Use internal DB id + safe server metadata.
         const sanitized = prices.map((p) => ({
             id: p.id,
             sellPrice: p.sellPrice,
             isActive: p.isActive,
+            providerKey: p.providerKey,
+            providerLabel: p.providerLabel,
+            serverLabel: p.serverLabel,
         }));
         return { success: true, data: sanitized };
     });
@@ -457,7 +482,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 createIfMissing: true,
             });
             if (!user) {
-                return reply.status(400).send({ success: false, error: 'Login web atau telegramId diperlukan untuk membuat order' });
+                return reply.status(401).send({ success: false, error: 'Unauthorized' });
             }
             const order = await orderService.createOrder(user.id, parsed.data.priceId);
             return {
@@ -482,7 +507,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             createIfMissing: false,
         });
         if (!user) {
-            return reply.status(400).send({ success: false, error: 'telegramId atau login web diperlukan' });
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
         }
         const orders = await orderService.getOrders(user.id);
         return { success: true, data: orders };
@@ -495,8 +520,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
 
-        const user = await userService.getByTelegramId(parsed.data.telegramId);
-        if (!user) return { success: true, data: [] };
+        const { user } = await resolveOwnedUserFromRequest(req, {
+            telegramId: parsed.data.telegramId,
+            createIfMissing: false,
+        });
+        if (!user) {
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
+        }
 
         const rawLimit = Number(parsed.data.limit ?? 25);
         const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 100) : 25;
@@ -507,10 +537,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/user/balance?telegramId=
     fastify.get('/user/balance', async (req, reply) => {
         const query = req.query as { telegramId?: string };
-        if (!query.telegramId) {
-            return reply.status(400).send({ success: false, error: 'telegramId required' });
+        const { user } = await resolveOwnedUserFromRequest(req, {
+            telegramId: query.telegramId,
+            createIfMissing: false,
+        });
+        if (!user) {
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
         }
-        const user = await userService.findOrCreate(query.telegramId);
         return { success: true, data: { balance: user.balance } };
     });
 
@@ -527,7 +560,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 createIfMissing: true,
             });
             if (!user) {
-                return reply.status(400).send({ success: false, error: 'Login web atau telegramId diperlukan untuk membuat invoice' });
+                return reply.status(401).send({ success: false, error: 'Unauthorized' });
             }
             const invoice = await paymentService.createInvoice(user.id, parsed.data.amount);
             const qrisImageUrl = extractQrisImageUrl(invoice.gatewayPayload);
@@ -553,6 +586,23 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
     });
 
+    // POST /api/deposit/proof
+    fastify.post('/deposit/proof', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        const parsed = depositProofSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            const webUser = await authService.requireUser(req.headers.authorization);
+            const result = await handleWebDepositProof(webUser, parsed.data);
+            return { success: true, data: result };
+        } catch (err) {
+            const message = (err as Error).message;
+            return reply.status(message === 'Unauthorized' ? 401 : 400).send({ success: false, error: message });
+        }
+    });
+
     // GET /api/deposit/:invoiceId/qris.png?telegramId=
     fastify.get('/deposit/:invoiceId/qris.png', async (req, reply) => {
         const params = req.params as { invoiceId?: string };
@@ -565,7 +615,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             telegramId: query.telegramId,
             createIfMissing: false,
         });
-        if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
+        if (!user) return reply.status(401).send({ success: false, error: 'Unauthorized' });
 
         const invoice = await prisma.invoice.findFirst({
             where: { id: params.invoiceId, userId: user.id },
@@ -614,7 +664,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             telegramId: query.telegramId,
             createIfMissing: false,
         });
-        if (!user) return reply.status(404).send({ success: false, error: 'User not found' });
+        if (!user) return reply.status(401).send({ success: false, error: 'Unauthorized' });
 
         const invoice = await paymentService.syncInvoiceForUser(params.invoiceId, user.id);
         if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
@@ -655,7 +705,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             createIfMissing: false,
         });
         if (!user) {
-            return reply.status(400).send({ success: false, error: 'telegramId atau login web diperlukan' });
+            return reply.status(401).send({ success: false, error: 'Unauthorized' });
         }
         const invoices = await paymentService.getInvoices(user.id);
         return { success: true, data: invoices };
@@ -673,7 +723,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 createIfMissing: false,
             });
             if (!user) {
-                return reply.status(400).send({ success: false, error: 'telegramId atau login web diperlukan' });
+                return reply.status(401).send({ success: false, error: 'Unauthorized' });
             }
             const result = await orderService.cancelOrder(body.orderId, user.id);
             return { success: true, data: result };
@@ -683,14 +733,22 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     });
 };
 
-async function handleWebDepositProof(input: z.infer<typeof depositProofSchema>) {
+async function handleWebDepositProof(
+    webUser: {
+        id: string;
+        telegramId: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+    },
+    input: z.infer<typeof depositProofSchema>
+) {
     await paymentService.expireOverdueInvoices();
 
     const adminIds = parseTelegramAdminIds(config.TELEGRAM_ADMIN_IDS);
     if (!adminIds.length) throw new Error('Admin Telegram belum dikonfigurasi');
 
-    const user = await userService.getByTelegramId(input.telegramId);
-    if (!user) throw new Error('User Telegram tidak ditemukan');
+    const user = await resolveUserForWebSession(webUser, false);
+    if (!user) throw new Error('Wallet user tidak ditemukan. Buat invoice top up baru lalu coba lagi.');
 
     const invoice = await prisma.invoice.findFirst({
         where: { id: input.invoiceId, userId: user.id },
@@ -718,11 +776,16 @@ async function handleWebDepositProof(input: z.infer<typeof depositProofSchema>) 
     if (buffer.length < 100) throw new Error('File bukti tidak valid');
     if (buffer.length > 5 * 1024 * 1024) throw new Error('Ukuran bukti maksimal 5MB');
 
+    const adminTargetTelegramId = /^\d+$/.test(String(invoice.user.telegramId || '').trim())
+        ? String(invoice.user.telegramId).trim()
+        : '';
+    const telegramLabel = adminTargetTelegramId || 'Belum ditautkan';
+
     const caption = [
         'Deposit baru dari web menunggu konfirmasi manual',
         '',
         `Invoice ID: ${invoice.id}`,
-        `Telegram ID user: ${invoice.user.telegramId}`,
+        `Telegram ID user: ${telegramLabel}`,
         `Username: ${invoice.user.username ? `@${invoice.user.username}` : '-'}`,
         `Jumlah saldo: ${formatRupiahPlain(invoice.baseAmount || invoice.amount)}`,
         `Nominal QRIS: ${formatRupiahPlain(invoice.amount)}`,
@@ -733,8 +796,8 @@ async function handleWebDepositProof(input: z.infer<typeof depositProofSchema>) 
 
     const replyMarkup = {
         inline_keyboard: [
-            [{ text: '✅ Konfirmasi saldo masuk', callback_data: `pay_ok:${invoice.id}:${invoice.user.telegramId}` }],
-            [{ text: '❌ Belum masuk', callback_data: `pay_no:${invoice.id}:${invoice.user.telegramId}` }],
+            [{ text: '✅ Konfirmasi saldo masuk', callback_data: `pay_ok:${invoice.id}:${adminTargetTelegramId || 'na'}` }],
+            [{ text: '❌ Belum masuk', callback_data: `pay_no:${invoice.id}:${adminTargetTelegramId || 'na'}` }],
         ],
     };
 
@@ -808,21 +871,20 @@ async function resolveOwnedUserFromRequest(
     req: { headers: Record<string, any> },
     input: { telegramId?: string; createIfMissing: boolean }
 ) {
-    if (input.telegramId) {
+    if (req.headers.authorization) {
+        const webUser = await authService.requireUser(req.headers.authorization);
+        const user = await resolveUserForWebSession(webUser, input.createIfMissing);
+        return { user, webUser };
+    }
+
+    if (input.telegramId && hasInternalAccess(req)) {
         const user = input.createIfMissing
             ? await userService.findOrCreate(input.telegramId)
             : await userService.getByTelegramId(input.telegramId);
         return { user, webUser: null };
     }
 
-    if (!req.headers.authorization) {
-        return { user: null, webUser: null };
-    }
-
-    const webUser = await authService.requireUser(req.headers.authorization);
-    const user = await resolveUserForWebSession(webUser, input.createIfMissing);
-
-    return { user, webUser };
+    return { user: null, webUser: null };
 }
 
 async function resolveUserForWebSession(
@@ -892,4 +954,8 @@ function extractQrisImageUrl(gatewayPayload?: string | null) {
 function getRequestIp(req: { headers: Record<string, any>; ip?: string }) {
     const forwarded = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     return forwarded || req.ip || '';
+}
+
+function hasInternalAccess(req: { headers: Record<string, any> }) {
+    return String(req.headers['x-internal-secret'] || '').trim() === config.INTERNAL_API_SECRET;
 }

@@ -1,6 +1,5 @@
 import { prisma } from '../../database/prisma.client';
 import { heroSMSProvider, parseHeroSMSPriceId } from '../providers/herosms.provider';
-import { userService } from '../users/user.service';
 import { serviceService } from '../services/service.service';
 import { otpQueue } from '../../queue/queue';
 import logger from '../../utils/logger';
@@ -27,94 +26,109 @@ interface CancelAndRefundResult {
 export const orderService = {
     /**
      * Create a new order through HeroSMS:
-     * 1. Parse provider metadata from priceId
+     * 1. Reserve balance and create local PENDING order atomically
      * 2. Call provider to order the number
-     * 3. Deduct balance & save to DB
+     * 3. Activate local order with provider response
      * 4. Enqueue OTP polling
+     * 5. If any step after reservation fails, refund exactly once
      */
     async createOrder(userId: string, priceId: string) {
         const price = await serviceService.getPriceById(priceId);
         if (!price) throw new Error('Price not found');
         if (!price.isActive) throw new Error('This price is no longer available');
 
-        const balance = await userService.getBalance(userId);
-        if (balance < price.sellPrice) {
-            throw new Error(
-                `Insufficient balance. Need ${formatRupiah(price.sellPrice)}, have ${formatRupiah(balance)}`
-            );
-        }
-
         const providerPrice = parseHeroSMSPriceId(price.priceId);
         if (!providerPrice) {
             throw new Error('Invalid HeroSMS price configuration. Please sync provider data again.');
         }
 
-        // Call provider to order the number
-        const result = await heroSMSProvider.orderNumber({
-            serviceCode: providerPrice.serviceCode,
-            countryCode: providerPrice.countryCode,
-            providerId: providerPrice.providerId,
-            maxPrice: price.providerPrice,
-        });
-        if (!result.success || !result.phone_number || !result.order_id) {
-            throw new Error(result.message || 'Harga/provider HeroSMS berubah. Sync provider lalu coba lagi.');
-        }
-
-        // Deduct user balance
-        await userService.deductBalance(
+        const reservedOrder = await reserveOrderBalance(
             userId,
+            price.id,
             price.sellPrice,
             `Order ${price.service.name} ${price.country.name}`,
-            undefined
+            async (currentBalance) => {
+                throw new Error(
+                    `Insufficient balance. Need ${formatRupiah(price.sellPrice)}, have ${formatRupiah(currentBalance)}`
+                );
+            }
         );
 
-        // Create order record
-        const order = await prisma.order.create({
-            data: {
-                userId,
-                priceId,
-                providerOrderId: result.order_id,
-                phoneNumber: result.phone_number,
-                status: 'ACTIVE',
-            },
-            include: {
-                price: {
-                    include: { service: true, country: true },
-                },
-            },
-        });
+        let providerOrderId: string | null = null;
 
-        // SMS-Activate style providers may require an explicit "ready" signal
-        // after the number is obtained so the activation stays open for incoming OTP.
-        await heroSMSProvider.markActivationReady(result.order_id);
+        try {
+            const result = await heroSMSProvider.orderNumber({
+                serviceCode: providerPrice.serviceCode,
+                countryCode: providerPrice.countryCode,
+                providerId: providerPrice.providerId,
+                maxPrice: price.providerPrice,
+            });
+            if (!result.success || !result.phone_number || !result.order_id) {
+                await failReservedOrder(reservedOrder.id, {
+                    failReason: result.message || 'Harga/provider HeroSMS berubah. Sync provider lalu coba lagi.',
+                    refundDescription: 'Refund order failed before activation',
+                });
+                throw new Error(result.message || 'Harga/provider HeroSMS berubah. Sync provider lalu coba lagi.');
+            }
 
-        // Update transaction reference
-        await prisma.transaction.updateMany({
-            where: { userId, type: 'DEDUCT', reference: null },
-            data: { reference: order.id },
-        });
+            providerOrderId = result.order_id;
 
-        logger.info({ orderId: order.id, phoneNumber: result.phone_number }, 'Order created');
-
-        // Enqueue OTP polling job
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (user) {
-            await otpQueue.add(
-                'poll-otp',
-                {
-                    orderId: order.id,
-                    providerOrderId: result.order_id,
-                    telegramId: user.telegramId,
-                },
-                {
-                    attempts: 1,
-                    removeOnComplete: true,
-                    removeOnFail: false,
-                }
+            const activatedOrder = await activateReservedOrder(
+                reservedOrder.id,
+                result.order_id,
+                result.phone_number
             );
-        }
+            if (!activatedOrder) {
+                await failReservedOrder(reservedOrder.id, {
+                    cancelProvider: true,
+                    providerOrderId,
+                    failReason: 'Failed to activate local order state after provider success',
+                    refundDescription: 'Refund order activation failure',
+                });
+                throw new Error('Failed to activate local order state after provider success');
+            }
 
-        return order;
+            await heroSMSProvider.markActivationReady(result.order_id);
+
+            const user = await prisma.user.findUnique({ where: { id: userId } });
+            if (user) {
+                await otpQueue.add(
+                    'poll-otp',
+                    {
+                        orderId: activatedOrder.id,
+                        providerOrderId: result.order_id,
+                        telegramId: user.telegramId,
+                    },
+                    {
+                        attempts: 1,
+                        removeOnComplete: true,
+                        removeOnFail: false,
+                    }
+                );
+            }
+
+            logger.info(
+                { orderId: activatedOrder.id, phoneNumber: result.phone_number, providerOrderId: result.order_id },
+                'Order created'
+            );
+
+            return activatedOrder;
+        } catch (err) {
+            if (providerOrderId) {
+                await failReservedOrder(reservedOrder.id, {
+                    cancelProvider: true,
+                    providerOrderId,
+                    failReason: (err as Error).message || 'Order creation failed after provider success',
+                    refundDescription: 'Refund order processing failure',
+                }).catch((refundErr) => {
+                    logger.error(
+                        { err: refundErr, orderId: reservedOrder.id, providerOrderId },
+                        'Failed to compensate reserved order after provider success'
+                    );
+                });
+            }
+            throw err;
+        }
     },
 
     /** Get orders for a user */
@@ -321,3 +335,183 @@ export const orderService = {
         });
     },
 };
+
+async function reserveOrderBalance(
+    userId: string,
+    priceId: string,
+    amount: number,
+    description: string,
+    onInsufficientBalance: (currentBalance: number) => Promise<never>
+) {
+    return prisma.$transaction(async (tx) => {
+        const order = await tx.order.create({
+            data: {
+                userId,
+                priceId,
+                status: 'PENDING',
+            },
+            include: {
+                price: {
+                    include: { service: true, country: true },
+                },
+            },
+        });
+
+        const updateResult = await tx.user.updateMany({
+            where: {
+                id: userId,
+                balance: { gte: amount },
+            },
+            data: {
+                balance: { decrement: amount },
+            },
+        });
+
+        if (updateResult.count === 0) {
+            const currentUser = await tx.user.findUnique({
+                where: { id: userId },
+                select: { balance: true },
+            });
+            await tx.order.delete({ where: { id: order.id } }).catch(() => null);
+            return onInsufficientBalance(currentUser?.balance ?? 0);
+        }
+
+        await tx.transaction.create({
+            data: {
+                userId,
+                type: 'DEDUCT',
+                amount: -amount,
+                description,
+                reference: order.id,
+            },
+        });
+
+        return order;
+    });
+}
+
+async function activateReservedOrder(orderId: string, providerOrderId: string, phoneNumber: string) {
+    const updateResult = await prisma.order.updateMany({
+        where: {
+            id: orderId,
+            status: 'PENDING',
+        },
+        data: {
+            providerOrderId,
+            phoneNumber,
+            status: 'ACTIVE',
+            failReason: null,
+        },
+    });
+
+    if (updateResult.count === 0) {
+        return null;
+    }
+
+    return prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+            price: {
+                include: { service: true, country: true },
+            },
+        },
+    });
+}
+
+async function failReservedOrder(
+    orderId: string,
+    options: {
+        cancelProvider?: boolean;
+        providerOrderId?: string | null;
+        failReason: string;
+        refundDescription: string;
+    }
+) {
+    if (options.cancelProvider && options.providerOrderId) {
+        await heroSMSProvider.cancelActivation(options.providerOrderId);
+    }
+
+    const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { price: true },
+    });
+
+    if (!order) {
+        throw new Error('Order not found');
+    }
+
+    if (!['PENDING', 'ACTIVE'].includes(order.status)) {
+        return {
+            status: order.status,
+            refunded: false,
+            refundAmount: 0,
+        };
+    }
+
+    return prisma.$transaction(async (tx) => {
+        const updateResult = await tx.order.updateMany({
+            where: {
+                id: orderId,
+                status: { in: ['PENDING', 'ACTIVE'] },
+            },
+            data: {
+                status: 'FAILED',
+                failReason: options.failReason,
+            },
+        });
+
+        if (updateResult.count === 0) {
+            const currentOrder = await tx.order.findUnique({
+                where: { id: orderId },
+                select: { status: true },
+            });
+            return {
+                status: currentOrder?.status ?? 'UNKNOWN',
+                refunded: false,
+                refundAmount: 0,
+            };
+        }
+
+        const existingRefund = await tx.transaction.findFirst({
+            where: {
+                userId: order.userId,
+                type: 'REFUND',
+                reference: orderId,
+            },
+            select: { id: true },
+        });
+
+        if (!existingRefund) {
+            await tx.user.update({
+                where: { id: order.userId },
+                data: { balance: { increment: order.price.sellPrice } },
+            });
+
+            await tx.transaction.create({
+                data: {
+                    userId: order.userId,
+                    type: 'REFUND',
+                    amount: order.price.sellPrice,
+                    description: options.refundDescription,
+                    reference: orderId,
+                },
+            });
+        }
+
+        logger.warn(
+            {
+                orderId,
+                providerOrderId: options.providerOrderId,
+                refunded: !existingRefund,
+                failReason: options.failReason,
+            },
+            'Reserved order failed and refund processed'
+        );
+
+        return {
+            status: 'FAILED',
+            refunded: !existingRefund,
+            refundAmount: existingRefund ? 0 : order.price.sellPrice,
+        };
+    });
+}
