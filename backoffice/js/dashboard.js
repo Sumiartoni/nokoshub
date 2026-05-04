@@ -87,7 +87,7 @@
         orders:       { title: 'Orders',      sub: 'Riwayat pembelian nomor virtual' },
         invoices:     { title: 'Invoices',    sub: 'Riwayat deposit & pembayaran payment gateway' },
         transactions: { title: 'Transaksi',   sub: 'Semua aliran transaksi keuangan' },
-        services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari HeroSMS' },
+        services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari seluruh provider OTP' },
         referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
         smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
         'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
@@ -298,11 +298,16 @@
             const baseRate = Number(summary.providerRateBase || exchangeRate);
             const bufferPercent = Number(summary.providerRateBufferPercent || 0);
             const providerIdr = Number(summary.providerBalanceIdr ?? (providerUsd * exchangeRate));
+            const providerBalances = Array.isArray(summary.providerBalances) ? summary.providerBalances : [];
 
             providerBal = Number.isFinite(providerIdr) ? formatRupiahFull(providerIdr) : '—';
-            providerMeta = Number.isFinite(providerUsd) && Number.isFinite(exchangeRate) && exchangeRate > 0
-                ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}${bufferPercent ? ` (kurs asli ${formatRupiahFull(baseRate)} + ${bufferPercent}%)` : ''}`
-                : '';
+            providerMeta = providerBalances.length
+                ? providerBalances.map((item) => `${item.serverLabel}: $${Number(item.balanceUsd || 0).toFixed(2)}`).join(' • ')
+                : (
+                    Number.isFinite(providerUsd) && Number.isFinite(exchangeRate) && exchangeRate > 0
+                        ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}${bufferPercent ? ` (kurs asli ${formatRupiahFull(baseRate)} + ${bufferPercent}%)` : ''}`
+                        : ''
+                );
             providerStatus = (Number.isFinite(providerUsd) && providerUsd > 0) ? 'online' : 'offline';
         }
 
@@ -1036,9 +1041,11 @@
     function renderServiceStats(data) {
         const statsEl = document.getElementById('serviceStats');
         const active = data.filter(s => s.isActive).length;
+        const server1 = data.filter(s => s.providerKey === 'server1').length;
+        const server2 = data.filter(s => s.providerKey === 'herosms').length;
         document.getElementById('svc-total').textContent = data.length;
-        document.getElementById('svc-active').textContent = active;
-        document.getElementById('svc-inactive').textContent = data.length - active;
+        document.getElementById('svc-active').textContent = `${active} • S1 ${server1}`;
+        document.getElementById('svc-inactive').textContent = `${data.length - active} • S2 ${server2}`;
         statsEl.style.display = 'flex';
     }
 
@@ -1048,11 +1055,12 @@
 
         body.innerHTML = `
             <table class="data-table">
-                <thead><tr><th>Kode</th><th>Nama Layanan</th><th>Status</th><th>Aksi</th></tr></thead>
+                <thead><tr><th>Server</th><th>Kode</th><th>Nama Layanan</th><th>Status</th><th>Aksi</th></tr></thead>
                 <tbody>
                     ${data.map(s => `<tr>
+                        <td><span class="badge info">${s.serverLabel || s.providerLabel || 'Server'}</span></td>
                         <td>${idChip(s.serviceCode, s.serviceCode.length)}</td>
-                        <td class="fw-600">${s.name}</td>
+                        <td class="fw-600">${s.name}<div class="text-muted" style="font-size:0.72rem;margin-top:4px">${s.providerLabel || s.providerKey || 'Provider'}</div></td>
                         <td>${s.isActive ? statusBadge('ACTIVE') : statusBadge('DISABLED')}</td>
                         <td class="actions-cell">
                             <button class="btn btn-sm ${s.isActive ? 'btn-danger' : 'btn-success'}"
@@ -1095,7 +1103,7 @@
     window.triggerSync = async function () {
         openConfirm({
             title: 'Sync dari Provider',
-            message: 'Proses sync akan berjalan di background dan bisa memakan waktu 2–4 menit. Data layanan & harga akan diperbarui dari HeroSMS.',
+            message: 'Proses sync akan berjalan di background dan bisa memakan waktu 2–4 menit. Data layanan & harga akan diperbarui dari seluruh provider OTP yang aktif.',
             okText: 'Mulai Sync',
             color: 'primary',
             onOk: async () => {

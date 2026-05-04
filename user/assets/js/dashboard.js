@@ -460,19 +460,22 @@ function mapServices(services) {
     .filter(service => service && service.isActive !== false)
     .map(service => {
       const name = service.name || service.serviceCode || 'Layanan OTP';
-      const cat = inferCategory(name);
       return {
         id: service.id,
         serviceCode: service.serviceCode,
+        providerKey: service.providerKey || inferProviderKeyFromServiceCode(service.serviceCode),
+        providerLabel: service.providerLabel || 'Provider',
+        serverLabel: service.serverLabel || 'Server',
         e: iconForService(name),
         n: name,
-        cat,
-        bg: colorForCategory(cat),
         p: Number(service.minSellPrice || 0),
         priceCount: Number(service.priceCount || 0),
       };
     })
     .sort((a, b) => {
+      const serverA = normalizeServerFilter(a.serverLabel);
+      const serverB = normalizeServerFilter(b.serverLabel);
+      if (serverA !== serverB) return serverA.localeCompare(serverB);
       const popularA = popularServiceScore(a.n);
       const popularB = popularServiceScore(b.n);
       if (popularA !== popularB) return popularA - popularB;
@@ -594,7 +597,13 @@ function renderSvcs() {
   const list = document.getElementById('svcList');
   if (!list) return;
   const q = (document.getElementById('svcSearch')?.value || '').toLowerCase().trim();
-  const filtered = SVC.filter(s => !q || s.n.toLowerCase().includes(q));
+  const filtered = SVC.filter(s => {
+    const matchesQuery = !q || s.n.toLowerCase().includes(q);
+    const matchesServer = S.buy.serverFilter === 'all'
+      ? true
+      : normalizeServerFilter(s.serverLabel) === S.buy.serverFilter;
+    return matchesQuery && matchesServer;
+  });
 
   if (!filtered.length) {
     list.innerHTML = emptyBlock('🔍', 'Tidak ditemukan', 'Coba kata kunci lain atau sync provider dari backoffice.');
@@ -653,6 +662,15 @@ function setServerFilter(filter, button) {
   S.buy.serverFilter = ['server1', 'server2'].includes(filter) ? filter : 'all';
   updateServerFilterUi(button);
   clearServerOptions();
+  if (S.buy.svc && S.buy.serverFilter !== 'all' && normalizeServerFilter(S.buy.svc.serverLabel) !== S.buy.serverFilter) {
+    S.buy.svc = null;
+    S.buy.countries = [];
+    S.buy.country = null;
+    S.buy.price = null;
+    set('selSvcIcon', '📱');
+    set('selSvcName', 'Pilih layanan');
+    set('selSvcPrice', 'Pilih negara');
+  }
   if (S.buy.country) {
     S.buy.country = null;
     S.buy.price = null;
@@ -660,6 +678,7 @@ function setServerFilter(filter, button) {
     set('selSvcPrice', 'Pilih negara');
     showToast('Server diubah. Pilih negara lagi untuk memuat opsi yang sesuai.', 'info');
   }
+  renderSvcs();
 }
 
 function updateServerFilterUi(activeButton) {
@@ -1963,6 +1982,11 @@ function renderServiceIcon(service) {
     return `<img src="${esc(src)}" alt="${esc(service.n)}" loading="lazy" referrerpolicy="no-referrer" />`;
   }
   return `<span class="svc-tile-fallback">${service.e || iconForService(service.n)}</span>`;
+}
+
+function inferProviderKeyFromServiceCode(serviceCode = '') {
+  const [providerKey] = String(serviceCode || '').split('__');
+  return providerKey || '';
 }
 
 function normalizeServerFilter(label = '') {

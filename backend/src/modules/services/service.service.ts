@@ -43,7 +43,6 @@ export const serviceService = {
             ]);
 
             const servicesByCode = new Map(existingServices.map((service) => [service.serviceCode, service]));
-            const servicesByName = new Map(existingServices.map((service) => [normalizeServiceName(service.name), service]));
             const countriesByCode = new Map(existingCountries.map((country) => [country.countryCode, country]));
 
             for (const { providerKey, provider, descriptor } of providers) {
@@ -59,8 +58,7 @@ export const serviceService = {
                     const service = await ensureServiceRecord(
                         providerKey,
                         svc,
-                        servicesByCode,
-                        servicesByName
+                        servicesByCode
                     );
                     servicesCount++;
 
@@ -104,10 +102,14 @@ export const serviceService = {
 
     /** List all active services */
     async getServices() {
-        return prisma.service.findMany({
+        const services = await prisma.service.findMany({
             where: { isActive: true },
             orderBy: { id: 'asc' },
         });
+        return services.map((service) => ({
+            ...service,
+            ...describeServiceProvider(service.serviceCode),
+        }));
     },
 
     /** List countries that have prices for a given service */
@@ -271,17 +273,12 @@ function normalizePriceForSync(
 async function ensureServiceRecord(
     providerKey: 'server1' | 'herosms',
     svc: ProviderService,
-    servicesByCode: Map<string, { id: string; name: string; serviceCode: string; isActive: boolean }>,
-    servicesByName: Map<string, { id: string; name: string; serviceCode: string; isActive: boolean }>
+    servicesByCode: Map<string, { id: string; name: string; serviceCode: string; isActive: boolean }>
 ) {
     const providerServiceCode = String(svc.service_code);
-    const normalizedName = normalizeServiceName(svc.service_name);
     const compositeServiceCode = buildStoredServiceCode(providerKey, providerServiceCode);
 
-    const existing =
-        (providerKey === 'herosms' ? servicesByCode.get(providerServiceCode) : null) ??
-        servicesByCode.get(compositeServiceCode) ??
-        servicesByName.get(normalizedName);
+    const existing = servicesByCode.get(compositeServiceCode);
 
     if (existing) {
         const updated = await prisma.service.update({
@@ -289,19 +286,17 @@ async function ensureServiceRecord(
             data: { name: svc.service_name, isActive: true },
         });
         servicesByCode.set(updated.serviceCode, updated);
-        servicesByName.set(normalizedName, updated);
         return updated;
     }
 
     const created = await prisma.service.create({
         data: {
             name: svc.service_name,
-            serviceCode: providerKey === 'herosms' ? providerServiceCode : compositeServiceCode,
+            serviceCode: compositeServiceCode,
             isActive: true,
         },
     });
     servicesByCode.set(created.serviceCode, created);
-    servicesByName.set(normalizedName, created);
     return created;
 }
 
@@ -357,6 +352,8 @@ async function bulkUpsertPrices(
             INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "providerPriceUsd", "sellPrice", "isActive", "updatedAt")
             VALUES ${values}
             ON CONFLICT ("priceId") DO UPDATE SET
+            "serviceId" = EXCLUDED."serviceId",
+            "countryId" = EXCLUDED."countryId",
             "providerPrice" = EXCLUDED."providerPrice",
             "providerPriceUsd" = EXCLUDED."providerPriceUsd",
             "sellPrice" = EXCLUDED."sellPrice",
@@ -385,17 +382,17 @@ async function bulkUpsertPrices(
 }
 
 function buildStoredServiceCode(providerKey: 'server1' | 'herosms', serviceCode: string) {
-    if (providerKey === 'herosms') return serviceCode;
     return `${providerKey}__${serviceCode}`;
 }
 
-function normalizeServiceName(name: string) {
-    return String(name || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .replace(/\b(otp|sms|verification|receive|number|virtual)\b/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+function describeServiceProvider(serviceCode: string) {
+    const [providerKey] = String(serviceCode || '').split('__');
+    const provider = getProviderDescriptor(providerKey);
+    return {
+        providerKey: provider.key,
+        providerLabel: provider.displayName,
+        serverLabel: provider.serverLabel,
+    };
 }
 
 function sqlString(value: string): string {

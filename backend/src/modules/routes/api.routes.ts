@@ -274,14 +274,16 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         return {
             success: true,
-            data: services.map((service) => {
-                const stat = statsByService.get(service.id);
-                return {
-                    ...service,
-                    minSellPrice: stat?._min.sellPrice ?? null,
-                    priceCount: stat?._count._all ?? 0,
-                };
-            }),
+            data: services
+                .map((service) => {
+                    const stat = statsByService.get(service.id);
+                    return {
+                        ...service,
+                        minSellPrice: stat?._min.sellPrice ?? null,
+                        priceCount: stat?._count._all ?? 0,
+                    };
+                })
+                .filter((service) => Number(service.priceCount || 0) > 0),
         };
     });
 
