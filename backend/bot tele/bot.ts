@@ -332,7 +332,6 @@ export function createBot(): TelegramBot {
         const chatId = msg.chat.id;
         const firstName = msg.from?.first_name ?? 'Pengguna';
         clearSession(chatId);
-        await deleteMessageSafe(bot, chatId, msg.message_id);
 
         await upsertTextPanel(
             bot,
@@ -355,19 +354,16 @@ export function createBot(): TelegramBot {
     bot.onText(/\/menu/, async (msg) => {
         const existingPanelId = getSession(msg.chat.id).panelMessageId;
         clearSession(msg.chat.id);
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await sendMainMenu(bot, msg.chat.id, existingPanelId);
     });
 
     // ─── /balance ─────────────────────────────────────────────────────────────
     bot.onText(/\/balance/, async (msg) => {
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await handleBalance(bot, msg.chat.id, String(msg.from?.id), msg.message_id);
     });
 
     // ─── /history ─────────────────────────────────────────────────────────────
     bot.onText(/\/history/, async (msg) => {
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await handleHistory(bot, msg.chat.id, String(msg.from?.id), msg.message_id);
     });
 
@@ -382,7 +378,6 @@ export function createBot(): TelegramBot {
         const session = getSession(msg.chat.id);
         session.pendingWebLink = true;
         session.step = 'AWAIT_WEB_LINK_CODE';
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await upsertTextPanel(
             bot,
             msg.chat.id,
@@ -406,7 +401,6 @@ export function createBot(): TelegramBot {
     // ─── /myid ────────────────────────────────────────────────────────────────
     bot.onText(/\/myid/, async (msg) => {
         const telegramId = String(msg.from?.id ?? msg.chat.id);
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await upsertTextPanel(
             bot,
             msg.chat.id,
@@ -418,14 +412,12 @@ export function createBot(): TelegramBot {
 
     // ─── /buy ─────────────────────────────────────────────────────────────────
     bot.onText(/\/buy/, async (msg) => {
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await handleBuyStart(bot, msg.chat.id, 0, undefined, msg.message_id);
     });
 
     // ─── /deposit ─────────────────────────────────────────────────────────────
     bot.onText(/\/deposit(?:\s+(\d+))?/, async (msg, match) => {
         const amountStr = match?.[1];
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         if (amountStr) {
             await handleDepositWithAmount(bot, msg.chat.id, String(msg.from?.id), parseInt(amountStr), msg.message_id);
         } else {
@@ -445,13 +437,11 @@ export function createBot(): TelegramBot {
                 { sourceMessageId: msg.message_id }
             );
         }
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await handleOrderStatus(bot, msg.chat.id, orderId, msg.message_id);
     });
 
     // ─── /help ────────────────────────────────────────────────────────────────
     bot.onText(/\/help/, async (msg) => {
-        await deleteMessageSafe(bot, msg.chat.id, msg.message_id);
         await upsertTextPanel(
             bot,
             msg.chat.id,
@@ -508,7 +498,6 @@ export function createBot(): TelegramBot {
                 );
                 return;
             }
-            await deleteMessageSafe(bot, chatId, msg.message_id);
             await clearReplyPrompt(bot, chatId);
             await handleWebLinkCode(bot, msg, code);
             return;
@@ -516,7 +505,6 @@ export function createBot(): TelegramBot {
 
         if (session.step === 'AWAIT_PAYMENT_PROOF') {
             session.step = undefined;
-            await deleteMessageSafe(bot, chatId, msg.message_id);
             await upsertTextPanel(
                 bot,
                 chatId,
@@ -551,7 +539,6 @@ export function createBot(): TelegramBot {
                 return;
             }
             session.step = undefined;
-            await deleteMessageSafe(bot, chatId, msg.message_id);
             await clearReplyPrompt(bot, chatId);
             await handleDepositWithAmount(bot, chatId, telegramId, amount, msg.message_id);
         }
