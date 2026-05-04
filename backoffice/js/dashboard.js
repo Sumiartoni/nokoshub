@@ -318,7 +318,9 @@
 
         // System status panel
         const sysRow = document.getElementById('systemStatusRow');
-        const apiStatus = overviewRes.status === 'fulfilled' && overviewRes.value.success;
+        const apiStatus = [overviewRes, ordersRes, invoicesRes, servicesRes].some(
+            (result) => result.status === 'fulfilled' && result.value?.success
+        );
         sysRow.innerHTML = `
             <div class="status-pill ${apiStatus ? 'online' : 'offline'}">
                 <div class="status-pill-dot"></div> API ${apiStatus ? 'Online' : 'Offline'}
