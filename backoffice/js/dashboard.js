@@ -729,6 +729,7 @@
     //  SERVICES PAGE
     // ═══════════════════════════════════════════════════════════════════════════
     let _servicesData = [];
+    let _serviceProviderFilter = 'all';
 
     window.loadPricingSettings = async function (forceRefresh = false) {
         const multiplierInput = document.getElementById('sellMultiplierInput');
@@ -1030,11 +1031,20 @@
             const matchSearch = !q ||
                 (s.serviceCode || '').toLowerCase().includes(q) ||
                 (s.name || '').toLowerCase().includes(q);
-            return matchStatus && matchSearch;
+            const matchProvider = _serviceProviderFilter === 'all' || (s.providerKey || '') === _serviceProviderFilter;
+            return matchStatus && matchSearch && matchProvider;
         });
     }
 
     window.filterServicesTable = function () {
+        renderServicesTable(applyServiceFilter(_servicesData));
+    };
+
+    window.setServiceProviderFilter = function (providerKey) {
+        _serviceProviderFilter = ['server1', 'herosms'].includes(providerKey) ? providerKey : 'all';
+        document.querySelectorAll('[data-service-provider]').forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.serviceProvider === _serviceProviderFilter);
+        });
         renderServicesTable(applyServiceFilter(_servicesData));
     };
 
@@ -1053,24 +1063,60 @@
         const body = document.getElementById('servicesTableBody');
         if (!data.length) { body.innerHTML = emptyHTML('Tidak ada layanan. Coba sync dari provider.'); return; }
 
-        body.innerHTML = `
-            <table class="data-table">
-                <thead><tr><th>Server</th><th>Kode</th><th>Nama Layanan</th><th>Status</th><th>Aksi</th></tr></thead>
-                <tbody>
-                    ${data.map(s => `<tr>
-                        <td><span class="badge info">${s.serverLabel || s.providerLabel || 'Server'}</span></td>
-                        <td>${idChip(s.serviceCode, s.serviceCode.length)}</td>
-                        <td class="fw-600">${s.name}<div class="text-muted" style="font-size:0.72rem;margin-top:4px">${s.providerLabel || s.providerKey || 'Provider'}</div></td>
-                        <td>${s.isActive ? statusBadge('ACTIVE') : statusBadge('DISABLED')}</td>
-                        <td class="actions-cell">
-                            <button class="btn btn-sm ${s.isActive ? 'btn-danger' : 'btn-success'}"
-                                onclick="confirmToggleService('${s.serviceCode}', ${!s.isActive}, '${s.name}')">
-                                ${s.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                            </button>
-                        </td>
-                    </tr>`).join('')}
-                </tbody>
-            </table>`;
+        const groups = [
+            { key: 'server1', title: 'Server 1', fallbackProvider: 'Provider Baru' },
+            { key: 'herosms', title: 'Server 2', fallbackProvider: 'HeroSMS' },
+        ];
+
+        const visibleGroups = _serviceProviderFilter === 'all'
+            ? groups
+            : groups.filter((group) => group.key === _serviceProviderFilter);
+
+        body.innerHTML = visibleGroups.map((group) => {
+            const items = data.filter((service) => (service.providerKey || '') === group.key);
+            if (!items.length) {
+                return `
+                    <div class="service-group">
+                        <div class="service-group-head">
+                            <div class="service-group-title">
+                                <span class="badge info">${group.title}</span>
+                                <span>${group.fallbackProvider}</span>
+                            </div>
+                            <div class="service-group-count">0 layanan</div>
+                        </div>
+                        ${emptyHTML(`Belum ada layanan untuk ${group.title}. Jalankan sync provider.`)}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="service-group">
+                    <div class="service-group-head">
+                        <div class="service-group-title">
+                            <span class="badge info">${items[0].serverLabel || group.title}</span>
+                            <span>${items[0].providerLabel || group.fallbackProvider}</span>
+                        </div>
+                        <div class="service-group-count">${items.length} layanan</div>
+                    </div>
+                    <table class="data-table">
+                        <thead><tr><th>Kode</th><th>Nama Layanan</th><th>Status</th><th>Aksi</th></tr></thead>
+                        <tbody>
+                            ${items.map(s => `<tr>
+                                <td>${idChip(s.serviceCode, s.serviceCode.length)}</td>
+                                <td class="fw-600">${s.name}</td>
+                                <td>${s.isActive ? statusBadge('ACTIVE') : statusBadge('DISABLED')}</td>
+                                <td class="actions-cell">
+                                    <button class="btn btn-sm ${s.isActive ? 'btn-danger' : 'btn-success'}"
+                                        onclick="confirmToggleService('${s.serviceCode}', ${!s.isActive}, '${s.name}')">
+                                        ${s.isActive ? 'Nonaktifkan' : 'Aktifkan'}
+                                    </button>
+                                </td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }).join('');
     }
 
     window.confirmToggleService = function (serviceCode, isActive, name) {

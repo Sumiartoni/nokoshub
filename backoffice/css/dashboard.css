@@ -912,6 +912,56 @@ html, body {
 }
 .search-input::placeholder { color: var(--text-muted); }
 
+.segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.56);
+}
+.segmented-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: 0.18s ease;
+}
+.segmented-btn.active {
+    background: rgba(99, 102, 241, 0.18);
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.25);
+}
+.service-group {
+    margin-bottom: 18px;
+}
+.service-group:last-child {
+    margin-bottom: 0;
+}
+.service-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.service-group-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.service-group-count {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+}
+
 /* ─── Loading Overlay ──────────────────────────────────────────────────────── */
 .loading-overlay {
     display: flex;

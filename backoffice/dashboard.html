@@ -378,6 +378,11 @@
                         </svg>
                         <input type="text" class="search-input" id="serviceSearchInput" placeholder="Cari nama layanan / kode…" oninput="filterServicesTable()">
                     </div>
+                    <div class="segmented" id="serviceProviderTabs">
+                        <button class="segmented-btn active" type="button" data-service-provider="all" onclick="setServiceProviderFilter('all')">Semua</button>
+                        <button class="segmented-btn" type="button" data-service-provider="server1" onclick="setServiceProviderFilter('server1')">Server 1</button>
+                        <button class="segmented-btn" type="button" data-service-provider="herosms" onclick="setServiceProviderFilter('herosms')">Server 2</button>
+                    </div>
                     <select class="form-select" id="serviceStatusFilter" onchange="filterServicesTable()">
                         <option value="">Semua Status</option>
                         <option value="active">Aktif</option>
