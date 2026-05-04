@@ -283,13 +283,13 @@
         let providerBal = '—';
         let providerMeta = '';
         let providerStatus = 'warning';
-        let totalOrderCount = totalOrders;
+        let totalOrderRevenue = '—';
         let totalUserBalance = '—';
         let netProfit = '—';
 
         if (overviewRes.status === 'fulfilled' && overviewRes.value.success) {
             const summary = overviewRes.value.data || {};
-            totalOrderCount = Number(summary.totalOrders ?? totalOrders ?? 0);
+            totalOrderRevenue = formatRupiahFull(summary.totalOrderRevenue ?? 0);
             totalUserBalance = formatRupiahFull(summary.totalUserBalance ?? 0);
             netProfit = formatRupiahFull(summary.netProfit ?? 0);
 
@@ -311,7 +311,7 @@
         grid.innerHTML = `
             ${statCard('sky', 'revenue', 'Saldo Deposit User', totalUserBalance)}
             ${statCard('emerald', 'revenue', 'Net Profit', netProfit)}
-            ${statCard('indigo', 'orders', 'Total Order', totalOrderCount)}
+            ${statCard('indigo', 'orders', 'Omzet Order', totalOrderRevenue, totalOrders !== '—' ? `${totalOrders} transaksi` : '')}
             ${statCard('amber', 'provider', 'Saldo Provider', providerBal, providerMeta)}
             ${statCard('rose', 'services', 'Layanan Aktif', totalServices)}
         `;

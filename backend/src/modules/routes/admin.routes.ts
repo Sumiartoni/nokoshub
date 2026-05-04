@@ -174,6 +174,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const providerBalanceIdr = providerSummary.ok && providerRate
             ? Math.round(providerSummary.balanceUsd * providerRate.effectiveRate)
             : 0;
+        const totalOrderRevenue = orderMargins.reduce((sum, order) => {
+            return sum + (order.price?.sellPrice ?? 0);
+        }, 0);
         const netProfit = orderMargins.reduce((sum, order) => {
             return sum + ((order.price?.sellPrice ?? 0) - (order.price?.providerPrice ?? 0));
         }, 0);
@@ -183,6 +186,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
                 totalOrders,
                 activeOrders,
+                totalOrderRevenue,
                 totalUserBalance,
                 totalPaidDeposits: paidInvoiceAgg._sum.baseAmount ?? 0,
                 totalGatewayFees: paidInvoiceAgg._sum.gatewayFee ?? 0,
