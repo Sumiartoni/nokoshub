@@ -541,69 +541,168 @@ input, textarea, select { user-select: text; }
 /* =============================================
    BUY OTP PAGE - MULTI STEP
    ============================================= */
-/* Step indicator */
-.buy-steps {
-  display: flex;
-  align-items: center;
-  gap: 0;
+.buy-server-card {
   margin-bottom: 24px;
-  background: white;
+  background: linear-gradient(135deg, #fff7d8 0%, #eef7ff 100%);
   border: var(--bw) solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-s);
-  padding: 16px 24px;
-  overflow-x: auto;
+  padding: 18px 20px;
 }
-.buy-step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.step-num {
-  width: 32px; height: 32px;
-  border: var(--bw) solid var(--border);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 900;
-  font-size: 0.85rem;
-  background: var(--bg);
-  box-shadow: var(--shadow-xs);
-  transition: var(--ease);
-  flex-shrink: 0;
-}
-.step-info .step-title { font-weight: 800; font-size: 0.82rem; }
-.step-info .step-sub   { font-size: 0.68rem; color: var(--muted); font-weight: 600; }
-.step-line { flex: 1; height: 2px; background: #e5e5e5; margin: 0 14px; min-width: 30px; border-radius: 2px; }
 
-.buy-step.done .step-num  { background: var(--success); color: var(--text); border-color: var(--border); }
-.buy-step.active .step-num { background: var(--primary); color: #fff; }
-.step-line.done { background: var(--success); }
+.buy-server-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.buy-server-title {
+  font-family: var(--font-h);
+  font-size: 1.05rem;
+}
+
+.buy-server-sub {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 700;
+  max-width: 520px;
+}
+
+.buy-server-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-full);
+  background: #fff;
+  box-shadow: var(--shadow-xs);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.buy-server-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.server-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 14px;
+  background: #fff;
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--ease);
+}
+
+.server-pick:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-s);
+}
+
+.server-pick.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.server-pick-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: var(--r-full);
+  border: 1.5px solid currentColor;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.server-pick-name {
+  font-weight: 900;
+  font-size: 0.88rem;
+}
+
+.server-pick-desc {
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.78;
+}
 
 /* Sub-pages within buy */
 .buy-sub { display: none; }
 .buy-sub.active { display: block; }
 
 /* Service list in buy */
-.svc-list { display: flex; flex-direction: column; gap: 10px; }
-.svc-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px;
-  background: white;
+.svc-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.svc-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 118px;
+  padding: 12px 10px;
+  background: #fff;
   border: var(--bw) solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-s);
   cursor: pointer;
   transition: var(--ease);
 }
-.svc-row:hover { transform: translate(-2px,-2px); box-shadow: var(--shadow); }
-.svc-row:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 var(--border); }
-.svc-row-icon { width:46px; height:46px; border:var(--bw) solid var(--border); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; font-size:1.4rem; box-shadow:var(--shadow-xs); flex-shrink:0; }
-.svc-row-info { flex:1; min-width:0; }
-.svc-row-name { font-weight:800; font-size:0.92rem; }
-.svc-row-cat  { font-size:0.7rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
-.svc-row-right { text-align:right; flex-shrink:0; }
-.svc-row-price { font-family:var(--font-h); font-size:1.05rem; color:var(--primary); }
+
+.svc-tile:hover { transform: translate(-2px,-2px); box-shadow: var(--shadow); }
+.svc-tile:active { transform: translate(1px,1px); box-shadow: 1px 1px 0 var(--border); }
+
+.svc-tile-icon {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f9ff;
+  border: var(--bw) solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.svc-tile-icon img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+}
+
+.svc-tile-fallback {
+  font-size: 1.35rem;
+}
+
+.svc-tile-name {
+  width: 100%;
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* Search + filter bar */
 .buy-controls {
@@ -632,15 +731,6 @@ input, textarea, select { user-select: text; }
 }
 .search-wrap input { flex:1; border:none; background:transparent; font-family:var(--font-b); font-size:0.88rem; font-weight:700; color:var(--text); outline:none; }
 .search-wrap input::placeholder { color:var(--muted); }
-
-.filter-chips { display:flex; gap:7px; flex-wrap:wrap; }
-.fc {
-  padding:7px 14px; border:var(--bw) solid var(--border); border-radius:var(--r-full);
-  font-size:0.76rem; font-weight:800; cursor:pointer; background:white;
-  box-shadow:var(--shadow-xs); transition:var(--ease); white-space:nowrap;
-}
-.fc:hover { transform:translate(-1px,-1px); box-shadow:var(--shadow-s); }
-.fc.active { background:var(--primary); color:#fff; }
 
 /* Country selection */
 .country-toolbar {
@@ -1636,13 +1726,15 @@ input, textarea, select { user-select: text; }
   .card-hdr { gap: 10px; flex-wrap: wrap; align-items: flex-start; }
 
   /* Buy page */
-  .buy-controls { flex-direction: column; align-items: stretch; }
-  .buy-steps  { padding: 12px 14px; gap: 0; }
-  .step-line  { min-width: 18px; margin: 0 8px; }
-  .step-info .step-sub { display: none; }
-  .svc-row { gap: 10px; padding: 12px; }
-  .svc-row-icon { width: 40px; height: 40px; font-size: 1.15rem; }
-  .svc-row-price { font-size: 0.9rem; }
+  .buy-controls { align-items: stretch; }
+  .buy-server-card { padding: 16px; }
+  .buy-server-head { flex-direction: column; }
+  .buy-server-grid { grid-template-columns: 1fr; }
+  .svc-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .svc-tile { min-height: 110px; padding: 12px 8px; }
+  .svc-tile-icon { width: 54px; height: 54px; border-radius: 16px; }
+  .svc-tile-icon img { width: 32px; height: 32px; }
+  .svc-tile-name { font-size: 0.72rem; }
 
   /* Topup */
   .topup-layout { grid-template-columns: 1fr; }
@@ -1720,15 +1812,6 @@ input, textarea, select { user-select: text; }
   .referral-stats-grid,
   .profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .buy-steps {
-    align-items: stretch;
-  }
-
-  .buy-step {
-    min-width: 0;
-    flex: 1;
   }
 
   .buy-controls > *,
@@ -1864,7 +1947,7 @@ input, textarea, select { user-select: text; }
     font-size: 1.25rem;
   }
 
-  .svc-row,
+  .svc-tile,
   .act-item,
   .oc-top,
   .oc-mid,
@@ -1938,7 +2021,6 @@ input, textarea, select { user-select: text; }
     font-size: 0.78rem;
   }
 
-  .svc-row-right,
   .pay-fee {
     margin-left: 0;
     text-align: left;
@@ -2059,23 +2141,6 @@ input, textarea, select { user-select: text; }
     padding: 12px 12px 18px;
   }
 
-  .buy-steps {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .step-line {
-    width: 2px;
-    height: 16px;
-    margin: 0 0 0 15px;
-    min-width: 0;
-  }
-
-  .step-info .step-sub {
-    display: block;
-    font-size: 0.7rem;
-  }
-
   .stats-grid,
   .quick-grid,
   .country-grid,
@@ -2085,6 +2150,10 @@ input, textarea, select { user-select: text; }
   .api-stats-grid,
   .invoice-history-grid {
     grid-template-columns: 1fr;
+  }
+
+  .svc-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .quick-card {

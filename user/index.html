@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260504-1" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260504-2" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -229,30 +229,30 @@
             <p>Pilih layanan, pilih negara, lalu tunggu kode OTP masuk otomatis.</p>
           </div>
 
-          <!-- Progress steps -->
-          <div class="buy-steps" id="buySteps">
-            <div class="buy-step active" id="bStep1">
-              <div class="step-num">1</div>
-              <div class="step-info">
-                <div class="step-title">Pilih Layanan</div>
-                <div class="step-sub">500+ platform tersedia</div>
+          <div class="buy-server-card">
+            <div class="buy-server-head">
+              <div>
+                <div class="buy-server-title">Pilih Server</div>
+                <div class="buy-server-sub">Tentukan jalur server dulu, lalu pilih layanan OTP yang ingin dipakai.</div>
               </div>
+              <div class="buy-server-status" id="selectedServerLabel">Semua Server</div>
             </div>
-            <div class="step-line" id="bLine1"></div>
-            <div class="buy-step" id="bStep2">
-              <div class="step-num">2</div>
-              <div class="step-info">
-                <div class="step-title">Pilih Negara</div>
-                <div class="step-sub">Sesuai kebutuhan</div>
-              </div>
-            </div>
-            <div class="step-line" id="bLine2"></div>
-            <div class="buy-step" id="bStep3">
-              <div class="step-num">3</div>
-              <div class="step-info">
-                <div class="step-title">Menunggu OTP</div>
-                <div class="step-sub">Maks. 2 menit</div>
-              </div>
+            <div class="buy-server-grid">
+              <button class="server-pick active" id="serverPick-all" type="button" onclick="setServerFilter('all', this)">
+                <span class="server-pick-badge">Auto</span>
+                <span class="server-pick-name">Semua Server</span>
+                <span class="server-pick-desc">Tampilkan semua opsi terbaik</span>
+              </button>
+              <button class="server-pick" id="serverPick-server1" type="button" onclick="setServerFilter('server1', this)">
+                <span class="server-pick-badge">Server 1</span>
+                <span class="server-pick-name">Provider Utama</span>
+                <span class="server-pick-desc">Dipakai saat provider baru aktif</span>
+              </button>
+              <button class="server-pick" id="serverPick-server2" type="button" onclick="setServerFilter('server2', this)">
+                <span class="server-pick-badge">Server 2</span>
+                <span class="server-pick-name">HeroSMS</span>
+                <span class="server-pick-desc">Cadangan aktif saat ini</span>
+              </button>
             </div>
           </div>
 
@@ -262,15 +262,7 @@
             <div class="buy-controls">
               <div class="search-wrap">
                 <span>🔍</span>
-                <input type="text" id="svcSearch" placeholder="Cari layanan… WhatsApp, Shopee, dll" oninput="filterSvc()" />
-              </div>
-              <div class="filter-chips">
-                <div class="fc active" onclick="setCat(this,'all')">🌐 Semua</div>
-                <div class="fc" onclick="setCat(this,'social')">📱 Sosmed</div>
-                <div class="fc" onclick="setCat(this,'ecommerce')">🛒 E-Commerce</div>
-                <div class="fc" onclick="setCat(this,'financial')">💳 Finansial</div>
-                <div class="fc" onclick="setCat(this,'gaming')">🎮 Gaming</div>
-                <div class="fc" onclick="setCat(this,'streaming')">🎬 Streaming</div>
+                <input type="text" id="svcSearch" placeholder="Cari layanan populer..." oninput="filterSvc()" />
               </div>
             </div>
             <div class="svc-list" id="svcList"><!-- JS --></div>
@@ -816,6 +808,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260504-1"></script>
+  <script src="assets/js/dashboard.js?v=20260504-2"></script>
 </body>
 </html>

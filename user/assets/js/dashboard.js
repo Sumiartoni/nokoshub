@@ -56,6 +56,7 @@ const S = {
     country: null,
     price: null,
     priceOptions: [],
+    serverFilter: 'all',
     order: null,
     countries: [],
     busy: false,
@@ -128,13 +129,25 @@ const FALLBACK_COUNTRIES = [
   { id: 'my', f: '🇲🇾', n: 'Malaysia', code: '+60' },
 ];
 
-const CAT_LABEL = {
-  social: 'Sosial',
-  ecommerce: 'E-Commerce',
-  financial: 'Finansial',
-  gaming: 'Gaming',
-  streaming: 'Streaming',
+const SERVER_FILTER_LABEL = {
+  all: 'Semua Server',
+  server1: 'Server 1',
+  server2: 'Server 2',
 };
+
+const POPULAR_SERVICE_ORDER = [
+  'whatsapp',
+  'telegram',
+  'google',
+  'facebook',
+  'instagram',
+  'shopee',
+  'tokopedia',
+  'tiktok',
+  'discord',
+  'netflix',
+  'spotify',
+];
 
 const FMT = n => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
@@ -459,8 +472,19 @@ function mapServices(services) {
         priceCount: Number(service.priceCount || 0),
       };
     })
-    .sort((a, b) => a.n.localeCompare(b.n));
+    .sort((a, b) => {
+      const popularA = popularServiceScore(a.n);
+      const popularB = popularServiceScore(b.n);
+      if (popularA !== popularB) return popularA - popularB;
+      return a.n.localeCompare(b.n);
+    });
   return mapped.length ? mapped : SVC;
+}
+
+function popularServiceScore(name = '') {
+  const normalized = String(name).toLowerCase();
+  const index = POPULAR_SERVICE_ORDER.findIndex(keyword => normalized.includes(keyword));
+  return index === -1 ? 999 : index;
 }
 
 function updateUI() {
@@ -566,16 +590,11 @@ function setInput(id, val) {
   if (el && document.activeElement !== el) el.value = val;
 }
 
-let selectedCat = 'all';
-
 function renderSvcs() {
   const list = document.getElementById('svcList');
   if (!list) return;
   const q = (document.getElementById('svcSearch')?.value || '').toLowerCase().trim();
-  const filtered = SVC.filter(s =>
-    (selectedCat === 'all' || s.cat === selectedCat) &&
-    (!q || s.n.toLowerCase().includes(q))
-  );
+  const filtered = SVC.filter(s => !q || s.n.toLowerCase().includes(q));
 
   if (!filtered.length) {
     list.innerHTML = emptyBlock('🔍', 'Tidak ditemukan', 'Coba kata kunci lain atau sync provider dari backoffice.');
@@ -583,29 +602,17 @@ function renderSvcs() {
   }
 
   list.innerHTML = filtered.map(s => `
-    <div class="svc-row" onclick="selectSvc(${jsArg(s.id)})">
-      <div class="svc-row-icon" style="background:${s.bg};">${s.e}</div>
-      <div class="svc-row-info">
-        <div class="svc-row-name">${esc(s.n)}</div>
-        <div class="svc-row-cat">${CAT_LABEL[s.cat] || 'OTP'} ${s.priceCount ? `• ${s.priceCount} harga` : ''}</div>
+    <button class="svc-tile" type="button" onclick="selectSvc(${jsArg(s.id)})" aria-label="Pilih layanan ${esc(s.n)}">
+      <div class="svc-tile-icon">
+        ${renderServiceIcon(s)}
       </div>
-      <div class="svc-row-right">
-        <div class="svc-row-price">${s.p ? `Mulai ${FMT(s.p)}` : 'Cek harga'}</div>
-        <span class="badge badge-success" style="margin-top:3px;"><span class="badge-dot"></span>Tersedia</span>
-      </div>
-    </div>
+      <div class="svc-tile-name">${esc(s.n)}</div>
+    </button>
   `).join('');
   refreshIcons();
 }
 
 function filterSvc() { renderSvcs(); }
-
-function setCat(el, cat) {
-  document.querySelectorAll('.fc').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  selectedCat = cat;
-  renderSvcs();
-}
 
 function resetBuySteps() {
   goStep(1);
@@ -615,6 +622,7 @@ function resetBuySteps() {
   S.buy.priceOptions = [];
   S.buy.order = null;
   clearServerOptions();
+  updateServerFilterUi();
   const waiting = document.getElementById('otpStateWaiting');
   const received = document.getElementById('otpStateReceived');
   const expired = document.getElementById('otpStateExpired');
@@ -629,16 +637,6 @@ function goStep(n) {
   S.buy.step = n;
   document.querySelectorAll('.buy-sub').forEach(s => s.classList.remove('active'));
   document.getElementById('buyStep' + n)?.classList.add('active');
-
-  [1, 2, 3].forEach(i => {
-    const el = document.getElementById('bStep' + i);
-    const line = document.getElementById('bLine' + i);
-    if (!el) return;
-    el.classList.remove('active', 'done');
-    if (i < n) el.classList.add('done');
-    if (i === n) el.classList.add('active');
-    if (line) line.classList.toggle('done', i < n);
-  });
 }
 
 function clearServerOptions() {
@@ -649,6 +647,27 @@ function clearServerOptions() {
   if (list) list.innerHTML = '';
   if (sub) sub.textContent = 'Pilih server yang ingin dipakai untuk order.';
   if (wrap) wrap.style.display = 'none';
+}
+
+function setServerFilter(filter, button) {
+  S.buy.serverFilter = ['server1', 'server2'].includes(filter) ? filter : 'all';
+  updateServerFilterUi(button);
+  clearServerOptions();
+  if (S.buy.country) {
+    S.buy.country = null;
+    S.buy.price = null;
+    renderCountries();
+    set('selSvcPrice', 'Pilih negara');
+    showToast('Server diubah. Pilih negara lagi untuk memuat opsi yang sesuai.', 'info');
+  }
+}
+
+function updateServerFilterUi(activeButton) {
+  document.querySelectorAll('.server-pick').forEach((el) => {
+    el.classList.toggle('active', el.id === `serverPick-${S.buy.serverFilter}`);
+  });
+  if (activeButton) activeButton.classList.add('active');
+  set('selectedServerLabel', SERVER_FILTER_LABEL[S.buy.serverFilter] || 'Semua Server');
 }
 
 async function selectSvc(id) {
@@ -662,7 +681,7 @@ async function selectSvc(id) {
 
   set('selSvcIcon', s.e);
   set('selSvcName', s.n);
-  set('selSvcPrice', s.p ? `Mulai ${FMT(s.p)}` : 'Cek harga');
+  set('selSvcPrice', 'Pilih negara');
   clearServerOptions();
   const countrySearch = document.getElementById('countrySearch');
   if (countrySearch) countrySearch.value = '';
@@ -734,7 +753,7 @@ async function selectCountry(countryId, el) {
 
   try {
     const prices = await apiFetch('/prices', { params: { serviceId: svc.id, countryId: country.id } });
-    const options = (Array.isArray(prices) ? prices : [])
+    const allOptions = (Array.isArray(prices) ? prices : [])
       .filter(p => p.isActive !== false)
       .map(p => ({
         id: p.id,
@@ -745,7 +764,15 @@ async function selectCountry(countryId, el) {
       }))
       .sort((a, b) => Number(a.sellPrice) - Number(b.sellPrice));
 
-    if (!options.length) throw new Error('Harga untuk negara ini belum tersedia');
+    const options = allOptions.filter((option) => {
+      if (S.buy.serverFilter === 'all') return true;
+      return normalizeServerFilter(option.serverLabel) === S.buy.serverFilter;
+    });
+
+    if (!options.length) {
+      const serverName = SERVER_FILTER_LABEL[S.buy.serverFilter] || 'server pilihan';
+      throw new Error(`Tidak ada harga aktif untuk ${serverName} di negara ini`);
+    }
 
     S.buy.priceOptions = options;
 
@@ -1865,6 +1892,41 @@ function inferCategory(name = '') {
   return 'social';
 }
 
+function serviceBrandAsset(name = '') {
+  const n = String(name).toLowerCase();
+  const brands = [
+    ['whatsapp', 'whatsapp.com'],
+    ['telegram', 'telegram.org'],
+    ['instagram', 'instagram.com'],
+    ['facebook', 'facebook.com'],
+    ['tiktok', 'tiktok.com'],
+    ['google', 'google.com'],
+    ['gmail', 'gmail.com'],
+    ['shopee', 'shopee.co.id'],
+    ['tokopedia', 'tokopedia.com'],
+    ['paypal', 'paypal.com'],
+    ['gopay', 'gopay.co.id'],
+    ['dana', 'dana.id'],
+    ['ovo', 'ovo.id'],
+    ['discord', 'discord.com'],
+    ['netflix', 'netflix.com'],
+    ['spotify', 'spotify.com'],
+    ['amazon', 'amazon.com'],
+    ['grab', 'grab.com'],
+    ['gojek', 'gojek.com'],
+    ['airbnb', 'airbnb.com'],
+    ['yahoo', 'yahoo.com'],
+    ['tinder', 'tinder.com'],
+    ['nike', 'nike.com'],
+    ['adidas', 'adidas.com'],
+    ['indomaret', 'indomaret.co.id'],
+    ['myxl', 'xl.co.id'],
+  ];
+  const matched = brands.find(([keyword]) => n.includes(keyword));
+  if (!matched) return '';
+  return `https://www.google.com/s2/favicons?sz=128&domain=${matched[1]}`;
+}
+
 function iconForService(name = '') {
   const n = name.toLowerCase();
   if (n.includes('whatsapp')) return '📱';
@@ -1880,6 +1942,21 @@ function iconForService(name = '') {
   if (n.includes('spotify')) return '🎧';
   if (n.includes('discord')) return '🎮';
   return '📲';
+}
+
+function renderServiceIcon(service) {
+  const src = serviceBrandAsset(service.n);
+  if (src) {
+    return `<img src="${esc(src)}" alt="${esc(service.n)}" loading="lazy" referrerpolicy="no-referrer" />`;
+  }
+  return `<span class="svc-tile-fallback">${service.e || iconForService(service.n)}</span>`;
+}
+
+function normalizeServerFilter(label = '') {
+  const normalized = String(label).toLowerCase().replace(/\s+/g, '');
+  if (normalized.includes('server1')) return 'server1';
+  if (normalized.includes('server2')) return 'server2';
+  return 'all';
 }
 
 function colorForCategory(cat) {
