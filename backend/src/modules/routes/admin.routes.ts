@@ -116,6 +116,87 @@ function maxDate(left?: Date | string | null, right?: Date | string | null) {
 }
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
+    // GET /api/admin/overview - aggregate dashboard stats
+    fastify.get('/overview', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        await paymentService.reconcilePendingInvoices(10).catch(err => {
+            logger.warn({ err }, 'Failed to reconcile pending invoices before overview fetch');
+        });
+
+        const [
+            totalOrders,
+            activeOrders,
+            userBalanceAgg,
+            providerSummary,
+            paidInvoiceAgg,
+            orderMargins,
+        ] = await Promise.all([
+            prisma.order.count(),
+            prisma.order.count({ where: { status: 'ACTIVE' } }),
+            prisma.user.aggregate({ _sum: { balance: true } }),
+            (async () => {
+                try {
+                    const [{ heroSMSProvider }, rate] = await Promise.all([
+                        import('../../modules/providers/herosms.provider'),
+                        pricingService.getUsdIdrRate(),
+                    ]);
+                    const balanceUsd = await heroSMSProvider.getBalance();
+                    return { balanceUsd, rate, ok: true };
+                } catch (err) {
+                    logger.warn({ err }, 'Failed to load provider balance for admin overview');
+                    return { balanceUsd: 0, rate: null, ok: false };
+                }
+            })(),
+            prisma.invoice.aggregate({
+                where: { status: 'PAID' },
+                _sum: { baseAmount: true, gatewayFee: true, amount: true },
+            }),
+            prisma.order.findMany({
+                where: {
+                    status: {
+                        in: ['ACTIVE', 'SUCCESS'],
+                    },
+                },
+                select: {
+                    price: {
+                        select: {
+                            sellPrice: true,
+                            providerPrice: true,
+                        },
+                    },
+                },
+            }),
+        ]);
+
+        const totalUserBalance = userBalanceAgg._sum.balance ?? 0;
+        const providerRate = providerSummary.rate;
+        const providerBalanceIdr = providerSummary.ok && providerRate
+            ? Math.round(providerSummary.balanceUsd * providerRate.effectiveRate)
+            : 0;
+        const netProfit = orderMargins.reduce((sum, order) => {
+            return sum + ((order.price?.sellPrice ?? 0) - (order.price?.providerPrice ?? 0));
+        }, 0);
+
+        return {
+            success: true,
+            data: {
+                totalOrders,
+                activeOrders,
+                totalUserBalance,
+                totalPaidDeposits: paidInvoiceAgg._sum.baseAmount ?? 0,
+                totalGatewayFees: paidInvoiceAgg._sum.gatewayFee ?? 0,
+                totalGatewayPaid: paidInvoiceAgg._sum.amount ?? 0,
+                netProfit,
+                providerBalanceUsd: providerSummary.balanceUsd,
+                providerBalanceIdr,
+                providerRate: providerRate?.effectiveRate ?? 0,
+                providerRateBase: providerRate?.baseRate ?? 0,
+                providerRateBufferPercent: providerRate?.bufferPercent ?? 0,
+            },
+        };
+    });
+
     // GET /api/admin/users - merged web and Telegram users for backoffice
     fastify.get('/users', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;

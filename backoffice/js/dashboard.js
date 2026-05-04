@@ -240,10 +240,10 @@
     async function loadOverview() {
         renderStatSkeleton();
 
-        const [ordersRes, invoicesRes, balanceRes, servicesRes] = await Promise.allSettled([
+        const [overviewRes, ordersRes, invoicesRes, servicesRes] = await Promise.allSettled([
+            api('/api/admin/overview'),
             api('/api/admin/orders?limit=100'),
             api('/api/admin/invoices?limit=100'),
-            api('/api/admin/balance'),
             api('/api/services'),
         ]);
 
@@ -274,17 +274,30 @@
             document.getElementById('recentInvoicesBody').innerHTML = emptyHTML('Gagal memuat invoice');
         }
 
-        // Provider balance
+        // Services
+        let totalServices = '—';
+        if (servicesRes.status === 'fulfilled' && servicesRes.value.success) {
+            totalServices = servicesRes.value.data.length;
+        }
+
         let providerBal = '—';
         let providerMeta = '';
         let providerStatus = 'warning';
-        if (balanceRes.status === 'fulfilled' && balanceRes.value.success) {
-            const balance = balanceRes.value.data;
-            const providerUsd = Number(balance.providerBalanceUsd ?? balance.providerBalance);
-            const exchangeRate = Number(balance.exchangeRate || 0);
-            const baseRate = Number(balance.exchangeRateBase || exchangeRate);
-            const bufferPercent = Number(balance.exchangeRateBufferPercent || 0);
-            const providerIdr = Number(balance.providerBalanceIdr ?? (providerUsd * exchangeRate));
+        let totalOrderCount = totalOrders;
+        let totalUserBalance = '—';
+        let netProfit = '—';
+
+        if (overviewRes.status === 'fulfilled' && overviewRes.value.success) {
+            const summary = overviewRes.value.data || {};
+            totalOrderCount = Number(summary.totalOrders ?? totalOrders ?? 0);
+            totalUserBalance = formatRupiahFull(summary.totalUserBalance ?? 0);
+            netProfit = formatRupiahFull(summary.netProfit ?? 0);
+
+            const providerUsd = Number(summary.providerBalanceUsd ?? 0);
+            const exchangeRate = Number(summary.providerRate || 0);
+            const baseRate = Number(summary.providerRateBase || exchangeRate);
+            const bufferPercent = Number(summary.providerRateBufferPercent || 0);
+            const providerIdr = Number(summary.providerBalanceIdr ?? (providerUsd * exchangeRate));
 
             providerBal = Number.isFinite(providerIdr) ? formatRupiahFull(providerIdr) : '—';
             providerMeta = Number.isFinite(providerUsd) && Number.isFinite(exchangeRate) && exchangeRate > 0
@@ -293,25 +306,19 @@
             providerStatus = (Number.isFinite(providerUsd) && providerUsd > 0) ? 'online' : 'offline';
         }
 
-        // Services
-        let totalServices = '—';
-        if (servicesRes.status === 'fulfilled' && servicesRes.value.success) {
-            totalServices = servicesRes.value.data.length;
-        }
-
         // Render stat cards
         const grid = document.getElementById('statsGrid');
         grid.innerHTML = `
-            ${statCard('indigo', 'orders', 'Total Orders', totalOrders)}
-            ${statCard('info', 'active', 'Order Aktif', activeOrders)}
-            ${statCard('emerald', 'revenue', 'Total Revenue', invoiceRevenue)}
+            ${statCard('sky', 'revenue', 'Saldo Deposit User', totalUserBalance)}
+            ${statCard('emerald', 'revenue', 'Net Profit', netProfit)}
+            ${statCard('indigo', 'orders', 'Total Order', totalOrderCount)}
             ${statCard('amber', 'provider', 'Saldo Provider', providerBal, providerMeta)}
             ${statCard('rose', 'services', 'Layanan Aktif', totalServices)}
         `;
 
         // System status panel
         const sysRow = document.getElementById('systemStatusRow');
-        const apiStatus = ordersRes.status === 'fulfilled' && ordersRes.value.success;
+        const apiStatus = overviewRes.status === 'fulfilled' && overviewRes.value.success;
         sysRow.innerHTML = `
             <div class="status-pill ${apiStatus ? 'online' : 'offline'}">
                 <div class="status-pill-dot"></div> API ${apiStatus ? 'Online' : 'Offline'}
@@ -1123,10 +1130,13 @@
     //  USERS PAGE
     // ═══════════════════════════════════════════════════════════════════════════
     let _usersMap = new Map();
+    let _userAccountFilter = 'ALL';
 
     window.loadUsers = async function () {
         const body = document.getElementById('usersTableBody');
+        const stats = document.getElementById('userStats');
         body.innerHTML = loadingHTML();
+        if (stats) stats.style.display = 'none';
         _usersMap = new Map();
 
         try {
@@ -1135,21 +1145,36 @@
             for (const user of res.data || []) {
                 _usersMap.set(user.id, user);
             }
-            renderUsersTable([..._usersMap.values()]);
+            renderUserStats([..._usersMap.values()]);
+            renderUsersTable(applyUsersFilter());
         } catch (err) {
             body.innerHTML = errorHTML(err.message);
         }
     };
 
-    window.filterUsersTable = function () {
+    window.setUserAccountFilter = function (filter) {
+        _userAccountFilter = filter;
+        document.querySelectorAll('[data-user-filter]').forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.userFilter === filter);
+        });
+        renderUsersTable(applyUsersFilter());
+    };
+
+    function applyUsersFilter() {
         const q = document.getElementById('userSearchInput').value.toLowerCase();
-        const data = [..._usersMap.values()].filter(u =>
-            (u.email || '').toLowerCase().includes(q) ||
-            (u.telegramId || '').includes(q) ||
-            (u.username || '').toLowerCase().includes(q) ||
-            (`${u.firstName || ''} ${u.lastName || ''}`).toLowerCase().includes(q)
-        );
-        renderUsersTable(data);
+        return [..._usersMap.values()].filter(u => {
+            const matchesQuery =
+                (u.email || '').toLowerCase().includes(q) ||
+                (u.telegramId || '').includes(q) ||
+                (u.username || '').toLowerCase().includes(q) ||
+                (`${u.firstName || ''} ${u.lastName || ''}`).toLowerCase().includes(q);
+            const matchesType = _userAccountFilter === 'ALL' || u.accountType === _userAccountFilter;
+            return matchesQuery && matchesType;
+        });
+    }
+
+    window.filterUsersTable = function () {
+        renderUsersTable(applyUsersFilter());
     };
 
     function userTypeBadge(type) {
@@ -1162,6 +1187,28 @@
         return `<span class="badge ${cls}">${label}</span>`;
     }
 
+    function renderUserStats(users) {
+        const stats = document.getElementById('userStats');
+        if (!stats) return;
+
+        const total = users.length;
+        const telegramOnly = users.filter((u) => u.accountType === 'TELEGRAM_ONLY').length;
+        const webOnly = users.filter((u) => u.accountType === 'WEB_ONLY').length;
+        const linked = users.filter((u) => u.accountType === 'WEB_LINKED').length;
+        const totalBalance = users.reduce((sum, u) => sum + Number(u.balance || 0), 0);
+        const totalPurchase = users.reduce((sum, u) => sum + Number(u.totalDeduct || 0), 0);
+        const totalDeposit = users.reduce((sum, u) => sum + Number(u.totalDeposit || 0), 0);
+
+        document.getElementById('user-total').textContent = String(total);
+        document.getElementById('user-bot-only').textContent = String(telegramOnly);
+        document.getElementById('user-web-only').textContent = String(webOnly);
+        document.getElementById('user-linked').textContent = String(linked);
+        document.getElementById('user-balance-total').textContent = formatRupiah(totalBalance);
+        document.getElementById('user-purchase-total').textContent = formatRupiah(totalPurchase);
+        document.getElementById('user-deposit-total').textContent = formatRupiah(totalDeposit);
+        stats.style.display = 'flex';
+    }
+
     function renderUsersTable(users) {
         const body = document.getElementById('usersTableBody');
         if (!users.length) { body.innerHTML = emptyHTML('Tidak ada user yang sesuai'); return; }
@@ -1170,7 +1217,7 @@
             <table class="data-table">
                 <thead><tr>
                     <th>Akun</th><th>Email Web</th><th>Telegram</th><th>Saldo</th>
-                    <th>Total TX</th><th>Deposit</th><th>Deduct</th><th>Aktivitas</th><th>Aksi</th>
+                    <th>Total Pembelian</th><th>Total Deposit</th><th>Order</th><th>Aktivitas</th><th>Aksi</th>
                 </tr></thead>
                 <tbody>
                     ${users.map(u => {
@@ -1187,9 +1234,9 @@
                             <div class="text-sm text-muted">${u.username ? '@' + escText(u.username) : (u.telegramId ? 'Belum ada username' : 'Belum linked')}</div>
                         </td>
                         <td class="mono fw-600">${formatRupiahFull(u.balance || 0)}</td>
-                        <td class="mono">${u.txCount || 0}</td>
+                        <td class="mono text-rose fw-600">${formatRupiahFull(u.totalDeduct || 0)}</td>
                         <td class="mono text-emerald fw-600">${formatRupiahFull(u.totalDeposit)}</td>
-                        <td class="mono text-rose fw-600">${formatRupiahFull(u.totalDeduct)}</td>
+                        <td class="mono">${u.orderCount || 0}</td>
                         <td class="text-muted text-sm">${formatDateShort(u.lastActivity)}</td>
                         <td class="actions-cell">
                             <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjust(${escAttr(u.telegramId)})"` : 'disabled title="User web belum menautkan Telegram"'} >

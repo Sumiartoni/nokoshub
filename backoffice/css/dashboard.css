@@ -640,6 +640,12 @@ html, body {
     color: var(--text-primary);
     background: rgba(99,102,241,0.06);
 }
+.btn-outline.active {
+    border-color: rgba(99,102,241,0.45);
+    color: #fff;
+    background: rgba(99,102,241,0.16);
+    box-shadow: inset 0 0 0 1px rgba(99,102,241,0.14);
+}
 
 .btn-ghost {
     border: none;
@@ -861,6 +867,12 @@ html, body {
     align-items: center;
     gap: 10px;
     margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.filter-chip-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
 }
 .filter-bar .form-select {

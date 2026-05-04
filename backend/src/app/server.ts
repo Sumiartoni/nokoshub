@@ -16,6 +16,7 @@ import logger from '../utils/logger';
 let providerSyncInterval: NodeJS.Timeout | null = null;
 let providerSyncStartupTimer: NodeJS.Timeout | null = null;
 let invoiceExpiryInterval: NodeJS.Timeout | null = null;
+let paymentReconcileInterval: NodeJS.Timeout | null = null;
 
 export async function buildServer() {
     const app = Fastify({
@@ -152,12 +153,14 @@ export async function startServer() {
 
         startProviderSyncScheduler();
         startInvoiceExpiryScheduler();
+        startPaymentReconcileScheduler();
 
         // Graceful shutdown
         const shutdown = async () => {
             logger.info('Shutting down...');
             stopProviderSyncScheduler();
             stopInvoiceExpiryScheduler();
+            stopPaymentReconcileScheduler();
             await app.close();
             await redisConnection.quit();
             process.exit(0);
@@ -193,6 +196,27 @@ function stopInvoiceExpiryScheduler() {
     if (invoiceExpiryInterval) {
         clearInterval(invoiceExpiryInterval);
         invoiceExpiryInterval = null;
+    }
+}
+
+function startPaymentReconcileScheduler() {
+    if (paymentReconcileInterval) return;
+
+    paymentService.reconcilePendingInvoices(10)
+        .catch(err => logger.warn({ err }, 'Initial payment reconcile sweep failed'));
+
+    paymentReconcileInterval = setInterval(() => {
+        paymentService.reconcilePendingInvoices(10)
+            .catch(err => logger.warn({ err }, 'Scheduled payment reconcile sweep failed'));
+    }, 2 * 60 * 1000);
+
+    logger.info('Payment reconcile scheduler started');
+}
+
+function stopPaymentReconcileScheduler() {
+    if (paymentReconcileInterval) {
+        clearInterval(paymentReconcileInterval);
+        paymentReconcileInterval = null;
     }
 }
 

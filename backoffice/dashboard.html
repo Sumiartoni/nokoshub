@@ -837,6 +837,12 @@
                         </svg>
                         <input type="text" class="search-input" id="userSearchInput" placeholder="Cari email / Telegram ID / username…" oninput="filterUsersTable()">
                     </div>
+                    <div class="filter-chip-group" id="userTypeFilters">
+                        <button class="btn btn-sm btn-outline active" data-user-filter="ALL" onclick="setUserAccountFilter('ALL')">Semua User</button>
+                        <button class="btn btn-sm btn-outline" data-user-filter="TELEGRAM_ONLY" onclick="setUserAccountFilter('TELEGRAM_ONLY')">User Bot</button>
+                        <button class="btn btn-sm btn-outline" data-user-filter="WEB_ONLY" onclick="setUserAccountFilter('WEB_ONLY')">User Web</button>
+                        <button class="btn btn-sm btn-outline" data-user-filter="WEB_LINKED" onclick="setUserAccountFilter('WEB_LINKED')">Bot + Web</button>
+                    </div>
                     <button class="btn btn-sm btn-success" onclick="showAdjustBalanceModal()">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -849,6 +855,36 @@
                         </svg>
                         Refresh
                     </button>
+                </div>
+                <div class="mini-stats" id="userStats" style="margin-bottom:16px;display:none">
+                    <div class="mini-stat indigo">
+                        <div class="mini-stat-label">Total User</div>
+                        <div class="mini-stat-value" id="user-total">—</div>
+                    </div>
+                    <div class="mini-stat sky">
+                        <div class="mini-stat-label">User Bot</div>
+                        <div class="mini-stat-value" id="user-bot-only">—</div>
+                    </div>
+                    <div class="mini-stat amber">
+                        <div class="mini-stat-label">User Web</div>
+                        <div class="mini-stat-value" id="user-web-only">—</div>
+                    </div>
+                    <div class="mini-stat emerald">
+                        <div class="mini-stat-label">Bot + Web</div>
+                        <div class="mini-stat-value" id="user-linked">—</div>
+                    </div>
+                    <div class="mini-stat violet">
+                        <div class="mini-stat-label">Saldo User</div>
+                        <div class="mini-stat-value" id="user-balance-total">—</div>
+                    </div>
+                    <div class="mini-stat rose">
+                        <div class="mini-stat-label">Total Pembelian</div>
+                        <div class="mini-stat-value" id="user-purchase-total">—</div>
+                    </div>
+                    <div class="mini-stat emerald">
+                        <div class="mini-stat-label">Total Deposit</div>
+                        <div class="mini-stat-value" id="user-deposit-total">—</div>
+                    </div>
                 </div>
                 <div class="panel">
                     <div class="panel-body scrollable" id="usersTableBody">
@@ -978,7 +1014,7 @@
 </div>
 
 <script src="js/auth.js?v=20260424-1"></script>
-<script src="js/dashboard.js?v=20260424-3"></script>
+<script src="js/dashboard.js?v=20260504-1"></script>
 </body>
 </html>
 

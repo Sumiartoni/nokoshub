@@ -97,7 +97,10 @@ export const paymentService = {
         await paymentService.expireOverdueInvoices();
 
         if (isBayarGgWebhook(body)) {
-            return handleBayarGgWebhook(body, input.headers || {});
+            return handleBayarGgWebhook(body, {
+                headers: input.headers || {},
+                webhookToken: input.webhookToken,
+            });
         }
 
         return handleLegacyWebhook(body as LegacyWebhookBody, rawBody);
@@ -199,6 +202,8 @@ export const paymentService = {
     },
 
     async getAllInvoices(limit = 50) {
+        await paymentService.reconcilePendingInvoices(Math.min(Math.max(limit, 1), 20))
+            .catch(err => logger.warn({ err }, 'Failed to reconcile pending invoices before admin invoice fetch'));
         await paymentService.expireOverdueInvoices();
 
         return prisma.invoice.findMany({
@@ -282,20 +287,27 @@ export const paymentService = {
 
 async function handleBayarGgWebhook(
     body: BayarGgWebhookPayload,
-    headers: Record<string, any>
+    input: {
+        headers: Record<string, any>;
+        webhookToken?: string;
+    }
 ): Promise<{ success: boolean; message: string }> {
-    if (!bayarGgService.verifyWebhookSignature(body, headers)) {
+    const signatureValid = bayarGgService.verifyWebhookSignature(body, input.headers);
+    const tokenValid = bayarGgService.verifyWebhookToken(input.webhookToken);
+
+    if (!signatureValid && !tokenValid) {
         logger.warn(
             {
                 invoiceId: body.invoice_id,
-                hasHeaderSignature: Boolean(headers['x-webhook-signature']),
-                hasHeaderTimestamp: Boolean(headers['x-webhook-timestamp']),
+                hasHeaderSignature: Boolean(input.headers['x-webhook-signature']),
+                hasHeaderTimestamp: Boolean(input.headers['x-webhook-timestamp']),
                 hasBodySignature: Boolean(body.signature),
                 hasBodyTimestamp: Boolean(body.timestamp),
+                hasQueryToken: Boolean(input.webhookToken),
                 status: body.status,
                 finalAmount: body.final_amount,
             },
-            'Rejected BAYAR GG webhook because signature did not match'
+            'Rejected BAYAR GG webhook because auth did not match'
         );
         return { success: false, message: 'Invalid webhook signature' };
     }
