@@ -7,6 +7,12 @@ import logger from '../../utils/logger';
 import { pricingService } from '../pricing/pricing.service';
 
 type SyncResult = { services: number; prices: number; skipped?: boolean };
+type ProviderSyncBreakdown = {
+    providerKey: string;
+    providerLabel: string;
+    services: number;
+    prices: number;
+};
 
 let providerSyncRunning = false;
 
@@ -14,7 +20,7 @@ export const serviceService = {
     /**
      * Sync services, countries, and prices from every configured OTP provider.
      */
-    async syncFromProvider(): Promise<SyncResult> {
+    async syncFromProvider(): Promise<SyncResult & { providers?: ProviderSyncBreakdown[] }> {
         if (providerSyncRunning) {
             logger.info('Provider sync already running, skipping duplicate request');
             return { services: 0, prices: 0, skipped: true };
@@ -32,6 +38,7 @@ export const serviceService = {
 
             let servicesCount = 0;
             let pricesCount = 0;
+            const providerBreakdown: ProviderSyncBreakdown[] = [];
             const sellPriceMultiplier = await pricingService.getSellPriceMultiplier();
             const [existingServices, existingCountries] = await Promise.all([
                 prisma.service.findMany({
@@ -49,9 +56,17 @@ export const serviceService = {
                 const services = await provider.getServices();
                 if (!services.length) {
                     logger.warn({ providerKey }, 'No services returned from provider');
+                    providerBreakdown.push({
+                        providerKey,
+                        providerLabel: descriptor.displayName,
+                        services: 0,
+                        prices: 0,
+                    });
                     continue;
                 }
 
+                let providerServicesCount = 0;
+                let providerPricesCount = 0;
                 for (const svc of services) {
                     if (!svc.service_code || !svc.service_name) continue;
 
@@ -61,6 +76,7 @@ export const serviceService = {
                         servicesByCode
                     );
                     servicesCount++;
+                    providerServicesCount++;
 
                     const countries = await provider.getCountries(svc.service_code);
 
@@ -89,12 +105,24 @@ export const serviceService = {
                             providerLabel: descriptor.displayName,
                         });
                         pricesCount += inserted;
+                        providerPricesCount += inserted;
                     }
                 }
+
+                providerBreakdown.push({
+                    providerKey,
+                    providerLabel: descriptor.displayName,
+                    services: providerServicesCount,
+                    prices: providerPricesCount,
+                });
+                logger.info(
+                    { providerKey, providerLabel: descriptor.displayName, services: providerServicesCount, prices: providerPricesCount },
+                    'Provider sync finished'
+                );
             }
 
-            logger.info({ servicesCount, pricesCount }, 'Provider sync completed');
-            return { services: servicesCount, prices: pricesCount };
+            logger.info({ servicesCount, pricesCount, providers: providerBreakdown }, 'Provider sync completed');
+            return { services: servicesCount, prices: pricesCount, providers: providerBreakdown };
         } finally {
             providerSyncRunning = false;
         }
@@ -110,6 +138,33 @@ export const serviceService = {
             ...service,
             ...describeServiceProvider(service.serviceCode),
         }));
+    },
+
+    async getServicesWithStats(includeInactive = true) {
+        const services = await prisma.service.findMany({
+            where: includeInactive ? undefined : { isActive: true },
+            orderBy: { id: 'asc' },
+        });
+        const serviceIds = services.map((service) => service.id);
+        const priceStats = serviceIds.length
+            ? await prisma.price.groupBy({
+                by: ['serviceId'],
+                where: { serviceId: { in: serviceIds }, isActive: true },
+                _min: { sellPrice: true },
+                _count: { _all: true },
+            })
+            : [];
+        const statsByService = new Map(priceStats.map((stat) => [stat.serviceId, stat]));
+
+        return services.map((service) => {
+            const stat = statsByService.get(service.id);
+            return {
+                ...service,
+                ...describeServiceProvider(service.serviceCode),
+                minSellPrice: stat?._min.sellPrice ?? null,
+                priceCount: stat?._count._all ?? 0,
+            };
+        });
     },
 
     /** List countries that have prices for a given service */

@@ -471,6 +471,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     // PATCH /api/admin/service - toggle service active state
+    fastify.get('/services', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const services = await serviceService.getServicesWithStats(true);
+        return { success: true, data: services };
+    });
+
     fastify.patch('/service', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         const body = req.body as { serviceCode?: string; isActive?: boolean };

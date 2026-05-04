@@ -1011,7 +1011,7 @@
         document.getElementById('serviceStats').style.display = 'none';
 
         try {
-            const res = await api('/api/services');
+            const res = await api('/api/admin/services');
             if (!res.success) throw new Error(res.error || 'Gagal memuat layanan');
             _servicesData = res.data || [];
             renderServiceStats(_servicesData);
