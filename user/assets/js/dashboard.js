@@ -1546,7 +1546,7 @@ function canUserCancelOrder(order) {
   const status = String(order?.status || '').toUpperCase();
   if (!['ACTIVE', 'PENDING'].includes(status)) return false;
   if (order?.otpCode) return false;
-  const createdAt = new Date(order?.createdAt || 0).getTime();
+  const createdAt = getOrderCreatedAtMs(order);
   if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
   return Date.now() - createdAt >= ORDER_CANCEL_DELAY_MS;
 }
@@ -1554,7 +1554,7 @@ function canUserCancelOrder(order) {
 function getOrderCancelRemainingMs(order) {
   const status = String(order?.status || '').toUpperCase();
   if (!['ACTIVE', 'PENDING'].includes(status) || order?.otpCode) return 0;
-  const createdAt = new Date(order?.createdAt || 0).getTime();
+  const createdAt = getOrderCreatedAtMs(order);
   if (!Number.isFinite(createdAt) || createdAt <= 0) return ORDER_CANCEL_DELAY_MS;
   return Math.max(0, createdAt + ORDER_CANCEL_DELAY_MS - Date.now());
 }
@@ -1605,7 +1605,7 @@ function getOrderCancelHint(order) {
   if (!['ACTIVE', 'PENDING'].includes(status)) return '';
   if (order?.otpCode) return 'OTP sudah diterima dan order tidak bisa dibatalkan.';
 
-  const createdAt = new Date(order?.createdAt || 0).getTime();
+  const createdAt = getOrderCreatedAtMs(order);
   if (!Number.isFinite(createdAt) || createdAt <= 0) {
     return 'Pembatalan manual tersedia setelah 2 menit jika OTP belum masuk.';
   }
@@ -1619,6 +1619,19 @@ function getOrderCancelHint(order) {
   const minutes = Math.floor(remainingMs / 60000);
   const seconds = Math.ceil((remainingMs % 60000) / 1000);
   return `Pembatalan manual tersedia dalam ${minutes}:${String(Math.max(0, seconds)).padStart(2, '0')} jika OTP belum masuk.`;
+}
+
+function getOrderCreatedAtMs(order) {
+  const parsed = new Date(order?.createdAt || 0).getTime();
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+
+  const now = Date.now();
+  const maxFutureSkewMs = 60 * 1000;
+  if (parsed > now + maxFutureSkewMs) {
+    return now;
+  }
+
+  return parsed;
 }
 
 function schedulePendingInvoiceRefresh() {
