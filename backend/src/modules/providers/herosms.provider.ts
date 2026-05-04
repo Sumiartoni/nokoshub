@@ -240,6 +240,10 @@ class HeroSMSProvider {
         });
     }
 
+    isConfigured() {
+        return Boolean(String(config.HERO_SMS_API_KEY || '').trim());
+    }
+
     async getServices(): Promise<ProviderService[]> {
         try {
             const res = await this.request('getServicesList');

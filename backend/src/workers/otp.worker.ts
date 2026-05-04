@@ -1,13 +1,15 @@
 import { Worker, Job } from 'bullmq';
 import { prisma } from '../database/prisma.client';
-import { heroSMSProvider } from '../modules/providers/herosms.provider';
+import { getOtpProvider } from '../modules/providers/provider-runtime';
 import { orderService } from '../modules/orders/order.service';
 import { config } from '../app/config';
 import logger from '../utils/logger';
 import { sleep } from '../utils/helpers';
 import axios from 'axios';
+import type { OtpProviderKey } from '../modules/providers/provider-registry';
 
 interface OtpJobData {
+    providerKey: OtpProviderKey;
     orderId: string;
     providerOrderId: string;
     telegramId: string;
@@ -19,12 +21,13 @@ const workerConnection = { url: config.REDIS_URL, maxRetriesPerRequest: null as 
 const worker = new Worker<OtpJobData>(
     'otp-polling',
     async (job: Job<OtpJobData>) => {
-        const { orderId, providerOrderId, telegramId } = job.data;
+        const { providerKey, orderId, providerOrderId, telegramId } = job.data;
+        const provider = getOtpProvider(providerKey);
         const startTime = Date.now();
         const maxDuration = config.OTP_POLL_MAX_MS; // 20 minutes by default
         const interval = config.OTP_POLL_INTERVAL_MS; // 5s
 
-        logger.info({ orderId, providerOrderId }, 'OTP polling started');
+        logger.info({ orderId, providerKey, providerOrderId }, 'OTP polling started');
 
         while (Date.now() - startTime < maxDuration) {
             // Stop if another process has already finalized this order.
@@ -34,7 +37,7 @@ const worker = new Worker<OtpJobData>(
                 return;
             }
 
-            const statusResult = await heroSMSProvider.checkStatus(providerOrderId);
+            const statusResult = await provider.checkStatus(providerOrderId);
 
             if (statusResult.success && statusResult.sms_code) {
                 const updateResult = await prisma.order.updateMany({
@@ -54,7 +57,7 @@ const worker = new Worker<OtpJobData>(
 
                 // Notify user via backend API
                 await notifyOtpReceived(telegramId, orderId, statusResult.sms_code);
-                await heroSMSProvider.finishActivation(providerOrderId);
+                await provider.finishActivation(providerOrderId);
                 return;
             }
 

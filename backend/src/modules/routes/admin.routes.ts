@@ -12,6 +12,7 @@ import { emailService } from '../email/email.service';
 import { referralService } from '../referrals/referral.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
+import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
@@ -137,15 +138,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             prisma.user.aggregate({ _sum: { balance: true } }),
             (async () => {
                 try {
-                    const [{ heroSMSProvider }, rate] = await Promise.all([
-                        import('../../modules/providers/herosms.provider'),
+                    const [balances, rate] = await Promise.all([
+                        getConfiguredProviderBalances(),
                         pricingService.getUsdIdrRate(),
                     ]);
-                    const balanceUsd = await heroSMSProvider.getBalance();
-                    return { balanceUsd, rate, ok: true };
+                    const balanceUsd = balances.reduce((sum, item) => sum + item.balanceUsd, 0);
+                    return { balanceUsd, balances, rate, ok: true };
                 } catch (err) {
                     logger.warn({ err }, 'Failed to load provider balance for admin overview');
-                    return { balanceUsd: 0, rate: null, ok: false };
+                    return { balanceUsd: 0, balances: [], rate: null, ok: false };
                 }
             })(),
             prisma.invoice.aggregate({
@@ -194,6 +195,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 netProfit,
                 providerBalanceUsd: providerSummary.balanceUsd,
                 providerBalanceIdr,
+                providerBalances: providerSummary.balances,
                 providerRate: providerRate?.effectiveRate ?? 0,
                 providerRateBase: providerRate?.baseRate ?? 0,
                 providerRateBufferPercent: providerRate?.bufferPercent ?? 0,
@@ -507,8 +509,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/admin/balance - check provider balance
     fastify.get('/balance', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
-        const { heroSMSProvider } = await import('../../modules/providers/herosms.provider');
-        const providerBalanceUsd = await heroSMSProvider.getBalance();
+        const balances = await getConfiguredProviderBalances();
+        const providerBalanceUsd = balances.reduce((sum, item) => sum + item.balanceUsd, 0);
         const rate = await pricingService.getUsdIdrRate();
         const providerBalanceIdr = Math.round(providerBalanceUsd * rate.effectiveRate);
         const providerBalanceIdrBase = Math.round(providerBalanceUsd * rate.baseRate);
@@ -520,6 +522,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 providerBalanceUsd,
                 providerBalanceIdr,
                 providerBalanceIdrBase,
+                providerBalances: balances,
                 exchangeRate: rate.effectiveRate,
                 exchangeRateBase: rate.baseRate,
                 exchangeRateBufferPercent: rate.bufferPercent,

@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma.client';
-import { buildHeroSMSPriceId, heroSMSProvider } from '../providers/herosms.provider';
+import type { ProviderCountry, ProviderPrice, ProviderService } from '../providers/herosms.provider';
+import { buildProviderPriceId, getConfiguredOtpProviders } from '../providers/provider-runtime';
 import { getProviderDescriptor, parseProviderKeyFromPriceId } from '../providers/provider-registry';
 import { calculateSellPrice } from '../../utils/helpers';
 import logger from '../../utils/logger';
@@ -11,9 +12,7 @@ let providerSyncRunning = false;
 
 export const serviceService = {
     /**
-     * Sync services, countries, and prices from HeroSMS.
-     * 1. Fetch all services → upsert into DB
-     * 2. For each service, fetch countries → upsert countries + prices
+     * Sync services, countries, and prices from every configured OTP provider.
      */
     async syncFromProvider(): Promise<SyncResult> {
         if (providerSyncRunning) {
@@ -25,88 +24,73 @@ export const serviceService = {
         logger.info('Starting provider sync...');
 
         try {
-            const services = await heroSMSProvider.getServices();
-            if (!services.length) {
-                logger.warn('No services returned from provider');
+            const providers = getConfiguredOtpProviders();
+            if (!providers.length) {
+                logger.warn('No OTP providers configured for sync');
                 return { services: 0, prices: 0 };
             }
 
             let servicesCount = 0;
             let pricesCount = 0;
             const sellPriceMultiplier = await pricingService.getSellPriceMultiplier();
-            for (const svc of services) {
-                if (!svc.service_code || !svc.service_name) continue;
+            const [existingServices, existingCountries] = await Promise.all([
+                prisma.service.findMany({
+                    select: { id: true, name: true, serviceCode: true, isActive: true },
+                }),
+                prisma.country.findMany({
+                    select: { id: true, name: true, countryCode: true, isActive: true },
+                }),
+            ]);
 
-                // Upsert service
-                const serviceCode = String(svc.service_code);
-                const service = await prisma.service.upsert({
-                    where: { serviceCode },
-                    update: { name: svc.service_name, isActive: true },
-                    create: { name: svc.service_name, serviceCode, isActive: true },
-                });
-                servicesCount++;
+            const servicesByCode = new Map(existingServices.map((service) => [service.serviceCode, service]));
+            const servicesByName = new Map(existingServices.map((service) => [normalizeServiceName(service.name), service]));
+            const countriesByCode = new Map(existingCountries.map((country) => [country.countryCode, country]));
 
-                // Fetch countries for this service
-                const countries = await heroSMSProvider.getCountries(svc.service_code);
+            for (const { providerKey, provider, descriptor } of providers) {
+                const services = await provider.getServices();
+                if (!services.length) {
+                    logger.warn({ providerKey }, 'No services returned from provider');
+                    continue;
+                }
 
-                for (const ctr of countries) {
-                    if (!ctr.name || !ctr.number_id || !Array.isArray(ctr.pricelist)) continue;
+                for (const svc of services) {
+                    if (!svc.service_code || !svc.service_name) continue;
 
-                    const countryCode = String(ctr.number_id);
-                    const country = await prisma.country.upsert({
-                        where: { countryCode },
-                        update: { name: ctr.name, isActive: true },
-                        create: { name: ctr.name, countryCode, isActive: true },
-                    });
+                    const service = await ensureServiceRecord(
+                        providerKey,
+                        svc,
+                        servicesByCode,
+                        servicesByName
+                    );
+                    servicesCount++;
 
-                    const validPrices = ctr.pricelist
-                        .map((price) => normalizePriceForSync(
-                            price,
-                            sellPriceMultiplier,
-                            serviceCode,
-                            countryCode
-                        ))
-                        .filter((price): price is NormalizedPriceForSync => Boolean(price));
+                    const countries = await provider.getCountries(svc.service_code);
 
-                    if (validPrices.length === 0) continue;
+                    for (const ctr of countries) {
+                        if (!ctr.name || !ctr.number_id || !Array.isArray(ctr.pricelist)) continue;
 
-                    // We must do a raw SQL bulk upsert because Prisma has no `upsertMany`
-                    // Split into chunks of 500 to avoid Postgres payload/parameter limits
-                    const CHUNK_SIZE = 500;
-                    for (let i = 0; i < validPrices.length; i += CHUNK_SIZE) {
-                        const chunk = validPrices.slice(i, i + CHUNK_SIZE);
-                        const values = chunk.map(price => `(
-                            gen_random_uuid()::text,
-                            ${sqlString(service.id)},
-                            ${sqlString(country.id)},
-                            ${sqlString(price.priceId)},
-                            ${price.providerPrice}::integer,
-                            ${price.providerPriceUsd ?? 'NULL'}::numeric,
-                            ${price.sellPrice}::integer,
-                            true,
-                            current_timestamp(3)
-                        )`).join(', ');
+                        const country = await ensureCountryRecord(ctr, countriesByCode);
+                        const validPrices = ctr.pricelist
+                            .map((price) =>
+                                normalizePriceForSync(
+                                    providerKey,
+                                    price,
+                                    sellPriceMultiplier,
+                                    String(svc.service_code),
+                                    String(ctr.number_id)
+                                )
+                            )
+                            .filter((price): price is NormalizedPriceForSync => Boolean(price));
 
-                        const query = `
-                            INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "providerPriceUsd", "sellPrice", "isActive", "updatedAt")
-                            VALUES ${values}
-                            ON CONFLICT ("priceId") DO UPDATE SET
-                            "providerPrice" = EXCLUDED."providerPrice",
-                            "providerPriceUsd" = EXCLUDED."providerPriceUsd",
-                            "sellPrice" = EXCLUDED."sellPrice",
-                            "isActive" = true,
-                            "updatedAt" = EXCLUDED."updatedAt";
-                        `;
+                        if (validPrices.length === 0) continue;
 
-                        try {
-                            await prisma.$executeRawUnsafe(query);
-                            pricesCount += chunk.length;
-                        } catch (err: any) {
-                            logger.error(
-                                { err: err.message, country: ctr.name, service: svc.service_name },
-                                'Raw bulk upsert failed for chunk'
-                            );
-                        }
+                        const inserted = await bulkUpsertPrices(service.id, country.id, validPrices, {
+                            providerKey,
+                            countryName: ctr.name,
+                            serviceName: svc.service_name,
+                            providerLabel: descriptor.displayName,
+                        });
+                        pricesCount += inserted;
                     }
                 }
             }
@@ -258,7 +242,8 @@ interface NormalizedPriceForSync {
 }
 
 function normalizePriceForSync(
-    price: { provider_id?: string; price?: number; provider_price_usd?: number | null },
+    providerKey: 'server1' | 'herosms',
+    price: ProviderPrice,
     multiplier: number,
     serviceCode: string,
     countryCode: string
@@ -276,11 +261,141 @@ function normalizePriceForSync(
         : null;
 
     return {
-        priceId: buildHeroSMSPriceId(serviceCode, countryCode, String(price.provider_id)),
+        priceId: buildProviderPriceId(providerKey, serviceCode, countryCode, String(price.provider_id)),
         providerPrice,
         providerPriceUsd,
         sellPrice,
     };
+}
+
+async function ensureServiceRecord(
+    providerKey: 'server1' | 'herosms',
+    svc: ProviderService,
+    servicesByCode: Map<string, { id: string; name: string; serviceCode: string; isActive: boolean }>,
+    servicesByName: Map<string, { id: string; name: string; serviceCode: string; isActive: boolean }>
+) {
+    const providerServiceCode = String(svc.service_code);
+    const normalizedName = normalizeServiceName(svc.service_name);
+    const compositeServiceCode = buildStoredServiceCode(providerKey, providerServiceCode);
+
+    const existing =
+        (providerKey === 'herosms' ? servicesByCode.get(providerServiceCode) : null) ??
+        servicesByCode.get(compositeServiceCode) ??
+        servicesByName.get(normalizedName);
+
+    if (existing) {
+        const updated = await prisma.service.update({
+            where: { id: existing.id },
+            data: { name: svc.service_name, isActive: true },
+        });
+        servicesByCode.set(updated.serviceCode, updated);
+        servicesByName.set(normalizedName, updated);
+        return updated;
+    }
+
+    const created = await prisma.service.create({
+        data: {
+            name: svc.service_name,
+            serviceCode: providerKey === 'herosms' ? providerServiceCode : compositeServiceCode,
+            isActive: true,
+        },
+    });
+    servicesByCode.set(created.serviceCode, created);
+    servicesByName.set(normalizedName, created);
+    return created;
+}
+
+async function ensureCountryRecord(
+    ctr: ProviderCountry,
+    countriesByCode: Map<string, { id: string; name: string; countryCode: string; isActive: boolean }>
+) {
+    const countryCode = String(ctr.number_id);
+    const existing = countriesByCode.get(countryCode);
+    if (existing) {
+        const updated = await prisma.country.update({
+            where: { id: existing.id },
+            data: { name: ctr.name, isActive: true },
+        });
+        countriesByCode.set(updated.countryCode, updated);
+        return updated;
+    }
+
+    const created = await prisma.country.create({
+        data: { name: ctr.name, countryCode, isActive: true },
+    });
+    countriesByCode.set(created.countryCode, created);
+    return created;
+}
+
+async function bulkUpsertPrices(
+    serviceId: string,
+    countryId: string,
+    validPrices: NormalizedPriceForSync[],
+    meta: { providerKey: string; providerLabel: string; countryName: string; serviceName: string }
+) {
+    let inserted = 0;
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < validPrices.length; i += CHUNK_SIZE) {
+        const chunk = validPrices.slice(i, i + CHUNK_SIZE);
+        const values = chunk
+            .map(
+                (price) => `(
+                    gen_random_uuid()::text,
+                    ${sqlString(serviceId)},
+                    ${sqlString(countryId)},
+                    ${sqlString(price.priceId)},
+                    ${price.providerPrice}::integer,
+                    ${price.providerPriceUsd ?? 'NULL'}::numeric,
+                    ${price.sellPrice}::integer,
+                    true,
+                    current_timestamp(3)
+                )`
+            )
+            .join(', ');
+
+        const query = `
+            INSERT INTO "Price" ("id", "serviceId", "countryId", "priceId", "providerPrice", "providerPriceUsd", "sellPrice", "isActive", "updatedAt")
+            VALUES ${values}
+            ON CONFLICT ("priceId") DO UPDATE SET
+            "providerPrice" = EXCLUDED."providerPrice",
+            "providerPriceUsd" = EXCLUDED."providerPriceUsd",
+            "sellPrice" = EXCLUDED."sellPrice",
+            "isActive" = true,
+            "updatedAt" = EXCLUDED."updatedAt";
+        `;
+
+        try {
+            await prisma.$executeRawUnsafe(query);
+            inserted += chunk.length;
+        } catch (err: any) {
+            logger.error(
+                {
+                    err: err.message,
+                    providerKey: meta.providerKey,
+                    provider: meta.providerLabel,
+                    country: meta.countryName,
+                    service: meta.serviceName,
+                },
+                'Raw bulk upsert failed for chunk'
+            );
+        }
+    }
+
+    return inserted;
+}
+
+function buildStoredServiceCode(providerKey: 'server1' | 'herosms', serviceCode: string) {
+    if (providerKey === 'herosms') return serviceCode;
+    return `${providerKey}__${serviceCode}`;
+}
+
+function normalizeServiceName(name: string) {
+    return String(name || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\b(otp|sms|verification|receive|number|virtual)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function sqlString(value: string): string {

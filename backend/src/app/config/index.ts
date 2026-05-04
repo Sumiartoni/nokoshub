@@ -28,6 +28,8 @@ const envSchema = z.object({
 
     HERO_SMS_API_KEY: z.string().min(1, 'HERO_SMS_API_KEY is required'),
     HERO_SMS_BASE_URL: z.string().url().default('https://hero-sms.com/stubs/handler_api.php'),
+    SMSBOWER_API_KEY: z.string().default(''),
+    SMSBOWER_BASE_URL: z.string().url().default('https://smsbower.page/stubs/handler_api.php'),
     HERO_SMS_PRICE_TO_IDR_RATE: z.string().default('17000').transform(Number),
     USD_IDR_RATE_AUTO_ENABLED: z.string().default('true').transform((value) => {
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());

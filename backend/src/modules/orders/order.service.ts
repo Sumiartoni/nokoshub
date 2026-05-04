@@ -1,9 +1,10 @@
 import { prisma } from '../../database/prisma.client';
-import { heroSMSProvider, parseHeroSMSPriceId } from '../providers/herosms.provider';
+import { getOtpProvider, resolveProviderRuntimeFromPriceId } from '../providers/provider-runtime';
 import { serviceService } from '../services/service.service';
 import { otpQueue } from '../../queue/queue';
 import logger from '../../utils/logger';
 import { formatRupiah } from '../../utils/helpers';
+import type { OtpProviderKey } from '../providers/provider-registry';
 
 export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
 
@@ -25,21 +26,16 @@ interface CancelAndRefundResult {
 
 export const orderService = {
     /**
-     * Create a new order through HeroSMS:
-     * 1. Reserve balance and create local PENDING order atomically
-     * 2. Call provider to order the number
-     * 3. Activate local order with provider response
-     * 4. Enqueue OTP polling
-     * 5. If any step after reservation fails, refund exactly once
+     * Create a new order through the provider encoded in the selected price.
      */
     async createOrder(userId: string, priceId: string) {
         const price = await serviceService.getPriceById(priceId);
         if (!price) throw new Error('Price not found');
         if (!price.isActive) throw new Error('This price is no longer available');
 
-        const providerPrice = parseHeroSMSPriceId(price.priceId);
-        if (!providerPrice) {
-            throw new Error('Invalid HeroSMS price configuration. Please sync provider data again.');
+        const providerRuntime = resolveProviderRuntimeFromPriceId(price.priceId);
+        if (!providerRuntime) {
+            throw new Error('Invalid provider price configuration. Please sync provider data again.');
         }
 
         const reservedOrder = await reserveOrderBalance(
@@ -57,18 +53,19 @@ export const orderService = {
         let providerOrderId: string | null = null;
 
         try {
-            const result = await heroSMSProvider.orderNumber({
-                serviceCode: providerPrice.serviceCode,
-                countryCode: providerPrice.countryCode,
-                providerId: providerPrice.providerId,
+            const result = await providerRuntime.provider.orderNumber({
+                serviceCode: providerRuntime.parsedPrice.serviceCode,
+                countryCode: providerRuntime.parsedPrice.countryCode,
+                providerId: providerRuntime.parsedPrice.providerId,
                 maxPrice: price.providerPrice,
             });
             if (!result.success || !result.phone_number || !result.order_id) {
                 await failReservedOrder(reservedOrder.id, {
-                    failReason: result.message || 'Harga/provider HeroSMS berubah. Sync provider lalu coba lagi.',
+                    providerKey: providerRuntime.providerKey,
+                    failReason: result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`,
                     refundDescription: 'Refund order failed before activation',
                 });
-                throw new Error(result.message || 'Harga/provider HeroSMS berubah. Sync provider lalu coba lagi.');
+                throw new Error(result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`);
             }
 
             providerOrderId = result.order_id;
@@ -80,6 +77,7 @@ export const orderService = {
             );
             if (!activatedOrder) {
                 await failReservedOrder(reservedOrder.id, {
+                    providerKey: providerRuntime.providerKey,
                     cancelProvider: true,
                     providerOrderId,
                     failReason: 'Failed to activate local order state after provider success',
@@ -88,13 +86,14 @@ export const orderService = {
                 throw new Error('Failed to activate local order state after provider success');
             }
 
-            await heroSMSProvider.markActivationReady(result.order_id);
+            await providerRuntime.provider.markActivationReady(result.order_id);
 
             const user = await prisma.user.findUnique({ where: { id: userId } });
             if (user) {
                 await otpQueue.add(
                     'poll-otp',
                     {
+                        providerKey: providerRuntime.providerKey,
                         orderId: activatedOrder.id,
                         providerOrderId: result.order_id,
                         telegramId: user.telegramId,
@@ -116,6 +115,7 @@ export const orderService = {
         } catch (err) {
             if (providerOrderId) {
                 await failReservedOrder(reservedOrder.id, {
+                    providerKey: providerRuntime.providerKey,
                     cancelProvider: true,
                     providerOrderId,
                     failReason: (err as Error).message || 'Order creation failed after provider success',
@@ -213,6 +213,7 @@ export const orderService = {
                 userId: true,
                 status: true,
                 providerOrderId: true,
+                price: { select: { priceId: true } },
             },
         });
 
@@ -229,7 +230,10 @@ export const orderService = {
         }
 
         if (options.cancelProvider && order.providerOrderId) {
-            await heroSMSProvider.cancelActivation(order.providerOrderId);
+            const providerRuntime = resolveProviderRuntimeFromPriceId(order.price.priceId);
+            if (providerRuntime) {
+                await providerRuntime.provider.cancelActivation(order.providerOrderId);
+            }
         }
 
         const result = await prisma.$transaction(async (tx) => {
@@ -421,6 +425,7 @@ async function activateReservedOrder(orderId: string, providerOrderId: string, p
 async function failReservedOrder(
     orderId: string,
     options: {
+        providerKey: OtpProviderKey;
         cancelProvider?: boolean;
         providerOrderId?: string | null;
         failReason: string;
@@ -428,7 +433,7 @@ async function failReservedOrder(
     }
 ) {
     if (options.cancelProvider && options.providerOrderId) {
-        await heroSMSProvider.cancelActivation(options.providerOrderId);
+        await cancelProviderActivation(options.providerKey, options.providerOrderId);
     }
 
     const order = await prisma.order.findUnique({
@@ -514,4 +519,9 @@ async function failReservedOrder(
             refundAmount: existingRefund ? 0 : order.price.sellPrice,
         };
     });
+}
+
+async function cancelProviderActivation(providerKey: OtpProviderKey, providerOrderId: string) {
+    const provider = getOtpProvider(providerKey);
+    await provider.cancelActivation(providerOrderId);
 }

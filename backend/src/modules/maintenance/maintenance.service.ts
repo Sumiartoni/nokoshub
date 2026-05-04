@@ -273,18 +273,20 @@ async function checkDatabase() {
 
 async function checkProvider() {
     try {
-        const [{ heroSMSProvider }, { pricingService }] = await Promise.all([
-            import('../providers/herosms.provider'),
+        const [{ getConfiguredProviderBalances }, { pricingService }] = await Promise.all([
+            import('../providers/provider-runtime'),
             import('../pricing/pricing.service'),
         ]);
-        const [balanceUsd, rate] = await Promise.all([
-            heroSMSProvider.getBalance(),
+        const [balances, rate] = await Promise.all([
+            getConfiguredProviderBalances(),
             pricingService.getUsdIdrRate(),
         ]);
+        const balanceUsd = balances.reduce((sum, item) => sum + item.balanceUsd, 0);
 
         return {
             ok: true,
             balanceUsd,
+            balances,
             effectiveRate: rate.effectiveRate,
             source: rate.source,
         };
