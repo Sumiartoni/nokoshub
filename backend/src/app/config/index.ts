@@ -20,6 +20,8 @@ const envSchema = z.object({
 
     TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
     TELEGRAM_ADMIN_IDS: z.string().default(''),
+    TELEGRAM_SUPPORT_HANDLE: z.string().default('@nokoshubsupport'),
+    TELEGRAM_MAINTENANCE_NOTICE: z.string().default('Maintenance harian 23:00 WIB - 00:10 WIB. Hindari transaksi pada jam tersebut karena pesanan bisa tertunda atau gagal.'),
     TELEGRAM_FORCE_IPV4: z.string().default('true').transform((value) => {
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),

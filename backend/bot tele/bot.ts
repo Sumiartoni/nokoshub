@@ -3,6 +3,7 @@ import axios from 'axios';
 import QRCode from 'qrcode';
 import { config } from '../src/app/config';
 import { setNotifyHandler } from '../src/modules/routes/webhook.routes';
+import { maintenanceService } from '../src/modules/maintenance/maintenance.service';
 import logger from '../src/utils/logger';
 import { formatRupiah } from '../src/utils/helpers';
 
@@ -12,6 +13,7 @@ const TELEGRAM_REQUEST_TIMEOUT_MS = Math.max(10000, config.TELEGRAM_REQUEST_TIME
 const TELEGRAM_NETWORK_WARNING_INTERVAL_MS = 60000;
 const TELEGRAM_COMMANDS_RETRY_MAX_MS = 300000;
 const TELEGRAM_ADMIN_IDS = parseTelegramAdminIds(config.TELEGRAM_ADMIN_IDS);
+const TELEGRAM_SUPPORT_HANDLE = normalizeSupportHandle(config.TELEGRAM_SUPPORT_HANDLE);
 const BOT_COMMANDS = [
     { command: '/start', description: 'Mulai bot NokosHUB' },
     { command: '/menu', description: 'Buka menu utama' },
@@ -275,6 +277,111 @@ function isAdminTelegramId(telegramId: string): boolean {
     return TELEGRAM_ADMIN_IDS.includes(telegramId);
 }
 
+function normalizeSupportHandle(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return '@nokoshubsupport';
+    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+function escapeTelegramMarkdown(value: string) {
+    return value.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+function getTimeGreeting(date = new Date()) {
+    const hour = Number(new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        hour12: false,
+    }).format(date));
+
+    if (hour < 4) return 'Selamat dini hari';
+    if (hour < 11) return 'Selamat pagi';
+    if (hour < 15) return 'Selamat siang';
+    if (hour < 18) return 'Selamat sore';
+    return 'Selamat malam';
+}
+
+function menuBackKeyboard(extraRows: TelegramBot.InlineKeyboardButton[][] = []) {
+    return {
+        inline_keyboard: [
+            ...extraRows,
+            [{ text: '⬅️ Kembali ke Menu Utama', callback_data: 'menu' }],
+        ],
+    };
+}
+
+function buildHelpText() {
+    return (
+        `📖 *Pusat Bantuan NokosHUB*\n\n` +
+        `• *Beli Nomor OTP*:\n` +
+        `  1. Pilih menu beli nomor\n` +
+        `  2. Pilih aplikasi, negara, lalu harga\n` +
+        `  3. Nomor akan dikirim dan OTP masuk otomatis ke chat ini\n\n` +
+        `• *Deposit Saldo*:\n` +
+        `  1. Pilih menu deposit\n` +
+        `  2. Masukkan nominal\n` +
+        `  3. Bayar QRIS sesuai nominal invoice\n` +
+        `  4. Saldo masuk otomatis setelah pembayaran terdeteksi\n\n` +
+        `• *Catatan Penting*:\n` +
+        `  OTP tidak masuk dalam batas waktu akan diproses gagal dan saldo direfund otomatis sesuai status order.\n\n` +
+        `🛠 *Info Maintenance*\n` +
+        `${config.TELEGRAM_MAINTENANCE_NOTICE}\n\n` +
+        `📞 *Customer Service*\n` +
+        `${TELEGRAM_SUPPORT_HANDLE}`
+    );
+}
+
+function buildBotDescription(settings?: { enabled: boolean; title: string; message: string; expectedEndAt: string }) {
+    const maintenanceText = settings?.enabled
+        ? `${settings.title}: ${settings.message}${settings.expectedEndAt ? ` Selesai sekitar ${new Date(settings.expectedEndAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}.` : ''}`
+        : config.TELEGRAM_MAINTENANCE_NOTICE;
+
+    return (
+        `Apa yang dapat bot ini lakukan?\n\n` +
+        `🛠 ${maintenanceText}\n\n` +
+        `📞 Customer Service / Bantuan:\n${TELEGRAM_SUPPORT_HANDLE}\n\n` +
+        `Terima kasih atas pengertian dan kesabarannya.`
+    ).slice(0, 512);
+}
+
+function buildBotShortDescription() {
+    return 'Order nomor OTP otomatis, deposit saldo, dan cek riwayat langsung dari Telegram.';
+}
+
+async function getTelegramUserSession(telegramId: string, meta?: {
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+}) {
+    const res = await apiPost('/api/user/session', {
+        telegramId,
+        username: meta?.username,
+        firstName: meta?.firstName,
+        lastName: meta?.lastName,
+    });
+
+    return res.data as {
+        telegramId: string;
+        username?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+        balance: number;
+        createdAt?: string;
+    };
+}
+
+function formatTelegramDisplayName(input: {
+    firstName?: string | null;
+    lastName?: string | null;
+    username?: string | null;
+    fallback?: string;
+}) {
+    const fullName = [input.firstName, input.lastName].filter(Boolean).join(' ').trim();
+    if (fullName) return fullName;
+    if (input.username) return `@${input.username}`;
+    return input.fallback ?? 'Pelanggan';
+}
+
 // ─── Bot Factory ──────────────────────────────────────────────────────────────
 
 export function createBot(): TelegramBot {
@@ -307,7 +414,7 @@ export function createBot(): TelegramBot {
         logger.error(summarizeTelegramError(err), 'Telegram polling error');
     });
 
-    // Set Telegram Bot Commands Menu (the blue Menu button in the chat input bar)
+    // Set Telegram bot profile + commands.
     scheduleBotCommandsSetup(bot);
 
     // ─── OTP Notification handler (from worker) ───────────────────────────────
@@ -339,31 +446,25 @@ export function createBot(): TelegramBot {
     // ─── /start ───────────────────────────────────────────────────────────────
     bot.onText(/\/start/, async (msg) => {
         const chatId = msg.chat.id;
-        const firstName = msg.from?.first_name ?? 'Pengguna';
         clearSession(chatId);
-
-        await upsertTextPanel(
-            bot,
-            chatId,
-            `🎉 *Selamat datang di NokosHUB!*\n\n` +
-            `Halo, *${firstName}*! 👋\n\n` +
-            `*NokosHUB* adalah layanan pembelian nomor virtual cepat & otomatis untuk kebutuhan verifikasi OTP.\n\n` +
-            `⚠️ *PENTING:*\n` +
-            `Silakan lakukan *Deposit Saldo* terlebih dahulu menggunakan /deposit sebelum mulai membeli nomor.\n\n` +
-            `Gunakan menu di bawah atau ketik perintah (contoh: /buy, /deposit):`,
-            {
-                parse_mode: 'Markdown',
-                reply_markup: mainMenuKeyboard(),
-            },
-            { sourceMessageId: msg.message_id }
-        );
+        await sendMainMenu(bot, chatId, undefined, msg.message_id, {
+            telegramId: String(msg.from?.id ?? msg.chat.id),
+            username: msg.from?.username,
+            firstName: msg.from?.first_name,
+            lastName: msg.from?.last_name,
+        });
     });
 
     // ─── /menu ────────────────────────────────────────────────────────────────
     bot.onText(/\/menu/, async (msg) => {
         const existingPanelId = getSession(msg.chat.id).panelMessageId;
         clearSession(msg.chat.id);
-        await sendMainMenu(bot, msg.chat.id, existingPanelId);
+        await sendMainMenu(bot, msg.chat.id, existingPanelId, msg.message_id, {
+            telegramId: String(msg.from?.id ?? msg.chat.id),
+            username: msg.from?.username,
+            firstName: msg.from?.first_name,
+            lastName: msg.from?.last_name,
+        });
     });
 
     // ─── /balance ─────────────────────────────────────────────────────────────
@@ -395,7 +496,10 @@ export function createBot(): TelegramBot {
             `2. Masuk ke menu *Profil / Setelan*.\n` +
             `3. Tekan *Buat Kode Link Telegram*.\n` +
             `4. Balas prompt di bawah dengan kode 6 digit dari web.`,
-            { parse_mode: 'Markdown' },
+            {
+                parse_mode: 'Markdown',
+                reply_markup: menuBackKeyboard(),
+            },
             { sourceMessageId: msg.message_id }
         );
         await sendReplyPrompt(
@@ -454,29 +558,11 @@ export function createBot(): TelegramBot {
         await upsertTextPanel(
             bot,
             msg.chat.id,
-            `📖 *Panduan NokosHUB*\n\n` +
-            `1️⃣ *Deposit Saldo*\n` +
-            `• Wajib dilakukan sebelum membeli nomor.\n` +
-            `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
-            `• Scan QR QRIS yang tampil atau buka link bayar BAYAR GG\n` +
-            `• Saldo masuk otomatis setelah pembayaran terdeteksi\n\n` +
-            `2️⃣ *Beli Nomor*\n` +
-            `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
-            `• Sistem akan memberikan nomor virtual siap pakai\n` +
-            `• OTP akan otomatis dikirim ke sini\n\n` +
-            `3️⃣ *Perintah*\n` +
-            `/start - Mulai bot\n` +
-            `/menu - Menu utama\n` +
-            `/buy - Beli nomor\n` +
-            `/deposit [jumlah] - Deposit saldo\n` +
-            `/balance - Lihat saldo\n` +
-            `/history - Riwayat order\n` +
-            `/linked - Tautkan akun web\n` +
-            `/myid - Lihat Telegram ID\n` +
-            `/status [orderId] - Status order\n\n` +
-            `📞 *Butuh bantuan?*\n` +
-            `Hubungi admin @nokosadmin`,
-            { parse_mode: 'Markdown' },
+            buildHelpText(),
+            {
+                parse_mode: 'Markdown',
+                reply_markup: menuBackKeyboard(),
+            },
             { sourceMessageId: msg.message_id }
         );
     });
@@ -579,33 +665,41 @@ export function createBot(): TelegramBot {
         if (data === 'balance') return handleBalance(bot, chatId, telegramId, undefined, query.message?.message_id);
         if (data === 'history') return handleHistory(bot, chatId, telegramId, undefined, query.message?.message_id);
         if (data === 'deposit') return askDepositAmount(bot, chatId, undefined, query.message?.message_id);
+        if (data === 'linked') {
+            const session = getSession(chatId);
+            session.pendingWebLink = true;
+            session.step = 'AWAIT_WEB_LINK_CODE';
+            await upsertTextPanel(
+                bot,
+                chatId,
+                `🔗 *Tautkan Akun Web NokosHUB*\n\n` +
+                `1. Buka dashboard web\n` +
+                `2. Masuk ke menu *Profil / Setelan*\n` +
+                `3. Tekan *Buat Kode Link Telegram*\n` +
+                `4. Balas prompt dengan kode 6 digit dari web`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: menuBackKeyboard(),
+                },
+                { targetMessageId: query.message?.message_id }
+            );
+            return sendReplyPrompt(
+                bot,
+                chatId,
+                '🔢 Balas pesan ini dengan kode link 6 digit dari dashboard web.',
+                'Ketik kode 6 digit',
+                query.message?.message_id
+            );
+        }
         if (data === 'help') {
             return upsertTextPanel(
                 bot,
                 chatId,
-                `📖 *Panduan NokosHUB*\n\n` +
-                `1️⃣ *Deposit Saldo*\n` +
-                `• Wajib dilakukan sebelum membeli nomor.\n` +
-                `• Ketuk "Deposit Saldo" atau ketik /deposit 50000\n` +
-                `• Scan QR QRIS yang tampil atau buka link bayar BAYAR GG\n` +
-                `• Saldo masuk otomatis setelah pembayaran terdeteksi\n\n` +
-                `2️⃣ *Beli Nomor*\n` +
-                `• Ketuk "Beli Nomor" atau ketik /buy → pilih aplikasi → negara → harga\n` +
-                `• Sistem akan memberikan nomor virtual siap pakai\n` +
-                `• OTP akan otomatis dikirim ke sini\n\n` +
-                `3️⃣ *Perintah*\n` +
-                `/start - Mulai bot\n` +
-                `/menu - Menu utama\n` +
-                `/buy - Beli nomor\n` +
-                `/deposit [jumlah] - Deposit saldo\n` +
-                `/balance - Lihat saldo\n` +
-                `/history - Riwayat order\n` +
-                `/linked - Tautkan akun web\n` +
-                `/myid - Lihat Telegram ID\n` +
-                `/status [orderId] - Status order\n\n` +
-                `📞 *Butuh bantuan?*\n` +
-                `Hubungi admin @nokosadmin`,
-                { parse_mode: 'Markdown' },
+                buildHelpText(),
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: menuBackKeyboard(),
+                },
                 { targetMessageId: query.message?.message_id }
             );
         }
@@ -695,11 +789,17 @@ export function createBot(): TelegramBot {
 }
 
 function scheduleBotCommandsSetup(bot: TelegramBot, attempt = 1) {
-    bot.setMyCommands(BOT_COMMANDS)
-        .then(() => logger.info({ attempt }, 'Telegram bot commands set'))
+    Promise.all([
+        bot.setMyCommands(BOT_COMMANDS),
+        maintenanceService.getSettings()
+            .then((settings) => bot.setMyDescription({ description: buildBotDescription(settings) }))
+            .catch(() => bot.setMyDescription({ description: buildBotDescription() })),
+        bot.setMyShortDescription({ short_description: buildBotShortDescription() }),
+    ])
+        .then(() => logger.info({ attempt }, 'Telegram bot profile and commands set'))
         .catch((err: any) => {
             if (!isTelegramNetworkIssue(err)) {
-                logger.error(summarizeTelegramError(err), 'Failed to set bot commands');
+                logger.error(summarizeTelegramError(err), 'Failed to set bot profile or commands');
                 return;
             }
 
@@ -710,7 +810,7 @@ function scheduleBotCommandsSetup(bot: TelegramBot, attempt = 1) {
                     attempt,
                     retryMs,
                 },
-                'Telegram bot commands setup delayed; retrying automatically'
+                'Telegram bot profile setup delayed; retrying automatically'
             );
             setTimeout(() => scheduleBotCommandsSetup(bot, attempt + 1), retryMs);
         });
@@ -858,31 +958,86 @@ function mainMenuKeyboard() {
     return {
         inline_keyboard: [
             [
-                { text: '1️⃣ Beli Nomor /buy', callback_data: 'buy' },
-                { text: '2️⃣ Deposit Saldo /deposit', callback_data: 'deposit' },
+                { text: '🛒 Beli Nomor', callback_data: 'buy' },
+                { text: '💳 Deposit', callback_data: 'deposit' },
             ],
             [
-                { text: '3️⃣ Riwayat Order /history', callback_data: 'history' },
-                { text: '4️⃣ Bantuan /help', callback_data: 'help' },
+                { text: '💰 Saldo Saya', callback_data: 'balance' },
+                { text: '📦 Riwayat', callback_data: 'history' },
             ],
             [
-                { text: '💰 Cek Saldo /balance', callback_data: 'balance' },
+                { text: '🔗 Tautkan Akun Web', callback_data: 'linked' },
+                { text: '🆘 Bantuan', callback_data: 'help' },
             ],
         ],
     };
 }
 
-async function sendMainMenu(bot: TelegramBot, chatId: number, messageId?: number) {
-    await upsertTextPanel(
-        bot,
-        chatId,
-        `📱 *Menu Utama NokosHUB*\n\nPilih layanan atau gunakan perintah teks (e.g. /buy):`,
-        {
-            parse_mode: 'Markdown',
-            reply_markup: mainMenuKeyboard(),
-        },
-        { targetMessageId: messageId }
-    );
+async function sendMainMenu(
+    bot: TelegramBot,
+    chatId: number,
+    messageId?: number,
+    sourceMessageId?: number,
+    profileInput?: {
+        telegramId?: string;
+        username?: string;
+        firstName?: string;
+        lastName?: string;
+    }
+) {
+    const telegramId = profileInput?.telegramId ?? String(chatId);
+
+    try {
+        const session = await getTelegramUserSession(telegramId, {
+            username: profileInput?.username,
+            firstName: profileInput?.firstName,
+            lastName: profileInput?.lastName,
+        });
+        const displayName = escapeTelegramMarkdown(formatTelegramDisplayName({
+            firstName: session.firstName ?? profileInput?.firstName,
+            lastName: session.lastName ?? profileInput?.lastName,
+            username: session.username ?? profileInput?.username,
+            fallback: 'Pelanggan',
+        }));
+        const usernameText = session.username ? `@${escapeTelegramMarkdown(session.username)}` : 'Belum ada username';
+        const supportText = escapeTelegramMarkdown(TELEGRAM_SUPPORT_HANDLE);
+        const greeting = escapeTelegramMarkdown(getTimeGreeting());
+
+        await upsertTextPanel(
+            bot,
+            chatId,
+            `${greeting}, *${displayName}* 👋\n\n` +
+            `🏪 *NokosHUB Auto Order*\n\n` +
+            `🆔 *Profil Anda*\n` +
+            `• ID: \`${telegramId}\`\n` +
+            `• Username: ${usernameText}\n` +
+            `• Saldo: *${formatRupiah(session.balance ?? 0)}*\n\n` +
+            `🛠 *Info Maintenance*\n` +
+            `${escapeTelegramMarkdown(config.TELEGRAM_MAINTENANCE_NOTICE)}\n\n` +
+            `📞 *Customer Service*\n` +
+            `${supportText}\n\n` +
+            `Pilih menu di bawah untuk melanjutkan.`,
+            {
+                parse_mode: 'Markdown',
+                reply_markup: mainMenuKeyboard(),
+            },
+            { sourceMessageId, targetMessageId: messageId }
+        );
+    } catch {
+        await upsertTextPanel(
+            bot,
+            chatId,
+            `🏪 *NokosHUB Auto Order*\n\n` +
+            `🆔 ID Telegram: \`${telegramId}\`\n` +
+            `📞 Customer Service: ${escapeTelegramMarkdown(TELEGRAM_SUPPORT_HANDLE)}\n\n` +
+            `Pilih menu di bawah untuk melanjutkan.`,
+            {
+                parse_mode: 'Markdown',
+                reply_markup: mainMenuKeyboard(),
+            },
+            { sourceMessageId, targetMessageId: messageId }
+        );
+    }
 }
 
 // ─── Flow Handlers ────────────────────────────────────────────────────────────
@@ -900,8 +1055,11 @@ async function handleBalance(
         await upsertTextPanel(
             bot,
             chatId,
-            `💰 *Saldo Anda*\n\n${formatRupiah(balance)}\n\nGunakan /deposit untuk menambah saldo.`,
-            { parse_mode: 'Markdown' },
+            `💰 *Saldo Anda*\n\n${formatRupiah(balance)}\n\nGunakan menu deposit jika ingin menambah saldo.`,
+            {
+                parse_mode: 'Markdown',
+                reply_markup: menuBackKeyboard(),
+            },
             { sourceMessageId, targetMessageId: messageId }
         );
     } catch {
@@ -945,7 +1103,10 @@ async function handleHistory(
             bot,
             chatId,
             `📋 *Riwayat 5 Order Terakhir*\n\n${lines.join('\n\n')}`,
-            { parse_mode: 'Markdown' },
+            {
+                parse_mode: 'Markdown',
+                reply_markup: menuBackKeyboard(),
+            },
             { sourceMessageId, targetMessageId: messageId }
         );
     } catch {
@@ -993,6 +1154,7 @@ async function handleBuyStart(
         if (navRow.length > 0) {
             rows.push(navRow);
         }
+        rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
 
         const text = `📲 *Pilih Aplikasi*\n\nPilih aplikasi yang ingin kamu verifikasi:\n\n_Halaman ${page + 1} dari ${totalPages}_`;
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
@@ -1046,6 +1208,7 @@ async function handleServiceSelected(
         if (navRow.length > 0) {
             rows.push(navRow);
         }
+        rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
 
         const text = `🌍 *Pilih Negara*\n\nLayanan: *${serviceName}*\n_Halaman ${page + 1} dari ${totalPages}_\n\nPilih negara yang tersedia:`;
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
@@ -1113,6 +1276,7 @@ async function handleCountrySelected(
         if (navRow.length > 0) {
             rows.push(navRow);
         }
+        rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
 
         const text = `💳 *${serviceName} ${countryName}*\n\n` +
             `Saldo kamu: *${formatRupiah(balance)}*\n_Halaman ${page + 1} dari ${totalPages}_\n\n` +
@@ -1206,6 +1370,9 @@ async function askDepositAmount(
                     [
                         { text: 'Rp50.000', callback_data: 'DEPOSIT_50000' },
                         { text: 'Rp100.000', callback_data: 'DEPOSIT_100000' },
+                    ],
+                    [
+                        { text: '⬅️ Kembali ke Menu', callback_data: 'menu' },
                     ],
                 ],
             },
@@ -1499,9 +1666,10 @@ async function handleOrderStatus(
                         ? {
                             inline_keyboard: [
                                 [{ text: '🚫 Batalkan', callback_data: `cancel_order:${order.id}` }],
+                                [{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }],
                             ],
                         }
-                        : undefined,
+                        : menuBackKeyboard(),
             }
             ,
             { sourceMessageId, targetMessageId: messageId }
