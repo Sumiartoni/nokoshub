@@ -81,6 +81,7 @@ const TTLS = {
   orders: 'Pesanan',
   transactions: 'Transaksi',
   referral: 'Referral',
+  help: 'Bantuan',
   profile: 'Profil',
   api: 'API Key',
 };
@@ -98,6 +99,10 @@ const ROUTE_ALIASES = {
   referral: 'referral',
   refferal: 'referral',
   referal: 'referral',
+  help: 'help',
+  bantuan: 'help',
+  panduan: 'help',
+  faq: 'help',
   akun: 'profile',
   profil: 'profile',
   settings: 'profile',

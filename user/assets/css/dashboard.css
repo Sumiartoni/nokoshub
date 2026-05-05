@@ -1308,6 +1308,113 @@ input, textarea, select { user-select: text; }
   flex-wrap:wrap;
 }
 
+/* =============================================
+   HELP PAGE
+   ============================================= */
+.help-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:16px;
+  margin-bottom:16px;
+}
+.help-hero-card {
+  display:flex;
+  gap:18px;
+  align-items:flex-start;
+}
+.help-hero-icon {
+  width:64px;
+  height:64px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:var(--bw) solid var(--border);
+  border-radius:20px;
+  background:#DBF4FF;
+  box-shadow:var(--shadow-xs);
+  font-size:1.9rem;
+}
+.help-hero-body { min-width:0; flex:1; }
+.help-steps {
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.help-step {
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+}
+.help-step span {
+  width:30px;
+  height:30px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:var(--bw) solid var(--border);
+  border-radius:50%;
+  background:var(--secondary);
+  box-shadow:var(--shadow-xs);
+  font-family:var(--font-h);
+  font-size:0.95rem;
+}
+.help-step strong {
+  display:block;
+  margin-bottom:4px;
+  font-size:0.87rem;
+}
+.help-step p,
+.help-faq-item p {
+  color:var(--muted);
+  font-size:0.8rem;
+  font-weight:700;
+  line-height:1.55;
+}
+.help-list {
+  margin:0;
+  padding-left:18px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.help-list li {
+  color:var(--text);
+  font-size:0.82rem;
+  font-weight:700;
+  line-height:1.55;
+}
+.help-alert {
+  padding:12px 14px;
+  border:var(--bw) solid var(--border);
+  border-radius:var(--r-md);
+  font-size:0.82rem;
+  font-weight:800;
+  line-height:1.55;
+  margin-bottom:14px;
+}
+.help-alert.success {
+  background:#D4FFF0;
+}
+.help-faq {
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:12px;
+}
+.help-faq-item {
+  padding:14px;
+  border:var(--bw) solid var(--border);
+  border-radius:var(--r-md);
+  background:#fff;
+  box-shadow:var(--shadow-xs);
+}
+.help-faq-item strong {
+  display:block;
+  margin-bottom:6px;
+  font-size:0.86rem;
+}
+
 /* Paginator */
 .paginator { display:flex; align-items:center; justify-content:space-between; margin-top:20px; padding-top:16px; border-top:var(--bw) solid var(--border); flex-wrap:wrap; gap:10px; }
 .paginator-info { font-size:0.78rem; font-weight:700; color:var(--muted); }
@@ -2262,6 +2369,7 @@ input, textarea, select { user-select: text; }
   .quick-grid,
   .country-grid,
   .amount-presets,
+  .help-grid,
   .referral-stats-grid,
   .profile-stats,
   .api-stats-grid,
@@ -2336,6 +2444,14 @@ input, textarea, select { user-select: text; }
 
   .profile-stats {
     grid-template-columns: 1fr;
+  }
+
+  .help-hero-card {
+    flex-direction:column;
+  }
+
+  .help-faq {
+    grid-template-columns:1fr;
   }
 }
 

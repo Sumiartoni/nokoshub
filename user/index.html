@@ -69,7 +69,7 @@
       <!-- Footer -->
       <div class="sidebar-footer">
         <div class="sidebar-footer-item"><i data-lucide="message-circle"></i> Live Chat</div>
-        <div class="sidebar-footer-item"><i data-lucide="circle-help"></i> Bantuan</div>
+        <div class="sidebar-footer-item" onclick="nav('help')"><i data-lucide="circle-help"></i> Bantuan</div>
         <div class="sidebar-footer-item logout" onclick="doLogout()"><i data-lucide="log-out"></i> Keluar</div>
       </div>
     </aside>
@@ -711,6 +711,99 @@
             </div>
           </div>
         </div><!-- /page-referral -->
+
+
+        <!-- =============================================
+             PAGE: HELP
+             ============================================= -->
+        <div class="page" id="page-help">
+          <div class="ph"><h1>🆘 Bantuan</h1><p>Panduan singkat pembelian OTP, refund, dan hal penting yang perlu diperhatikan saat order.</p></div>
+
+          <div class="help-grid">
+            <div class="table-card help-hero-card">
+              <div class="help-hero-icon">📱</div>
+              <div class="help-hero-body">
+                <div class="card-title" style="margin-bottom:10px;">Cara membeli nomor OTP</div>
+                <div class="help-steps">
+                  <div class="help-step">
+                    <span>1</span>
+                    <div>
+                      <strong>Pilih server dan layanan</strong>
+                      <p>Tentukan jalur server yang ingin dipakai, lalu pilih layanan OTP seperti WhatsApp, Telegram, Shopee, dan lainnya.</p>
+                    </div>
+                  </div>
+                  <div class="help-step">
+                    <span>2</span>
+                    <div>
+                      <strong>Pilih negara lalu buat nomor</strong>
+                      <p>Pilih negara yang tersedia, sistem akan menampilkan harga aktif lalu membuat nomor virtual secara otomatis.</p>
+                    </div>
+                  </div>
+                  <div class="help-step">
+                    <span>3</span>
+                    <div>
+                      <strong>Tunggu OTP masuk</strong>
+                      <p>Setelah nomor berhasil dibuat, tunggu kode OTP masuk ke dashboard. Tidak perlu refresh halaman secara terus-menerus.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-card help-refund-card">
+              <div class="card-title" style="margin-bottom:12px;">💸 Kapan saldo akan direfund?</div>
+              <div class="help-alert success">
+                Jika OTP tidak masuk sampai batas waktu tunggu berakhir, saldo order akan <strong>direfund otomatis</strong> ke akun Anda.
+              </div>
+              <ul class="help-list">
+                <li>Refund berlaku untuk pesanan yang gagal menerima OTP sesuai flow sistem.</li>
+                <li>Jika provider menandai order gagal atau dibatalkan, saldo akan kembali otomatis.</li>
+                <li>Refund biasanya akan langsung terlihat di saldo dan riwayat transaksi.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="help-grid">
+            <div class="table-card">
+              <div class="card-title" style="margin-bottom:12px;">⏳ Kenapa OTP belum masuk?</div>
+              <ul class="help-list">
+                <li>Layanan tujuan sedang lambat mengirim SMS OTP.</li>
+                <li>Nomor dari server yang dipilih sedang padat atau delay.</li>
+                <li>App tujuan meminta verifikasi tambahan selain OTP SMS.</li>
+                <li>Provider upstream sedang gangguan sementara.</li>
+              </ul>
+              <div class="topup-notice" style="margin-top:12px;">Tips: tunggu sampai timer selesai dan jangan buru-buru menutup halaman saat order masih aktif.</div>
+            </div>
+
+            <div class="table-card">
+              <div class="card-title" style="margin-bottom:12px;">📌 Hal penting saat order OTP</div>
+              <ul class="help-list">
+                <li>Pastikan saldo akun cukup sebelum membuat order.</li>
+                <li>Jangan gunakan nomor yang sama untuk beberapa form sekaligus.</li>
+                <li>Jika server 1 penuh atau lambat, Anda bisa coba server 2.</li>
+                <li>Cek menu <strong>Pesanan Saya</strong> untuk memantau status dan OTP yang masuk.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="card-title" style="margin-bottom:12px;">❓ Tanya Jawab Singkat</div>
+            <div class="help-faq">
+              <div class="help-faq-item">
+                <strong>Apakah OTP selalu masuk cepat?</strong>
+                <p>Tidak selalu. Kecepatan OTP bergantung pada layanan tujuan dan kondisi server/provider saat itu.</p>
+              </div>
+              <div class="help-faq-item">
+                <strong>Apakah saldo hangus kalau OTP tidak masuk?</strong>
+                <p>Tidak. Jika order gagal atau OTP tidak diterima sesuai ketentuan sistem, saldo akan direfund otomatis.</p>
+              </div>
+              <div class="help-faq-item">
+                <strong>Di mana saya melihat refund?</strong>
+                <p>Refund akan terlihat di saldo akun dan juga tercatat di menu <strong>Transaksi</strong>.</p>
+              </div>
+            </div>
+          </div>
+        </div><!-- /page-help -->
 
 
         <!-- =============================================
