@@ -1278,7 +1278,7 @@
                 <tbody>
                     ${users.map(u => {
                         const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username || '—';
-                        const canAdjust = Boolean(u.telegramId);
+                        const canAdjust = /^\d+$/.test(String(u.telegramId || '').trim());
                         return `<tr>
                         <td>
                             ${userTypeBadge(u.accountType)}

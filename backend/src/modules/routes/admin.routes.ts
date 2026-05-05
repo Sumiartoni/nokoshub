@@ -13,6 +13,7 @@ import { referralService } from '../referrals/referral.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
+import { userService } from '../users/user.service';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
@@ -293,10 +294,19 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             txSummary.set(group.userId, summary);
         }
 
-        const usersByTelegramId = new Map(telegramUsers.map((user) => [user.telegramId, user]));
+        const webWalletUsers = new Map<string, typeof telegramUsers[number]>();
+        const realTelegramUsers = telegramUsers.filter((user) => {
+            if (!user.telegramId.startsWith('web_')) return true;
+            const webUserId = user.telegramId.slice(4);
+            if (webUserId) {
+                webWalletUsers.set(webUserId, user);
+            }
+            return false;
+        });
+        const usersByTelegramId = new Map(realTelegramUsers.map((user) => [user.telegramId, user]));
         const rows = new Map<string, any>();
 
-        for (const user of telegramUsers) {
+        for (const user of realTelegramUsers) {
             const summary = txSummary.get(user.id);
             rows.set(`telegram:${user.id}`, {
                 id: user.id,
@@ -326,25 +336,27 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         for (const webUser of webUsers) {
             const linkedTelegramUser = webUser.telegramId ? usersByTelegramId.get(webUser.telegramId) : null;
             if (!linkedTelegramUser) {
+                const webWallet = webWalletUsers.get(webUser.id);
+                const summary = webWallet ? txSummary.get(webWallet.id) : null;
                 rows.set(`web:${webUser.id}`, {
                     id: webUser.id,
-                    telegramUserId: null,
+                    telegramUserId: webWallet?.id ?? null,
                     webUserId: webUser.id,
                     accountType: 'WEB_ONLY',
                     email: webUser.email,
-                    telegramId: webUser.telegramId,
+                    telegramId: null,
                     username: null,
                     firstName: webUser.firstName,
                     lastName: webUser.lastName,
-                    balance: 0,
-                    isActive: true,
-                    orderCount: 0,
-                    invoiceCount: 0,
-                    txCount: 0,
-                    totalDeposit: 0,
-                    totalRefund: 0,
-                    totalDeduct: 0,
-                    lastActivity: webUser.updatedAt,
+                    balance: webWallet?.balance ?? 0,
+                    isActive: webWallet?.isActive ?? true,
+                    orderCount: webWallet?._count.orders ?? 0,
+                    invoiceCount: webWallet?._count.invoices ?? 0,
+                    txCount: summary?.txCount ?? webWallet?._count.transactions ?? 0,
+                    totalDeposit: summary?.totalDeposit ?? 0,
+                    totalRefund: summary?.totalRefund ?? 0,
+                    totalDeduct: summary?.totalDeduct ?? 0,
+                    lastActivity: maxDate(summary?.lastActivity ?? webWallet?.updatedAt ?? null, webUser.updatedAt),
                     createdAt: webUser.createdAt,
                     webCreatedAt: webUser.createdAt,
                     telegramCreatedAt: null,
