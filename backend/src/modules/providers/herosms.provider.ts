@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { pricingService } from '../pricing/pricing.service';
+import { PROVIDER_BROWSER_HEADERS } from './provider-http';
 
 type AnyRecord = Record<string, any>;
 
@@ -234,9 +235,7 @@ class HeroSMSProvider {
         this.client = axios.create({
             baseURL: normalizeHeroSMSBaseUrl(config.HERO_SMS_BASE_URL),
             timeout: 15000,
-            headers: {
-                Accept: 'application/json,text/plain,*/*',
-            },
+            headers: PROVIDER_BROWSER_HEADERS,
         });
     }
 

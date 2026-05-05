@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { pricingService } from '../pricing/pricing.service';
+import { PROVIDER_BROWSER_HEADERS } from './provider-http';
 import type {
     ProviderCountry,
     ProviderOrderParams,
@@ -133,9 +134,7 @@ class SmsBowerProvider {
         this.client = axios.create({
             baseURL: normalizeBaseUrl(config.SMSBOWER_BASE_URL),
             timeout: 15000,
-            headers: {
-                Accept: 'application/json,text/plain,*/*',
-            },
+            headers: PROVIDER_BROWSER_HEADERS,
         });
     }
 
