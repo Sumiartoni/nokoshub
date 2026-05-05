@@ -61,6 +61,8 @@ services:
       TELEGRAM_REQUEST_TIMEOUT_MS: ${TELEGRAM_REQUEST_TIMEOUT_MS:-35000}
       HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
       HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/stubs/handler_api.php}
+      SMSBOWER_API_KEY: ${SMSBOWER_API_KEY:-}
+      SMSBOWER_BASE_URL: ${SMSBOWER_BASE_URL:-https://smsbower.page/stubs/handler_api.php}
       HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       USD_IDR_RATE_AUTO_ENABLED: ${USD_IDR_RATE_AUTO_ENABLED:-true}
       USD_IDR_RATE_API_URL: ${USD_IDR_RATE_API_URL:-https://api.frankfurter.dev/v2/rate/USD/IDR}
@@ -128,6 +130,8 @@ services:
       REDIS_URL: redis://redis:6379
       HERO_SMS_API_KEY: ${HERO_SMS_API_KEY}
       HERO_SMS_BASE_URL: ${HERO_SMS_BASE_URL:-https://hero-sms.com/stubs/handler_api.php}
+      SMSBOWER_API_KEY: ${SMSBOWER_API_KEY:-}
+      SMSBOWER_BASE_URL: ${SMSBOWER_BASE_URL:-https://smsbower.page/stubs/handler_api.php}
       HERO_SMS_PRICE_TO_IDR_RATE: ${HERO_SMS_PRICE_TO_IDR_RATE:-17000}
       USD_IDR_RATE_AUTO_ENABLED: ${USD_IDR_RATE_AUTO_ENABLED:-true}
       USD_IDR_RATE_API_URL: ${USD_IDR_RATE_API_URL:-https://api.frankfurter.dev/v2/rate/USD/IDR}
