@@ -135,6 +135,21 @@ const SERVER_FILTER_LABEL = {
   server2: 'Server 2',
 };
 
+const SERVER_PUBLIC_COPY = {
+  all: {
+    title: 'Semua Server',
+    description: 'Tampilkan semua opsi terbaik',
+  },
+  server1: {
+    title: 'Server 1',
+    description: 'Jalur utama untuk layanan OTP',
+  },
+  server2: {
+    title: 'Server 2',
+    description: 'Jalur alternatif untuk layanan OTP',
+  },
+};
+
 const POPULAR_SERVICE_ORDER = [
   'whatsapp',
   'telegram',
@@ -836,7 +851,7 @@ function renderServerOptions() {
     <div class="server-option-card" onclick="selectServerOption(${index}, this)">
       <div class="server-option-top">
         <span class="server-option-badge">${esc(option.serverLabel || `Server ${index + 1}`)}</span>
-        <span class="server-option-provider">${esc(option.providerLabel || option.providerKey || 'Provider')}</span>
+        <span class="server-option-provider">${esc((SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {}).description || 'Pilih jalur server yang ingin digunakan')}</span>
       </div>
       <div class="server-option-price">${FMT(option.sellPrice)}</div>
       <div class="server-option-note">Pilih server ini untuk lanjut membuat nomor OTP.</div>

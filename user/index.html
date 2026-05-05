@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260504-2" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260505-1" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -245,13 +245,13 @@
               </button>
               <button class="server-pick" id="serverPick-server1" type="button" onclick="setServerFilter('server1', this)">
                 <span class="server-pick-badge">Server 1</span>
-                <span class="server-pick-name">Provider Utama</span>
-                <span class="server-pick-desc">Dipakai saat provider baru aktif</span>
+                <span class="server-pick-name">Server 1</span>
+                <span class="server-pick-desc">Jalur utama untuk layanan OTP</span>
               </button>
               <button class="server-pick" id="serverPick-server2" type="button" onclick="setServerFilter('server2', this)">
                 <span class="server-pick-badge">Server 2</span>
-                <span class="server-pick-name">HeroSMS</span>
-                <span class="server-pick-desc">Cadangan aktif saat ini</span>
+                <span class="server-pick-name">Server 2</span>
+                <span class="server-pick-desc">Jalur alternatif untuk layanan OTP</span>
               </button>
             </div>
           </div>
@@ -808,6 +808,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260504-2"></script>
+  <script src="assets/js/dashboard.js?v=20260505-1"></script>
 </body>
 </html>
