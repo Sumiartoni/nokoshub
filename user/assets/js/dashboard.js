@@ -7,6 +7,7 @@ const STORE_KEYS = {
   token: 'nokoshub.auth.token',
   apiBase: 'nokoshub.api.base',
   notificationSeenAt: 'nokoshub.notifications.seenAt',
+  installPromptDismissUntil: 'nokoshub.installPrompt.dismissUntil',
 };
 
 const API_BASE = detectApiBase();
@@ -112,6 +113,7 @@ const ROUTE_ALIASES = {
 let topupCountdownTimer = null;
 let topupStatusPoller = null;
 let invoiceHistoryPoller = null;
+let deferredInstallPrompt = null;
 
 let SVC = [
   { id: 'wa', e: '📱', n: 'WhatsApp', cat: 'social', bg: '#FFF3D4', p: 1200, priceCount: 1 },
@@ -2271,6 +2273,140 @@ function emptyInline(text) {
   return `<div style="padding:20px;text-align:center;color:var(--muted);font-weight:800;">${esc(text)}</div>`;
 }
 
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function isIosDevice() {
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/i.test(ua);
+}
+
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent || '');
+}
+
+function canShowInstallPrompt() {
+  if (isStandaloneApp()) return false;
+  const dismissUntil = Number(localStorage.getItem(STORE_KEYS.installPromptDismissUntil) || 0);
+  if (dismissUntil && Date.now() < dismissUntil) return false;
+  return true;
+}
+
+function buildInstallPromptSteps() {
+  if (deferredInstallPrompt) {
+    return [
+      'Tekan tombol install di bawah untuk menambahkan NokosHUB ke layar utama.',
+      'Setelah terpasang, dashboard bisa dibuka lebih cepat seperti aplikasi biasa.',
+    ];
+  }
+
+  if (isIosDevice()) {
+    return [
+      'Buka menu Share di Safari.',
+      'Pilih Add to Home Screen.',
+      'Tekan Add agar NokosHUB muncul di layar utama iPhone atau iPad Anda.',
+    ];
+  }
+
+  if (isAndroidDevice()) {
+    return [
+      'Buka menu browser di kanan atas.',
+      'Pilih Install app atau Tambahkan ke layar utama.',
+      'Konfirmasi pemasangan agar NokosHUB muncul seperti aplikasi.',
+    ];
+  }
+
+  return [
+    'Gunakan menu browser Anda lalu pilih Install app atau Tambahkan ke layar utama.',
+    'Setelah dipasang, dashboard akan lebih cepat diakses seperti aplikasi.',
+  ];
+}
+
+function openInstallPrompt() {
+  if (!canShowInstallPrompt()) return;
+  const modal = document.getElementById('installPromptModal');
+  const desc = document.getElementById('installPromptDesc');
+  const stepsWrap = document.getElementById('installPromptSteps');
+  const primaryBtn = document.getElementById('installPromptPrimaryBtn');
+  if (!modal || !desc || !stepsWrap || !primaryBtn) return;
+
+  const isIos = isIosDevice();
+  const supportsNativePrompt = Boolean(deferredInstallPrompt);
+  desc.textContent = supportsNativePrompt
+    ? 'Pasang dashboard ini agar lebih cepat dibuka seperti aplikasi dan lebih nyaman dipakai setiap hari.'
+    : isIos
+      ? 'Di iPhone atau iPad, NokosHUB bisa dipasang lewat Safari menggunakan fitur Add to Home Screen.'
+      : 'Dashboard ini bisa dipasang ke layar utama agar aksesnya terasa seperti aplikasi biasa.';
+
+  stepsWrap.innerHTML = buildInstallPromptSteps().map((text, index) => `
+    <div class="install-prompt-step">
+      <div class="install-prompt-step-num">${index + 1}</div>
+      <div class="install-prompt-step-text">${esc(text)}</div>
+    </div>
+  `).join('');
+
+  primaryBtn.textContent = supportsNativePrompt ? 'Install Sekarang' : (isIos ? 'Saya Mengerti' : 'Tutup');
+  primaryBtn.onclick = supportsNativePrompt ? triggerInstallPrompt : closeInstallPrompt;
+
+  modal.classList.add('open');
+}
+
+function closeInstallPrompt() {
+  document.getElementById('installPromptModal')?.classList.remove('open');
+}
+
+function dismissInstallPromptFor24h() {
+  localStorage.setItem(STORE_KEYS.installPromptDismissUntil, String(Date.now() + (24 * 60 * 60 * 1000)));
+  closeInstallPrompt();
+  showToast('Pengingat install disembunyikan selama 24 jam.', 'info');
+}
+
+async function triggerInstallPrompt() {
+  if (!deferredInstallPrompt) {
+    closeInstallPrompt();
+    return;
+  }
+
+  try {
+    await deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+  } catch (err) {
+    console.error(err);
+  } finally {
+    deferredInstallPrompt = null;
+    closeInstallPrompt();
+  }
+}
+
+function registerPwaSupport() {
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    setTimeout(() => openInstallPrompt(), 300);
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    closeInstallPrompt();
+    showToast('NokosHUB berhasil ditambahkan ke layar utama.', 'success');
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/user/sw.js').catch((err) => {
+        console.error('Service worker registration failed', err);
+      });
+    });
+  }
+
+  setTimeout(() => {
+    if (!deferredInstallPrompt && canShowInstallPrompt()) {
+      openInstallPrompt();
+    }
+  }, 1200);
+}
+
 function esc(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -2297,6 +2433,7 @@ document.addEventListener('keydown', e => {
     document.querySelectorAll('.modal-ov.open').forEach(m => m.classList.remove('open'));
     closeSidebar();
     closeNotifications();
+    closeInstallPrompt();
   }
 });
 
@@ -2321,6 +2458,7 @@ document.addEventListener('click', (event) => {
   updateUI();
   renderSvcs();
   renderNotifications();
+  registerPwaSupport();
   initRouter();
   loadPaymentSettings();
   loadDashboardData({ silent: true });

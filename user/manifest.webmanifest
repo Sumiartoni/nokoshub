@@ -1,0 +1,24 @@
+{
+  "name": "NokosHUB Dashboard",
+  "short_name": "NokosHUB",
+  "description": "Dashboard NokosHUB untuk beli nomor OTP, cek pesanan, dan kelola saldo.",
+  "start_url": "/user/#/home",
+  "scope": "/user/",
+  "display": "standalone",
+  "background_color": "#FFFEF0",
+  "theme_color": "#4F9CF9",
+  "icons": [
+    {
+      "src": "/user/assets/images/favicon.png",
+      "sizes": "1000x1000",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/user/assets/images/logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
