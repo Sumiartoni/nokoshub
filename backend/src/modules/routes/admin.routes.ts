@@ -122,20 +122,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.get('/overview', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
 
-        await paymentService.reconcilePendingInvoices(10).catch(err => {
-            logger.warn({ err }, 'Failed to reconcile pending invoices before overview fetch');
-        });
-
         const [
             totalOrders,
             activeOrders,
+            totalServices,
             userBalanceAgg,
             providerSummary,
             paidInvoiceAgg,
-            orderMargins,
+            orderTotals,
         ] = await Promise.all([
             prisma.order.count(),
             prisma.order.count({ where: { status: 'ACTIVE' } }),
+            prisma.service.count({ where: { isActive: true } }),
             prisma.user.aggregate({ _sum: { balance: true } }),
             (async () => {
                 try {
@@ -154,21 +152,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 where: { status: 'PAID' },
                 _sum: { baseAmount: true, gatewayFee: true, amount: true },
             }),
-            prisma.order.findMany({
-                where: {
-                    status: {
-                        in: ['ACTIVE', 'SUCCESS'],
-                    },
-                },
-                select: {
-                    price: {
-                        select: {
-                            sellPrice: true,
-                            providerPrice: true,
-                        },
-                    },
-                },
-            }),
+            prisma.$queryRaw<Array<{ totalOrderRevenue: bigint | number | null; netProfit: bigint | number | null }>>`
+                SELECT
+                    COALESCE(SUM(p."sellPrice"), 0) AS "totalOrderRevenue",
+                    COALESCE(SUM(p."sellPrice" - p."providerPrice"), 0) AS "netProfit"
+                FROM "Order" o
+                INNER JOIN "Price" p ON p.id = o."priceId"
+                WHERE o.status IN ('ACTIVE', 'SUCCESS')
+            `,
         ]);
 
         const totalUserBalance = userBalanceAgg._sum.balance ?? 0;
@@ -176,18 +167,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const providerBalanceIdr = providerSummary.ok && providerRate
             ? Math.round(providerSummary.balanceUsd * providerRate.effectiveRate)
             : 0;
-        const totalOrderRevenue = orderMargins.reduce((sum, order) => {
-            return sum + (order.price?.sellPrice ?? 0);
-        }, 0);
-        const netProfit = orderMargins.reduce((sum, order) => {
-            return sum + ((order.price?.sellPrice ?? 0) - (order.price?.providerPrice ?? 0));
-        }, 0);
+        const orderSummary = orderTotals[0] ?? { totalOrderRevenue: 0, netProfit: 0 };
+        const totalOrderRevenue = Number(orderSummary.totalOrderRevenue ?? 0);
+        const netProfit = Number(orderSummary.netProfit ?? 0);
 
         return {
             success: true,
             data: {
                 totalOrders,
                 activeOrders,
+                totalServices,
                 totalOrderRevenue,
                 totalUserBalance,
                 totalPaidDeposits: paidInvoiceAgg._sum.baseAmount ?? 0,
@@ -211,7 +200,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const rawLimit = Number.parseInt(query.limit ?? '500', 10);
         const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 500;
 
-        const [telegramUsers, webUsers, txGroups, lastTxGroups] = await Promise.all([
+        const [telegramUsers, webUsers] = await Promise.all([
             prisma.user.findMany({
                 select: {
                     id: true,
@@ -247,16 +236,38 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 orderBy: { createdAt: 'desc' },
                 take: limit,
             }),
-            prisma.transaction.groupBy({
-                by: ['userId', 'type'],
-                _count: { _all: true },
-                _sum: { amount: true },
-            }),
-            prisma.transaction.groupBy({
-                by: ['userId'],
-                _max: { createdAt: true },
-            }),
         ]);
+
+        const webWalletUsers = new Map<string, typeof telegramUsers[number]>();
+        const realTelegramUsers = telegramUsers.filter((user) => {
+            if (!user.telegramId.startsWith('web_')) return true;
+            const webUserId = user.telegramId.slice(4);
+            if (webUserId) {
+                webWalletUsers.set(webUserId, user);
+            }
+            return false;
+        });
+        const usersByTelegramId = new Map(realTelegramUsers.map((user) => [user.telegramId, user]));
+        const relevantUserIds = [
+            ...realTelegramUsers.map((user) => user.id),
+            ...[...webWalletUsers.values()].map((user) => user.id),
+        ];
+
+        const [txGroups, lastTxGroups] = relevantUserIds.length
+            ? await Promise.all([
+                prisma.transaction.groupBy({
+                    by: ['userId', 'type'],
+                    where: { userId: { in: relevantUserIds } },
+                    _count: { _all: true },
+                    _sum: { amount: true },
+                }),
+                prisma.transaction.groupBy({
+                    by: ['userId'],
+                    where: { userId: { in: relevantUserIds } },
+                    _max: { createdAt: true },
+                }),
+            ])
+            : [[], []];
 
         const txSummary = new Map<string, {
             txCount: number;
@@ -294,16 +305,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             txSummary.set(group.userId, summary);
         }
 
-        const webWalletUsers = new Map<string, typeof telegramUsers[number]>();
-        const realTelegramUsers = telegramUsers.filter((user) => {
-            if (!user.telegramId.startsWith('web_')) return true;
-            const webUserId = user.telegramId.slice(4);
-            if (webUserId) {
-                webWalletUsers.set(webUserId, user);
-            }
-            return false;
-        });
-        const usersByTelegramId = new Map(realTelegramUsers.map((user) => [user.telegramId, user]));
         const rows = new Map<string, any>();
 
         for (const user of realTelegramUsers) {

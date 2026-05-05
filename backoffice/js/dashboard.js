@@ -240,11 +240,10 @@
     async function loadOverview() {
         renderStatSkeleton();
 
-        const [overviewRes, ordersRes, invoicesRes, servicesRes] = await Promise.allSettled([
+        const [overviewRes, ordersRes, invoicesRes] = await Promise.allSettled([
             api('/api/admin/overview'),
-            api('/api/admin/orders?limit=100'),
-            api('/api/admin/invoices?limit=100'),
-            api('/api/services'),
+            api('/api/admin/orders?limit=12'),
+            api('/api/admin/invoices?limit=12'),
         ]);
 
         let ordersData = [], invoicesData = [];
@@ -276,9 +275,6 @@
 
         // Services
         let totalServices = '—';
-        if (servicesRes.status === 'fulfilled' && servicesRes.value.success) {
-            totalServices = servicesRes.value.data.length;
-        }
 
         let providerBal = '—';
         let providerMeta = '';
@@ -292,6 +288,7 @@
             totalOrderRevenue = formatRupiahFull(summary.totalOrderRevenue ?? 0);
             totalUserBalance = formatRupiahFull(summary.totalUserBalance ?? 0);
             netProfit = formatRupiahFull(summary.netProfit ?? 0);
+            totalServices = Number(summary.totalServices ?? 0);
 
             const providerUsd = Number(summary.providerBalanceUsd ?? 0);
             const exchangeRate = Number(summary.providerRate || 0);
@@ -323,7 +320,7 @@
 
         // System status panel
         const sysRow = document.getElementById('systemStatusRow');
-        const apiStatus = [overviewRes, ordersRes, invoicesRes, servicesRes].some(
+        const apiStatus = [overviewRes, ordersRes, invoicesRes].some(
             (result) => result.status === 'fulfilled' && result.value?.success
         );
         sysRow.innerHTML = `
