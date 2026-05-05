@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260505-2" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260505-3" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -68,9 +68,9 @@
 
       <!-- Footer -->
       <div class="sidebar-footer">
-        <div class="sidebar-footer-item"><i data-lucide="message-circle"></i> Live Chat</div>
-        <div class="sidebar-footer-item" onclick="nav('help')"><i data-lucide="circle-help"></i> Bantuan</div>
-        <div class="sidebar-footer-item logout" onclick="doLogout()"><i data-lucide="log-out"></i> Keluar</div>
+        <button class="sidebar-footer-item sidebar-footer-btn" type="button"><i data-lucide="message-circle"></i> Live Chat</button>
+        <button class="sidebar-footer-item sidebar-footer-btn" id="helpButton" type="button"><i data-lucide="circle-help"></i> Bantuan</button>
+        <button class="sidebar-footer-item sidebar-footer-btn logout" type="button" onclick="doLogout()"><i data-lucide="log-out"></i> Keluar</button>
       </div>
     </aside>
 
@@ -921,6 +921,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260505-2"></script>
+  <script src="assets/js/dashboard.js?v=20260505-3"></script>
 </body>
 </html>

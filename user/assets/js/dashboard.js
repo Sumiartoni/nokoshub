@@ -349,7 +349,7 @@ function nav(page, options = {}) {
   document.getElementById('n-' + route)?.classList.add('active');
 
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const mnMap = { home: 'mn-home', buy: 'mn-buy', topup: 'mn-topup', orders: 'mn-orders', transactions: 'mn-orders', referral: 'mn-profile', profile: 'mn-profile', api: 'mn-profile' };
+  const mnMap = { home: 'mn-home', buy: 'mn-buy', topup: 'mn-topup', orders: 'mn-orders', transactions: 'mn-orders', referral: 'mn-profile', help: 'mn-profile', profile: 'mn-profile', api: 'mn-profile' };
   document.getElementById(mnMap[route] || '')?.classList.add('active');
 
   set('topbarTitle', TTLS[route] || route);
@@ -2037,6 +2037,12 @@ document.getElementById('hamburger').addEventListener('click', () => {
 document.getElementById('notifButton')?.addEventListener('click', (event) => {
   event.stopPropagation();
   toggleNotifications();
+});
+
+document.getElementById('helpButton')?.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  nav('help');
 });
 
 function closeSidebar() {
