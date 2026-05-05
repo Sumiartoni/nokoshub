@@ -671,6 +671,7 @@
                     </div>
                     <button class="btn btn-sm btn-primary" onclick="runMaintenanceAction('run_full_routine')">Full Routine</button>
                     <button class="btn btn-sm btn-outline" onclick="runMaintenanceAction('sync_provider')">Sync Provider</button>
+                    <button class="btn btn-sm btn-outline" onclick="runMaintenanceAction('repair_duplicate_deposits')">Repair Deposit Ganda</button>
                     <button class="btn btn-sm btn-outline" onclick="loadMaintenanceDashboard()">Refresh</button>
                 </div>
 
@@ -793,6 +794,7 @@
                             <div class="maintenance-action-grid">
                                 <button class="btn btn-outline" onclick="runMaintenanceAction('expire_invoices')">Expire Overdue Invoices</button>
                                 <button class="btn btn-outline" onclick="runMaintenanceAction('reconcile_payments')">Reconcile BAYAR GG</button>
+                                <button class="btn btn-outline" onclick="runMaintenanceAction('repair_duplicate_deposits')">Repair Deposit Ganda</button>
                                 <button class="btn btn-outline" onclick="runMaintenanceAction('cleanup_pending_registrations')">Cleanup OTP Register</button>
                                 <button class="btn btn-outline" onclick="runMaintenanceAction('cleanup_telegram_links')">Cleanup Link Telegram</button>
                                 <button class="btn btn-outline" onclick="runMaintenanceAction('sync_provider')">Sync Provider</button>
@@ -926,16 +928,34 @@
         <div class="modal-body">
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Telegram ID</label>
-                    <input class="form-input" id="adjTelegramId" type="text" placeholder="Contoh: 123456789">
+                    <label class="form-label">Target Akun</label>
+                    <select class="form-select" id="adjTargetType" onchange="syncAdjustTargetFields()">
+                        <option value="telegram">User Bot (Telegram)</option>
+                        <option value="web">User Web</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Tipe</label>
                     <select class="form-select" id="adjType">
                         <option value="DEPOSIT">DEPOSIT (Tambah)</option>
                         <option value="REFUND">REFUND (Pengembalian)</option>
+                        <option value="DEDUCT">DEDUCT (Kurangi)</option>
                     </select>
                 </div>
+            </div>
+            <div class="form-row" style="margin-top:14px">
+                <div class="form-group" id="adjTelegramGroup">
+                    <label class="form-label">Telegram ID</label>
+                    <input class="form-input" id="adjTelegramId" type="text" placeholder="Contoh: 123456789">
+                </div>
+                <div class="form-group" id="adjWebUserGroup" hidden>
+                    <label class="form-label">Web User ID</label>
+                    <input class="form-input" id="adjWebUserId" type="text" placeholder="Contoh: cmxxxxxxxxxxxx">
+                </div>
+            </div>
+            <div class="form-group" style="margin-top:14px">
+                <label class="form-label">Target Terpilih</label>
+                <input class="form-input" id="adjTargetLabel" type="text" placeholder="Belum dipilih" readonly>
             </div>
             <div class="form-group" style="margin-top:14px">
                 <label class="form-label">Jumlah (Rp)</label>
@@ -1019,7 +1039,7 @@
 </div>
 
 <script src="js/auth.js?v=20260424-1"></script>
-<script src="js/dashboard.js?v=20260504-1"></script>
+<script src="js/dashboard.js?v=20260505-2"></script>
 </body>
 </html>
 

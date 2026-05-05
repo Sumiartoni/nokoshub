@@ -51,7 +51,7 @@ const S = {
     minimumDeposit: 10000,
     maximumDeposit: 10000000,
   },
-  topup: { amount: 0, method: 'QRIS BAYAR GG', fee: 0, invoice: null },
+  topup: { amount: 0, method: 'QRIS BAYAR GG', fee: 0, invoice: null, creatingInvoice: false, proofFile: null },
   buy: {
     step: 1,
     svc: null,
@@ -1246,6 +1246,16 @@ async function doTopup() {
     return;
   }
 
+  if (S.topup.creatingInvoice) return;
+
+  const btn = document.getElementById('topupSubmitBtn');
+  S.topup.creatingInvoice = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('btn-disabled-soft');
+    btn.innerHTML = '<span class="spinner-inline"></span> Membuat invoice...';
+  }
+
   try {
     const invoice = normalizeInvoiceRecord(await apiFetch('/deposit', {
       body: { amount: S.topup.amount },
@@ -1269,6 +1279,13 @@ async function doTopup() {
     await loadDashboardData({ silent: true });
   } catch (err) {
     showToast(`Gagal buat invoice: ${err.message}`, 'error');
+  } finally {
+    S.topup.creatingInvoice = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('btn-disabled-soft');
+      btn.innerHTML = '🚀 Konfirmasi Top Up';
+    }
   }
 }
 

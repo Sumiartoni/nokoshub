@@ -237,17 +237,23 @@ export const maintenanceService = {
         return paymentService.reconcilePendingInvoices(limit);
     },
 
+    async repairDuplicateDeposits() {
+        return paymentService.repairDuplicateDepositCredits();
+    },
+
     async runFullRoutine() {
         const [
             expiredInvoices,
             reconciledPayments,
             cleanedRegistrations,
             cleanedLinks,
+            repairedDuplicates,
         ] = await Promise.all([
             this.expireOverdueInvoices(),
             this.reconcilePendingPayments(50),
             this.cleanupExpiredPendingRegistrations(),
             this.cleanupTelegramLinkCodes(),
+            this.repairDuplicateDeposits(),
         ]);
 
         serviceService.syncFromProvider().catch(() => null);
@@ -257,6 +263,7 @@ export const maintenanceService = {
             reconciledPayments,
             cleanedRegistrations,
             cleanedLinks,
+            repairedDuplicates,
             providerSyncStarted: true,
         };
     },

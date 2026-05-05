@@ -1288,6 +1288,21 @@ input, textarea, select { user-select: text; }
 .oc-status-slot { margin-left:auto; flex-shrink:0; }
 .oc-status-note { color:var(--muted); font-size:0.84rem; font-weight:700; }
 .btn-disabled-soft { opacity:0.55; cursor:not-allowed; }
+.spinner-inline {
+  width:14px;
+  height:14px;
+  border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff;
+  border-radius:50%;
+  display:inline-block;
+  vertical-align:-2px;
+  margin-right:8px;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin {
+  from { transform:rotate(0deg); }
+  to { transform:rotate(360deg); }
+}
 .invoice-icon-paid { background:#D4FFF0; }
 .invoice-icon-expired { background:#FFE1E1; }
 .invoice-icon-pending { background:#FFF3D4; }

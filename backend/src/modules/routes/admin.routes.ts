@@ -94,6 +94,7 @@ const maintenanceActionSchema = z.object({
     action: z.enum([
         'expire_invoices',
         'reconcile_payments',
+        'repair_duplicate_deposits',
         'cleanup_pending_registrations',
         'cleanup_telegram_links',
         'run_full_routine',
@@ -406,7 +407,57 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             orderBy: { createdAt: 'desc' },
             take: query.limit ? parseInt(query.limit) : 50,
         });
-        return { success: true, data: transactions };
+
+        const webWalletIds = transactions
+            .map((tx) => tx.user?.telegramId || '')
+            .filter((telegramId) => telegramId.startsWith('web_'))
+            .map((telegramId) => telegramId.slice(4))
+            .filter(Boolean);
+
+        const webUsers = webWalletIds.length
+            ? await prisma.webUser.findMany({
+                where: { id: { in: [...new Set(webWalletIds)] } },
+                select: {
+                    id: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    telegramId: true,
+                },
+            })
+            : [];
+
+        const webUserMap = new Map(webUsers.map((user) => [user.id, user]));
+        const data = transactions.map((tx) => {
+            const telegramId = tx.user?.telegramId || '';
+            const isWebWallet = telegramId.startsWith('web_');
+            if (!isWebWallet) {
+                return {
+                    ...tx,
+                    displayUser: tx.user?.username ? `@${tx.user.username}` : telegramId || '—',
+                    displaySubtext: telegramId || 'User bot',
+                    accountType: 'TELEGRAM_ONLY',
+                };
+            }
+
+            const webUserId = telegramId.slice(4);
+            const webUser = webUserMap.get(webUserId);
+            const displayName = webUser?.email
+                || [webUser?.firstName, webUser?.lastName].filter(Boolean).join(' ')
+                || `Web user ${webUserId}`;
+
+            return {
+                ...tx,
+                displayUser: displayName,
+                displaySubtext: webUser?.telegramId
+                    ? `Web + Telegram (${webUser.telegramId})`
+                    : 'User web',
+                accountType: webUser?.telegramId ? 'WEB_LINKED' : 'WEB_ONLY',
+                webUserId,
+            };
+        });
+
+        return { success: true, data };
     });
 
     // GET /api/admin/invoices
@@ -462,6 +513,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             } else if (parsed.data.action === 'reconcile_payments') {
                 result = await maintenanceService.reconcilePendingPayments(parsed.data.limit ?? 25);
                 message = 'Rekonsiliasi payment gateway selesai';
+            } else if (parsed.data.action === 'repair_duplicate_deposits') {
+                result = await maintenanceService.repairDuplicateDeposits();
+                message = 'Deposit ganda berhasil diperiksa dan diperbaiki';
             } else if (parsed.data.action === 'cleanup_pending_registrations') {
                 result = await maintenanceService.cleanupExpiredPendingRegistrations();
                 message = 'Pending OTP register kadaluarsa berhasil dibersihkan';
@@ -695,18 +749,67 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // PATCH /api/admin/user-balance - manually adjust user balance
     fastify.patch('/user-balance', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
-        const body = req.body as { telegramId?: string; amount?: number; type?: string; description?: string };
-        if (!body.telegramId || !body.amount || !body.type) {
-            return reply.status(400).send({ success: false, error: 'telegramId, amount, type required' });
+        const body = req.body as {
+            telegramId?: string;
+            webUserId?: string;
+            amount?: number;
+            type?: string;
+            description?: string;
+        };
+
+        if ((!body.telegramId && !body.webUserId) || !body.amount || !body.type) {
+            return reply.status(400).send({ success: false, error: 'telegramId atau webUserId, amount, type required' });
         }
-        const { userService } = await import('../../modules/users/user.service');
-        const user = await userService.findOrCreate(body.telegramId);
-        await userService.addBalance(
-            user.id,
-            body.amount,
-            body.type as 'DEPOSIT' | 'REFUND',
-            body.description ?? 'Admin adjustment'
-        );
-        return { success: true, message: 'Balance updated' };
+        if (!['DEPOSIT', 'REFUND', 'DEDUCT'].includes(body.type)) {
+            return reply.status(400).send({ success: false, error: 'Tipe harus DEPOSIT, REFUND, atau DEDUCT' });
+        }
+
+        let user;
+        let target = '';
+
+        if (body.webUserId) {
+            const webUser = await prisma.webUser.findUnique({
+                where: { id: body.webUserId },
+                select: { id: true, email: true, firstName: true, lastName: true },
+            });
+            if (!webUser) {
+                return reply.status(404).send({ success: false, error: 'Web user tidak ditemukan' });
+            }
+
+            user = await userService.findOrCreateWebWallet(webUser.id, {
+                firstName: webUser.firstName,
+                lastName: webUser.lastName,
+            });
+            target = webUser.email || `web:${webUser.id}`;
+        } else {
+            user = await userService.findOrCreate(String(body.telegramId));
+            target = String(body.telegramId);
+        }
+
+        const description = body.description?.trim() || 'Admin adjustment';
+        const reference = `admin_adjust_${Date.now()}`;
+
+        if (body.type === 'DEDUCT') {
+            await userService.deductBalance(user.id, body.amount, description, reference);
+        } else {
+            await userService.addBalance(
+                user.id,
+                body.amount,
+                body.type as 'DEPOSIT' | 'REFUND',
+                description,
+                reference
+            );
+        }
+
+        return {
+            success: true,
+            message: `Saldo ${target} berhasil diperbarui`,
+            data: {
+                userId: user.id,
+                target,
+                type: body.type,
+                amount: body.amount,
+            },
+        };
     });
 };

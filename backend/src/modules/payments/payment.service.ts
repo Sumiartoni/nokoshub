@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { prisma } from '../../database/prisma.client';
-import { userService } from '../users/user.service';
 import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { referralService } from '../referrals/referral.service';
@@ -25,6 +24,25 @@ export const paymentService = {
         }
         await paymentService.expireOverdueInvoices();
         bayarGgService.assertConfigured();
+
+        const existingPending = await prisma.invoice.findFirst({
+            where: {
+                userId,
+                provider: 'BAYAR_GG',
+                status: 'PENDING',
+                baseAmount: requestedAmount,
+                expiredAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (existingPending) {
+            logger.info(
+                { invoiceId: existingPending.id, userId, requestedAmount },
+                'Reusing existing pending BAYAR GG invoice'
+            );
+            return existingPending;
+        }
 
         const invoice = await prisma.invoice.create({
             data: {
@@ -282,6 +300,90 @@ export const paymentService = {
 
         return result.count;
     },
+
+    async repairDuplicateDepositCredits() {
+        const depositTransactions = await prisma.transaction.findMany({
+            where: {
+                type: 'DEPOSIT',
+                reference: { not: null },
+            },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            select: {
+                id: true,
+                userId: true,
+                amount: true,
+                reference: true,
+                createdAt: true,
+            },
+        });
+
+        const grouped = new Map<string, typeof depositTransactions>();
+        for (const tx of depositTransactions) {
+            const reference = String(tx.reference || '').trim();
+            if (!reference) continue;
+            const bucket = grouped.get(reference) ?? [];
+            bucket.push(tx);
+            grouped.set(reference, bucket);
+        }
+
+        const duplicatesToRemove: typeof depositTransactions = [];
+        const balanceRollbackByUser = new Map<string, number>();
+
+        for (const [, rows] of grouped) {
+            if (rows.length <= 1) continue;
+            const [, ...extras] = rows;
+            for (const extra of extras) {
+                duplicatesToRemove.push(extra);
+                balanceRollbackByUser.set(
+                    extra.userId,
+                    (balanceRollbackByUser.get(extra.userId) ?? 0) + Math.max(0, extra.amount)
+                );
+            }
+        }
+
+        if (!duplicatesToRemove.length) {
+            return {
+                referencesScanned: grouped.size,
+                duplicateReferencesFixed: 0,
+                deletedTransactions: 0,
+                reversedAmount: 0,
+            };
+        }
+
+        await prisma.$transaction(async (tx) => {
+            for (const [userId, amount] of balanceRollbackByUser.entries()) {
+                if (amount <= 0) continue;
+                await tx.user.update({
+                    where: { id: userId },
+                    data: { balance: { decrement: amount } },
+                });
+            }
+
+            await tx.transaction.deleteMany({
+                where: {
+                    id: { in: duplicatesToRemove.map((item) => item.id) },
+                },
+            });
+        });
+
+        const reversedAmount = [...balanceRollbackByUser.values()].reduce((sum, value) => sum + value, 0);
+        logger.warn(
+            {
+                referencesScanned: grouped.size,
+                duplicateReferencesFixed: new Set(duplicatesToRemove.map((item) => item.reference)).size,
+                deletedTransactions: duplicatesToRemove.length,
+                reversedAmount,
+            },
+            'Duplicate deposit credits repaired'
+        );
+
+        return {
+            referencesScanned: grouped.size,
+            duplicateReferencesFixed: new Set(duplicatesToRemove.map((item) => item.reference)).size,
+            deletedTransactions: duplicatesToRemove.length,
+            reversedAmount,
+        };
+    },
 };
 
 async function handleBayarGgWebhook(
@@ -447,7 +549,7 @@ async function confirmInvoicePaid(
         gatewayPayload?: unknown;
     }
 ) {
-    return prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
         const invoice = await tx.invoice.findUnique({
             where: { id: invoiceId },
         });
@@ -463,6 +565,15 @@ async function confirmInvoicePaid(
         if (invoice.status === 'EXPIRED') {
             throw new Error('Invoice expired');
         }
+
+        const existingDepositTx = await tx.transaction.findFirst({
+            where: {
+                userId: invoice.userId,
+                type: 'DEPOSIT',
+                reference: invoice.id,
+            },
+            select: { id: true },
+        });
 
         const updated = await tx.invoice.updateMany({
             where: {
@@ -484,15 +595,27 @@ async function confirmInvoicePaid(
 
         const amountToCredit = invoice.baseAmount > 0 ? invoice.baseAmount : invoice.amount;
 
-        await userService.addBalance(
-            invoice.userId,
-            amountToCredit,
-            'DEPOSIT',
-            `Deposit via ${invoice.provider === 'BAYAR_GG' ? 'BAYAR GG' : 'QRIS'}`,
-            invoice.id
-        );
+        if (!existingDepositTx) {
+            await tx.user.update({
+                where: { id: invoice.userId },
+                data: { balance: { increment: amountToCredit } },
+            });
 
-        await referralService.processQualifiedDeposit(invoice.userId, invoice.id);
+            await tx.transaction.create({
+                data: {
+                    userId: invoice.userId,
+                    type: 'DEPOSIT',
+                    amount: amountToCredit,
+                    description: `Deposit via ${invoice.provider === 'BAYAR_GG' ? 'BAYAR GG' : 'QRIS'}`,
+                    reference: invoice.id,
+                },
+            });
+        } else {
+            logger.warn(
+                { invoiceId: invoice.id, userId: invoice.userId, depositTransactionId: existingDepositTx.id },
+                'Invoice was pending but deposit transaction already existed; skipping duplicate credit'
+            );
+        }
 
         logger.info(
             {
@@ -501,12 +624,32 @@ async function confirmInvoicePaid(
                 credited: amountToCredit,
                 totalPayment: invoice.amount,
                 provider: invoice.provider,
+                alreadyCredited: Boolean(existingDepositTx),
             },
             'Deposit confirmed'
         );
 
-        return true;
+        return {
+            confirmed: true,
+            shouldProcessReferral: true,
+            userId: invoice.userId,
+            invoiceReference: invoice.id,
+        };
     });
+
+    if (!outcome) {
+        return false;
+    }
+
+    if (outcome.shouldProcessReferral) {
+        try {
+            await referralService.processQualifiedDeposit(outcome.userId, outcome.invoiceReference);
+        } catch (err) {
+            logger.warn({ err, invoiceId, userId: outcome.userId }, 'Referral qualification after deposit confirmation failed');
+        }
+    }
+
+    return Boolean(outcome.confirmed);
 }
 
 async function markInvoiceExpired(invoiceId: string) {

@@ -688,6 +688,8 @@
             const matchType = !typeFilter || t.type === typeFilter;
             const matchSearch = !q ||
                 (t.user?.telegramId || '').includes(q) ||
+                (t.displayUser || '').toLowerCase().includes(q) ||
+                (t.displaySubtext || '').toLowerCase().includes(q) ||
                 (t.description || '').toLowerCase().includes(q) ||
                 (t.id || '').toLowerCase().includes(q);
             return matchType && matchSearch;
@@ -710,7 +712,10 @@
                 <tbody>
                     ${data.map(t => `<tr>
                         <td>${idChip(t.id)}</td>
-                        <td class="mono text-indigo">${t.user?.telegramId || '—'}</td>
+                        <td>
+                            <div class="mono text-indigo fw-600">${escText(t.displayUser || t.user?.telegramId || '—')}</div>
+                            <div class="text-sm text-muted">${escText(t.displaySubtext || '—')}</div>
+                        </td>
                         <td>${statusBadge(t.type)}</td>
                         <td class="mono fw-600 ${t.amount > 0 ? 'text-emerald' : 'text-rose'}">
                             ${t.amount > 0 ? '+' : ''}${formatRupiahFull(t.amount)}
@@ -1275,7 +1280,7 @@
                 <tbody>
                     ${users.map(u => {
                         const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username || '—';
-                        const canAdjust = /^\d+$/.test(String(u.telegramId || '').trim());
+                        const canAdjust = Boolean((u.telegramId && /^\d+$/.test(String(u.telegramId).trim())) || u.webUserId);
                         return `<tr>
                         <td>
                             ${userTypeBadge(u.accountType)}
@@ -1292,7 +1297,7 @@
                         <td class="mono">${u.orderCount || 0}</td>
                         <td class="text-muted text-sm">${formatDateShort(u.lastActivity)}</td>
                         <td class="actions-cell">
-                            <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjust(${escAttr(u.telegramId)})"` : 'disabled title="User web belum menautkan Telegram"'} >
+                            <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjustForUser(${escAttr(u.accountType)}, ${escAttr(u.telegramId || '')}, ${escAttr(u.webUserId || '')}, ${escAttr(u.email || displayName)})"` : 'disabled title="Target user tidak valid"'} >
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                                 </svg>
@@ -1306,26 +1311,44 @@
     }
 
     // ─── Balance Adjustment Modal ─────────────────────────────────────────────────
-    window.showAdjustBalanceModal = function () {
+    window.syncAdjustTargetFields = function () {
+        const targetType = document.getElementById('adjTargetType')?.value || 'telegram';
+        const telegramGroup = document.getElementById('adjTelegramGroup');
+        const webGroup = document.getElementById('adjWebUserGroup');
+        if (telegramGroup) telegramGroup.hidden = targetType !== 'telegram';
+        if (webGroup) webGroup.hidden = targetType !== 'web';
+    };
+
+    window.showAdjustBalanceModal = function (targetType = 'telegram') {
+        document.getElementById('adjTargetType').value = targetType;
         document.getElementById('adjTelegramId').value = '';
+        document.getElementById('adjWebUserId').value = '';
+        document.getElementById('adjTargetLabel').value = '';
         document.getElementById('adjAmount').value = '';
         document.getElementById('adjType').value = 'DEPOSIT';
         document.getElementById('adjDescription').value = 'Admin adjustment';
+        syncAdjustTargetFields();
         document.getElementById('balanceModal').style.display = 'flex';
     };
 
-    window.prefillAdjust = function (telegramId) {
-        showAdjustBalanceModal();
-        document.getElementById('adjTelegramId').value = telegramId;
+    window.prefillAdjustForUser = function (accountType, telegramId, webUserId, label) {
+        const targetType = webUserId && (!telegramId || accountType === 'WEB_ONLY') ? 'web' : 'telegram';
+        showAdjustBalanceModal(targetType);
+        document.getElementById('adjTelegramId').value = telegramId || '';
+        document.getElementById('adjWebUserId').value = webUserId || '';
+        document.getElementById('adjTargetLabel').value = label || telegramId || webUserId || '';
     };
 
     window.submitAdjustBalance = async function () {
+        const targetType = document.getElementById('adjTargetType').value;
         const telegramId = document.getElementById('adjTelegramId').value.trim();
+        const webUserId = document.getElementById('adjWebUserId').value.trim();
         const amount = parseInt(document.getElementById('adjAmount').value);
         const type = document.getElementById('adjType').value;
         const description = document.getElementById('adjDescription').value.trim() || 'Admin adjustment';
 
-        if (!telegramId) { showToast('Harap masukkan Telegram ID', 'warning'); return; }
+        if (targetType === 'telegram' && !telegramId) { showToast('Harap masukkan Telegram ID', 'warning'); return; }
+        if (targetType === 'web' && !webUserId) { showToast('Harap masukkan Web User ID', 'warning'); return; }
         if (!amount || amount <= 0) { showToast('Harap masukkan jumlah yang valid', 'warning'); return; }
 
         const btn = document.getElementById('adjSubmitBtn');
@@ -1335,10 +1358,18 @@
         try {
             const res = await api('/api/admin/user-balance', {
                 method: 'PATCH',
-                body: JSON.stringify({ telegramId, amount, type, description }),
+                body: JSON.stringify({
+                    telegramId: targetType === 'telegram' ? telegramId : undefined,
+                    webUserId: targetType === 'web' ? webUserId : undefined,
+                    amount,
+                    type,
+                    description,
+                }),
             });
             if (res.success) {
-                showToast(`✓ Saldo user ${telegramId} berhasil di-update (+${formatRupiahFull(amount)})`);
+                const targetLabel = targetType === 'telegram' ? telegramId : (document.getElementById('adjTargetLabel').value || webUserId);
+                const actionLabel = type === 'DEDUCT' ? `-${formatRupiahFull(amount)}` : `+${formatRupiahFull(amount)}`;
+                showToast(`✓ Saldo user ${targetLabel} berhasil di-update (${actionLabel})`);
                 closeModal('balanceModal');
                 if (document.getElementById('page-users').classList.contains('active')) loadUsers();
             } else {
