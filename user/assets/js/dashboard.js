@@ -6,6 +6,7 @@ const STORE_KEYS = {
   session: 'nokoshub.user.session',
   token: 'nokoshub.auth.token',
   apiBase: 'nokoshub.api.base',
+  notificationSeenAt: 'nokoshub.notifications.seenAt',
 };
 
 const API_BASE = detectApiBase();
@@ -69,6 +70,8 @@ const S = {
   timer: null,
   poller: null,
   backendOnline: false,
+  notificationsOpen: false,
+  notificationsSeenAt: 0,
 };
 
 const TTLS = {
@@ -348,6 +351,7 @@ function nav(page, options = {}) {
   document.title = `${TTLS[route] || 'Dashboard'} | NokosHUB`;
 
   closeSidebar();
+  closeNotifications();
   document.querySelector('.page-wrap')?.scrollTo(0, 0);
   window.scrollTo(0, 0);
 
@@ -467,7 +471,163 @@ function renderDashboardData() {
   renderReferralPage();
   updateDashboardStats();
   updateProfileFields();
+  renderNotifications();
   refreshIcons();
+}
+
+function getNotificationItems() {
+  const items = [];
+  const now = Date.now();
+
+  if (!S.user.telegramId) {
+    items.push({
+      id: 'link-telegram',
+      icon: '🔗',
+      title: 'Tautkan akun Telegram',
+      text: 'Hubungkan Telegram dari menu profil agar pembelian bot dan web bisa tersinkron penuh.',
+      createdAt: new Date(now - 1000).toISOString(),
+    });
+  }
+
+  (Array.isArray(S.orders) ? S.orders : []).slice(0, 8).forEach((order) => {
+    const meta = orderMeta(order);
+    const status = String(order.status || '').toUpperCase();
+    let title = `Pesanan ${meta.service}`;
+    let text = `Nomor ${maskPhone(order.phoneNumber)} sedang diproses.`;
+    let icon = '📱';
+
+    if (status === 'SUCCESS' && order.otpCode) {
+      title = `OTP masuk untuk ${meta.service}`;
+      text = `Kode OTP ${order.otpCode} sudah tersedia di pesanan Anda.`;
+      icon = '✅';
+    } else if (status === 'CANCELLED') {
+      title = `Pesanan ${meta.service} dibatalkan`;
+      text = order.failReason || 'Saldo direfund otomatis ke akun Anda.';
+      icon = '↩️';
+    } else if (status === 'FAILED') {
+      title = `Pesanan ${meta.service} gagal`;
+      text = order.failReason || 'Pesanan tidak dapat diproses. Coba ulang beberapa saat lagi.';
+      icon = '⚠️';
+    }
+
+    items.push({
+      id: `order-${order.id}`,
+      icon,
+      title,
+      text,
+      createdAt: order.updatedAt || order.createdAt,
+    });
+  });
+
+  (Array.isArray(S.invoices) ? S.invoices : []).slice(0, 6).forEach((invoice) => {
+    const status = String(invoice.status || '').toUpperCase();
+    if (!['PAID', 'EXPIRED', 'PENDING'].includes(status)) return;
+
+    let title = `Invoice ${invoice.invoiceId || shortId(invoice.id || '')}`;
+    let text = `Top up ${FMT(invoice.amount)} sedang menunggu pembayaran.`;
+    let icon = '💳';
+
+    if (status === 'PAID') {
+      title = 'Deposit berhasil masuk';
+      text = `Pembayaran ${FMT(invoice.amount)} sudah berhasil dan saldo telah diperbarui.`;
+      icon = '💰';
+    } else if (status === 'EXPIRED') {
+      title = 'Invoice top up kedaluwarsa';
+      text = `Invoice ${FMT(invoice.amount)} sudah expired. Buat invoice baru untuk melanjutkan top up.`;
+      icon = '⌛';
+    }
+
+    items.push({
+      id: `invoice-${invoice.invoiceId || invoice.id}`,
+      icon,
+      title,
+      text,
+      createdAt: invoice.updatedAt || invoice.createdAt || invoice.expiredAt,
+    });
+  });
+
+  (Array.isArray(S.transactions) ? S.transactions : []).slice(0, 6).forEach((tx) => {
+    items.push({
+      id: `tx-${tx.id}`,
+      icon: tx.type === 'DEPOSIT' ? '💸' : tx.type === 'REFUND' ? '🔄' : '🧾',
+      title: typeLabel(tx.type),
+      text: `${tx.description || 'Aktivitas akun terbaru'} • ${FMT(tx.amount)}`,
+      createdAt: tx.createdAt,
+    });
+  });
+
+  return items
+    .filter((item) => item && item.title)
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 12);
+}
+
+function renderNotifications() {
+  const list = document.getElementById('notifList');
+  const sub = document.getElementById('notifPanelSub');
+  if (!list) return;
+
+  const items = getNotificationItems();
+  if (sub) {
+    sub.textContent = items.length
+      ? `${items.length} aktivitas terbaru siap ditinjau`
+      : 'Ringkasan aktivitas akun terbaru';
+  }
+
+  if (!items.length) {
+    list.innerHTML = `
+      <div class="notif-empty">
+        <div class="notif-empty-icon">🔔</div>
+        <div class="notif-empty-title">Belum ada notifikasi</div>
+        <div class="notif-empty-desc">Aktivitas akun baru akan tampil di sini.</div>
+      </div>
+    `;
+    updateNotificationBadge(items);
+    return;
+  }
+
+  list.innerHTML = items.map((item) => `
+    <div class="notif-item">
+      <div class="notif-item-icon">${item.icon || '🔔'}</div>
+      <div class="notif-item-body">
+        <div class="notif-item-title">${esc(item.title)}</div>
+        <div class="notif-item-text">${esc(item.text)}</div>
+        <div class="notif-item-time">${esc(formatDate(item.createdAt))}</div>
+      </div>
+    </div>
+  `).join('');
+
+  updateNotificationBadge(items);
+}
+
+function updateNotificationBadge(items = getNotificationItems()) {
+  const dot = document.getElementById('notifDot');
+  if (!dot) return;
+  const seenAt = Number(S.notificationsSeenAt || 0);
+  const hasUnread = items.some((item) => new Date(item.createdAt || 0).getTime() > seenAt);
+  dot.classList.toggle('hidden', !hasUnread);
+}
+
+function toggleNotifications(forceOpen) {
+  const panel = document.getElementById('notifPanel');
+  const button = document.getElementById('notifButton');
+  if (!panel || !button) return;
+
+  const nextOpen = typeof forceOpen === 'boolean' ? forceOpen : !S.notificationsOpen;
+  S.notificationsOpen = nextOpen;
+  panel.classList.toggle('open', nextOpen);
+  panel.setAttribute('aria-hidden', nextOpen ? 'false' : 'true');
+  button.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+
+  if (nextOpen) {
+    S.notificationsSeenAt = Date.now();
+    localStorage.setItem(STORE_KEYS.notificationSeenAt, String(S.notificationsSeenAt));
+    updateNotificationBadge();
+  }
+}
+
+function closeNotifications() {
+  toggleNotifications(false);
 }
 
 function mapServices(services) {
@@ -1869,6 +2029,11 @@ document.getElementById('hamburger').addEventListener('click', () => {
   document.getElementById('sidebarOv').classList.toggle('open');
 });
 
+document.getElementById('notifButton')?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  toggleNotifications();
+});
+
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOv').classList.remove('open');
@@ -2120,7 +2285,16 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-ov.open').forEach(m => m.classList.remove('open'));
     closeSidebar();
+    closeNotifications();
   }
+});
+
+document.addEventListener('click', (event) => {
+  if (!S.notificationsOpen) return;
+  const panel = document.getElementById('notifPanel');
+  const button = document.getElementById('notifButton');
+  if (panel?.contains(event.target) || button?.contains(event.target)) return;
+  closeNotifications();
 });
 
 (function init() {
@@ -2131,9 +2305,11 @@ document.addEventListener('keydown', e => {
 
   hydrateSessionFromUrl();
   applySession(readSession());
+  S.notificationsSeenAt = Number(localStorage.getItem(STORE_KEYS.notificationSeenAt) || 0);
   if (typeof lucide !== 'undefined') lucide.createIcons();
   updateUI();
   renderSvcs();
+  renderNotifications();
   initRouter();
   loadPaymentSettings();
   loadDashboardData({ silent: true });

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="NokosHUB Dashboard — Beli nomor OTP & kelola saldo" />
   <title>NokosHUB Dashboard 🤖</title>
-  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260505-1" />
+  <link rel="stylesheet" href="assets/css/dashboard.css?v=20260505-2" />
   <link rel="icon" type="image/png" href="assets/images/favicon.png" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -92,13 +92,33 @@
             <span class="tl">Saldo</span>
             <span class="ta" id="tb-balance">Rp 0</span>
           </div>
-          <div class="topbar-notif"><i data-lucide="bell"></i><div class="notif-dot"></div></div>
+          <button class="topbar-notif" id="notifButton" type="button" aria-label="Buka notifikasi" aria-expanded="false" aria-controls="notifPanel">
+            <i data-lucide="bell"></i>
+            <div class="notif-dot" id="notifDot"></div>
+          </button>
           <div class="topbar-user" onclick="nav('profile')">
             <div class="topbar-user-av">😎</div>
             <span id="tb-name">User</span>
           </div>
         </div>
       </header>
+
+      <div class="notif-panel" id="notifPanel" aria-hidden="true">
+        <div class="notif-panel-head">
+          <div>
+            <div class="notif-panel-title">Notifikasi</div>
+            <div class="notif-panel-sub" id="notifPanelSub">Ringkasan aktivitas akun terbaru</div>
+          </div>
+          <button class="notif-panel-close" type="button" onclick="closeNotifications()" aria-label="Tutup notifikasi">✕</button>
+        </div>
+        <div class="notif-list" id="notifList">
+          <div class="notif-empty">
+            <div class="notif-empty-icon">🔔</div>
+            <div class="notif-empty-title">Belum ada notifikasi</div>
+            <div class="notif-empty-desc">Aktivitas akun baru akan tampil di sini.</div>
+          </div>
+        </div>
+      </div>
 
       <!-- PAGES -->
       <div class="page-wrap">
@@ -808,6 +828,6 @@
     </div>
   </div>
 
-  <script src="assets/js/dashboard.js?v=20260505-1"></script>
+  <script src="assets/js/dashboard.js?v=20260505-2"></script>
 </body>
 </html>
