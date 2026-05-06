@@ -56,6 +56,8 @@ interface Session {
     step?: string;
     panelMessageId?: number;
     replyPromptMessageId?: number;
+    selectedServerKey?: string;
+    selectedServerLabel?: string;
     selectedServiceId?: string;
     selectedServiceName?: string;
     selectedCountryId?: string;
@@ -83,6 +85,19 @@ type PaymentSettings = {
     minimumDeposit: number;
     maximumDeposit: number;
 };
+
+const BUY_SERVER_OPTIONS = [
+    {
+        key: 'server1',
+        label: 'Server 1',
+        description: 'Jalur utama untuk layanan OTP',
+    },
+    {
+        key: 'herosms',
+        label: 'Server 2',
+        description: 'Jalur alternatif untuk layanan OTP',
+    },
+];
 
 const sessions = new Map<number, Session>();
 let paymentSettingsCache: { value: PaymentSettings; expiresAt: number } | null = null;
@@ -310,13 +325,24 @@ function menuBackKeyboard(extraRows: TelegramBot.InlineKeyboardButton[][] = []) 
     };
 }
 
+function resetBuySelection(session: Session) {
+    session.selectedServerKey = undefined;
+    session.selectedServerLabel = undefined;
+    session.selectedServiceId = undefined;
+    session.selectedServiceName = undefined;
+    session.selectedCountryId = undefined;
+    session.selectedCountryName = undefined;
+    session.prices = undefined;
+}
+
 function buildHelpText() {
     return (
         `📖 *Pusat Bantuan NokosHUB*\n\n` +
         `• *Beli Nomor OTP*:\n` +
         `  1. Pilih menu beli nomor\n` +
-        `  2. Pilih aplikasi, negara, lalu harga\n` +
-        `  3. Nomor akan dikirim dan OTP masuk otomatis ke chat ini\n\n` +
+        `  2. Pilih server terlebih dahulu\n` +
+        `  3. Pilih aplikasi, negara, lalu harga\n` +
+        `  4. Nomor akan dikirim dan OTP masuk otomatis ke chat ini\n\n` +
         `• *Deposit Saldo*:\n` +
         `  1. Pilih menu deposit\n` +
         `  2. Masukkan nominal\n` +
@@ -525,7 +551,7 @@ export function createBot(): TelegramBot {
 
     // ─── /buy ─────────────────────────────────────────────────────────────────
     bot.onText(/\/buy/, async (msg) => {
-        await handleBuyStart(bot, msg.chat.id, 0, undefined, msg.message_id);
+        await handleBuyStart(bot, msg.chat.id, undefined, msg.message_id);
     });
 
     // ─── /deposit ─────────────────────────────────────────────────────────────
@@ -661,7 +687,7 @@ export function createBot(): TelegramBot {
             return sendMainMenu(bot, chatId, existingPanelId);
         }
 
-        if (data === 'buy') return handleBuyStart(bot, chatId, 0, query.message?.message_id);
+        if (data === 'buy') return handleBuyStart(bot, chatId, query.message?.message_id);
         if (data === 'balance') return handleBalance(bot, chatId, telegramId, undefined, query.message?.message_id);
         if (data === 'history') return handleHistory(bot, chatId, telegramId, undefined, query.message?.message_id);
         if (data === 'deposit') return askDepositAmount(bot, chatId, undefined, query.message?.message_id);
@@ -720,10 +746,51 @@ export function createBot(): TelegramBot {
             );
         }
 
+        if (data === 'back_services') {
+            const session = getSession(chatId);
+            if (!session.selectedServerKey || !session.selectedServerLabel) {
+                return handleBuyStart(bot, chatId, query.message?.message_id);
+            }
+            return handleServerSelected(
+                bot,
+                chatId,
+                session.selectedServerKey,
+                session.selectedServerLabel,
+                0,
+                query.message?.message_id
+            );
+        }
+
+        if (data === 'back_countries') {
+            const session = getSession(chatId);
+            if (!session.selectedServiceId || !session.selectedServiceName) {
+                return handleBuyStart(bot, chatId, query.message?.message_id);
+            }
+            return handleServiceSelected(
+                bot,
+                chatId,
+                session.selectedServiceId,
+                session.selectedServiceName,
+                0,
+                query.message?.message_id
+            );
+        }
+
         // Pagination for services
         if (data.startsWith('page_svc:')) {
             const [, pageStr] = data.split(':');
-            return handleBuyStart(bot, chatId, parseInt(pageStr), query.message?.message_id);
+            const session = getSession(chatId);
+            if (!session.selectedServerKey || !session.selectedServerLabel) {
+                return upsertTextPanel(bot, chatId, '❌ Sesi kadaluarsa. Mulai ulang dari /buy', {}, { targetMessageId: query.message?.message_id });
+            }
+            return handleServerSelected(
+                bot,
+                chatId,
+                session.selectedServerKey,
+                session.selectedServerLabel,
+                parseInt(pageStr),
+                query.message?.message_id
+            );
         }
 
         // Pagination for countries
@@ -765,6 +832,12 @@ export function createBot(): TelegramBot {
             const [, serviceId, ...nameParts] = data.split(':');
             const serviceName = nameParts.join(':');
             return handleServiceSelected(bot, chatId, serviceId, serviceName, 0, query.message?.message_id);
+        }
+
+        if (data.startsWith('server:')) {
+            const [, serverKey, ...labelParts] = data.split(':');
+            const serverLabel = labelParts.join(':');
+            return handleServerSelected(bot, chatId, serverKey, serverLabel, 0, query.message?.message_id);
         }
 
         if (data.startsWith('country:')) {
@@ -1117,16 +1190,71 @@ async function handleHistory(
 async function handleBuyStart(
     bot: TelegramBot,
     chatId: number,
-    page: number = 0,
     messageId?: number,
     sourceMessageId?: number
 ) {
+    const session = getSession(chatId);
+    resetBuySelection(session);
+
+    const rows = BUY_SERVER_OPTIONS.map((server) => ([
+        {
+            text: `${server.label}`,
+            callback_data: `server:${server.key}:${server.label}`,
+        },
+    ]));
+
+    rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
+
+    const text =
+        `🛒 *Beli Nomor OTP*\n\n` +
+        `Sebelum memilih layanan, silakan pilih server terlebih dahulu.\n\n` +
+        BUY_SERVER_OPTIONS.map((server, index) => `${index + 1}. *${server.label}* — ${server.description}`).join('\n');
+
+    const options: any = {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: rows },
+    };
+
+    await upsertTextPanel(bot, chatId, text, options, { sourceMessageId, targetMessageId: messageId });
+}
+
+async function handleServerSelected(
+    bot: TelegramBot,
+    chatId: number,
+    serverKey: string,
+    serverLabel: string,
+    page: number = 0,
+    messageId?: number
+) {
+    const session = getSession(chatId);
+    session.selectedServerKey = serverKey;
+    session.selectedServerLabel = serverLabel;
+    session.selectedServiceId = undefined;
+    session.selectedServiceName = undefined;
+    session.selectedCountryId = undefined;
+    session.selectedCountryName = undefined;
+    session.prices = undefined;
+
     try {
         const res = await apiGet('/api/services');
-        const services: any[] = res.data ?? [];
+        const services: any[] = (res.data ?? []).filter((service: any) => service.providerKey === serverKey);
 
         if (!services.length) {
-            return upsertTextPanel(bot, chatId, '❌ Tidak ada layanan tersedia saat ini.', {}, { sourceMessageId, targetMessageId: messageId });
+            return upsertTextPanel(
+                bot,
+                chatId,
+                `❌ Tidak ada layanan tersedia untuk *${serverLabel}* saat ini.`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '⬅️ Pilih Server Lain', callback_data: 'buy' }],
+                            [{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }],
+                        ],
+                    },
+                },
+                { targetMessageId: messageId }
+            );
         }
 
         const ITEMS_PER_PAGE = 10;
@@ -1154,13 +1282,20 @@ async function handleBuyStart(
         if (navRow.length > 0) {
             rows.push(navRow);
         }
-        rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
+        rows.push([
+            { text: '⬅️ Ganti Server', callback_data: 'buy' },
+            { text: '🏠 Menu', callback_data: 'menu' },
+        ]);
 
-        const text = `📲 *Pilih Aplikasi*\n\nPilih aplikasi yang ingin kamu verifikasi:\n\n_Halaman ${page + 1} dari ${totalPages}_`;
+        const text =
+            `📲 *Pilih Aplikasi*\n\n` +
+            `Server: *${serverLabel}*\n` +
+            `Pilih aplikasi yang ingin kamu verifikasi.\n\n` +
+            `_Halaman ${page + 1} dari ${totalPages}_`;
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
-        await upsertTextPanel(bot, chatId, text, options, { sourceMessageId, targetMessageId: messageId });
+        await upsertTextPanel(bot, chatId, text, options, { targetMessageId: messageId });
     } catch {
-        await upsertTextPanel(bot, chatId, '❌ Gagal memuat daftar layanan. Coba lagi.', {}, { sourceMessageId, targetMessageId: messageId });
+        await upsertTextPanel(bot, chatId, '❌ Gagal memuat daftar layanan. Coba lagi.', {}, { targetMessageId: messageId });
     }
 }
 
@@ -1175,6 +1310,10 @@ async function handleServiceSelected(
     const session = getSession(chatId);
     session.selectedServiceId = serviceId;
     session.selectedServiceName = serviceName;
+    session.selectedCountryId = undefined;
+    session.selectedCountryName = undefined;
+    session.prices = undefined;
+    const serverLabel = session.selectedServerLabel || 'Server';
 
     try {
         const res = await apiGet('/api/countries', { serviceId });
@@ -1208,9 +1347,17 @@ async function handleServiceSelected(
         if (navRow.length > 0) {
             rows.push(navRow);
         }
-        rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
+        rows.push([
+            { text: '⬅️ Ganti Layanan', callback_data: 'back_services' },
+            { text: '🏠 Menu', callback_data: 'menu' },
+        ]);
 
-        const text = `🌍 *Pilih Negara*\n\nLayanan: *${serviceName}*\n_Halaman ${page + 1} dari ${totalPages}_\n\nPilih negara yang tersedia:`;
+        const text =
+            `🌍 *Pilih Negara*\n\n` +
+            `Server: *${serverLabel}*\n` +
+            `Layanan: *${serviceName}*\n` +
+            `_Halaman ${page + 1} dari ${totalPages}_\n\n` +
+            `Pilih negara yang tersedia:`;
         const options: any = { parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } };
         await upsertTextPanel(bot, chatId, text, options, { targetMessageId: messageId });
     } catch {
@@ -1230,6 +1377,7 @@ async function handleCountrySelected(
     const session = getSession(chatId);
     const serviceId = session.selectedServiceId;
     const serviceName = session.selectedServiceName;
+    const serverLabel = session.selectedServerLabel || 'Server';
 
     if (!serviceId) {
         return upsertTextPanel(bot, chatId, '❌ Sesi tidak valid. Mulai ulang dari /buy', {}, { targetMessageId: messageId });
@@ -1276,9 +1424,13 @@ async function handleCountrySelected(
         if (navRow.length > 0) {
             rows.push(navRow);
         }
-        rows.push([{ text: '⬅️ Kembali ke Menu', callback_data: 'menu' }]);
+        rows.push([
+            { text: '⬅️ Ganti Negara', callback_data: 'back_countries' },
+            { text: '🏠 Menu', callback_data: 'menu' },
+        ]);
 
         const text = `💳 *${serviceName} ${countryName}*\n\n` +
+            `Server: *${serverLabel}*\n` +
             `Saldo kamu: *${formatRupiah(balance)}*\n_Halaman ${page + 1} dari ${totalPages}_\n\n` +
             `Pilih harga nomor (termurah ke termahal):`;
 
