@@ -99,6 +99,20 @@ const BUY_SERVER_OPTIONS = [
     },
 ];
 
+const POPULAR_SERVICE_ORDER = [
+    'whatsapp',
+    'telegram',
+    'instagram',
+    'google',
+    'shopee',
+    'facebook',
+    'tokopedia',
+    'tiktok',
+    'discord',
+    'netflix',
+    'spotify',
+];
+
 const sessions = new Map<number, Session>();
 let paymentSettingsCache: { value: PaymentSettings; expiresAt: number } | null = null;
 
@@ -333,6 +347,12 @@ function resetBuySelection(session: Session) {
     session.selectedCountryId = undefined;
     session.selectedCountryName = undefined;
     session.prices = undefined;
+}
+
+function popularServiceScore(name: string) {
+    const normalized = String(name || '').toLowerCase();
+    const index = POPULAR_SERVICE_ORDER.findIndex((keyword) => normalized.includes(keyword));
+    return index === -1 ? 999 : index;
 }
 
 function buildHelpText() {
@@ -1237,7 +1257,14 @@ async function handleServerSelected(
 
     try {
         const res = await apiGet('/api/services');
-        const services: any[] = (res.data ?? []).filter((service: any) => service.providerKey === serverKey);
+        const services: any[] = (res.data ?? [])
+            .filter((service: any) => service.providerKey === serverKey)
+            .sort((a: any, b: any) => {
+                const popularA = popularServiceScore(a.name);
+                const popularB = popularServiceScore(b.name);
+                if (popularA !== popularB) return popularA - popularB;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            });
 
         if (!services.length) {
             return upsertTextPanel(
