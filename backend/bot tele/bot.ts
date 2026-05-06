@@ -113,6 +113,26 @@ const POPULAR_SERVICE_ORDER = [
     'spotify',
 ];
 
+const POPULAR_COUNTRY_ORDER = [
+    'indonesia',
+    'amerika serikat',
+    'united states',
+    'inggris',
+    'united kingdom',
+    'singapura',
+    'malaysia',
+    'filipina',
+    'philippines',
+    'vietnam',
+    'thailand',
+    'india',
+    'brazil',
+    'turki',
+    'turkey',
+    'rusia',
+    'russia',
+];
+
 const sessions = new Map<number, Session>();
 let paymentSettingsCache: { value: PaymentSettings; expiresAt: number } | null = null;
 
@@ -352,6 +372,12 @@ function resetBuySelection(session: Session) {
 function popularServiceScore(name: string) {
     const normalized = String(name || '').toLowerCase();
     const index = POPULAR_SERVICE_ORDER.findIndex((keyword) => normalized.includes(keyword));
+    return index === -1 ? 999 : index;
+}
+
+function popularCountryScore(name: string) {
+    const normalized = String(name || '').toLowerCase();
+    const index = POPULAR_COUNTRY_ORDER.findIndex((keyword) => normalized.includes(keyword));
     return index === -1 ? 999 : index;
 }
 
@@ -1344,7 +1370,12 @@ async function handleServiceSelected(
 
     try {
         const res = await apiGet('/api/countries', { serviceId });
-        const countries: any[] = res.data ?? [];
+        const countries: any[] = (res.data ?? []).sort((a: any, b: any) => {
+            const popularA = popularCountryScore(a.name);
+            const popularB = popularCountryScore(b.name);
+            if (popularA !== popularB) return popularA - popularB;
+            return String(a.name || '').localeCompare(String(b.name || ''));
+        });
 
         if (!countries.length) {
                 return upsertTextPanel(bot, chatId, `❌ Tidak ada negara tersedia untuk ${serviceName}.`, {}, { targetMessageId: messageId });
