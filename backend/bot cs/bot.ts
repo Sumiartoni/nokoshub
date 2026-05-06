@@ -117,8 +117,12 @@ export function createCsBot() {
 
             if (isAdmin(msg)) {
                 const target = getReplyTarget(msg);
-                if (!target) return;
-                await relayAdminReply(bot, msg, target.userChatId, text);
+                if (target) {
+                    await relayAdminReply(bot, msg, target.userChatId, text);
+                    return;
+                }
+
+                await handleUserMessage(bot, msg, text, { adminTestMode: true });
                 return;
             }
 
@@ -133,11 +137,26 @@ export function createCsBot() {
     return bot;
 }
 
-async function handleUserMessage(bot: TelegramBot, msg: TelegramBot.Message, text: string) {
+async function handleUserMessage(
+    bot: TelegramBot,
+    msg: TelegramBot.Message,
+    text: string,
+    options: {
+        adminTestMode?: boolean;
+    } = {}
+) {
     const chatId = msg.chat.id;
     const session = getSession(chatId);
 
     if (session.handoffActive) {
+        if (options.adminTestMode) {
+            await safeSendMessage(
+                bot,
+                chatId,
+                'Mode admin test aktif. Untuk membalas user, balas pesan eskalasi atau gunakan /reply <chatId> <pesan>.'
+            );
+            return;
+        }
         await forwardUserMessageToAdmins(bot, msg, text, session.lastEscalationReason || 'Percakapan masih dalam mode handoff');
         await safeSendMessage(bot, chatId, 'Pesan Anda sudah diteruskan ke admin Customer Service. Mohon tunggu balasan.');
         return;
@@ -152,6 +171,14 @@ async function handleUserMessage(bot: TelegramBot, msg: TelegramBot.Message, tex
     });
 
     if (decision.escalate) {
+        if (options.adminTestMode) {
+            await safeSendMessage(
+                bot,
+                chatId,
+                `AI test mode: pertanyaan ini akan di-handoff ke admin manusia.\nAlasan: ${decision.reason || 'AI tidak yakin dengan jawaban'}`
+            );
+            return;
+        }
         session.handoffActive = true;
         session.lastEscalationReason = decision.reason || 'AI tidak yakin dengan jawaban';
         await forwardUserMessageToAdmins(bot, msg, text, session.lastEscalationReason);
@@ -290,6 +317,7 @@ async function sendWelcome(bot: TelegramBot, chatId: number, mode: 'user' | 'adm
                 '- Balas pesan eskalasi untuk menjawab user',
                 '- /reply <chatId> <pesan>',
                 '- /done <chatId> untuk mengakhiri handoff',
+                '- Kirim teks biasa tanpa reply untuk test jawaban AI',
             ].join('\n')
         );
         return;
@@ -314,6 +342,7 @@ async function sendHelp(bot: TelegramBot, chatId: number, mode: 'user' | 'admin'
                 '- Balas pesan eskalasi untuk menjawab user langsung',
                 '- /reply <chatId> <pesan>',
                 '- /done <chatId> untuk mengembalikan percakapan ke AI',
+                '- Kirim teks biasa tanpa reply untuk test AI langsung dari bot',
             ].join('\n')
         );
         return;
