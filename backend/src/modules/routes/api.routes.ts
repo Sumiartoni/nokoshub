@@ -100,6 +100,19 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         return { status: 'ok', timestamp: new Date().toISOString() };
     });
 
+    // GET /api/support/contact
+    fastify.get('/support/contact', async () => {
+        const telegramHandle = normalizeTelegramHandle(config.CS_TELEGRAM_BOT_USERNAME || config.TELEGRAM_SUPPORT_HANDLE);
+        return {
+            success: true,
+            data: {
+                label: 'Customer Service',
+                telegramHandle,
+                telegramUrl: buildTelegramUrl(telegramHandle),
+            },
+        };
+    });
+
     // GET /api/auth/register/config
     fastify.get('/auth/register/config', async () => {
         return {
@@ -960,4 +973,14 @@ function getRequestIp(req: { headers: Record<string, any>; ip?: string }) {
 
 function hasInternalAccess(req: { headers: Record<string, any> }) {
     return String(req.headers['x-internal-secret'] || '').trim() === config.INTERNAL_API_SECRET;
+}
+
+function normalizeTelegramHandle(value?: string | null) {
+    const raw = String(value || '').trim();
+    if (!raw) return '@nokoshubsupport';
+    return raw.startsWith('@') ? raw : `@${raw}`;
+}
+
+function buildTelegramUrl(handle: string) {
+    return `https://t.me/${handle.replace(/^@/, '')}`;
 }

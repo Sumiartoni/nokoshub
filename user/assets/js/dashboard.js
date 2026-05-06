@@ -14,6 +14,11 @@ const API_BASE = detectApiBase();
 const OTP_WAIT_SECONDS = 1200;
 const ORDER_CANCEL_DELAY_MS = 2 * 60 * 1000;
 const POLL_MS = 5000;
+const SUPPORT_CONTACT = {
+  label: 'Customer Service',
+  telegramHandle: '@nokoshubsupport',
+  telegramUrl: 'https://t.me/nokoshubsupport',
+};
 
 const S = {
   user: {
@@ -234,6 +239,17 @@ async function apiFetch(path, options = {}) {
     throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
   }
   return payload.data ?? payload;
+}
+
+async function loadSupportContact() {
+  try {
+    const result = await apiFetch('/support/contact');
+    SUPPORT_CONTACT.label = String(result.label || SUPPORT_CONTACT.label);
+    SUPPORT_CONTACT.telegramHandle = String(result.telegramHandle || SUPPORT_CONTACT.telegramHandle);
+    SUPPORT_CONTACT.telegramUrl = String(result.telegramUrl || SUPPORT_CONTACT.telegramUrl);
+  } catch (err) {
+    console.error('Failed to load support contact:', err);
+  }
 }
 
 function readSession() {
@@ -1463,6 +1479,15 @@ function openGatewayPaymentPage() {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
+function openCustomerService() {
+  const url = String(SUPPORT_CONTACT.telegramUrl || '').trim();
+  if (!url) {
+    showToast('Link Customer Service belum tersedia.', 'warning');
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function startTopupStatusPolling() {
   stopTopupStatusPolling();
   topupStatusPoller = setInterval(() => {
@@ -2064,6 +2089,12 @@ document.getElementById('helpButton')?.addEventListener('click', (event) => {
   nav('help');
 });
 
+document.getElementById('customerServiceButton')?.addEventListener('click', (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  openCustomerService();
+});
+
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOv').classList.remove('open');
@@ -2475,6 +2506,7 @@ document.addEventListener('click', (event) => {
   updateUI();
   renderSvcs();
   renderNotifications();
+  loadSupportContact();
   registerPwaSupport();
   initRouter();
   loadPaymentSettings();

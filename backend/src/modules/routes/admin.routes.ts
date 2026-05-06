@@ -12,6 +12,7 @@ import { emailService } from '../email/email.service';
 import { referralService } from '../referrals/referral.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
+import { csBotSettingsService } from '../settings/cs-bot-settings.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { userService } from '../users/user.service';
 import { newsletterService } from '../newsletter/newsletter.service';
@@ -79,6 +80,25 @@ const smtpSettingsSchema = z.object({
 
 const smtpTestSchema = z.object({
     to: z.string().email('Email tujuan test tidak valid'),
+});
+
+const csBotSettingsSchema = z.object({
+    apiKey: z.string().optional().default(''),
+    model: z.string().min(3, 'Model OpenRouter wajib diisi').max(120),
+    siteUrl: z.string().optional().default(''),
+    siteName: z.string().optional().default(''),
+    knowledgePrompt: z.string().optional().default(''),
+}).superRefine((value, ctx) => {
+    if (value.siteUrl.trim()) {
+        const result = z.string().url().safeParse(value.siteUrl.trim());
+        if (!result.success) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['siteUrl'],
+                message: 'Site URL harus berupa URL valid',
+            });
+        }
+    }
 });
 
 const newsletterSendSchema = z.object({
@@ -742,6 +762,39 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         } catch (err) {
             return reply.status(400).send({ success: false, error: (err as Error).message });
         }
+    });
+
+    // GET /api/admin/settings/cs-bot
+    fastify.get('/settings/cs-bot', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await csBotSettingsService.getSettings();
+        return {
+            success: true,
+            data: {
+                ...settings,
+                apiKey: settings.apiKey ? '********' : '',
+            },
+        };
+    });
+
+    // PATCH /api/admin/settings/cs-bot
+    fastify.patch('/settings/cs-bot', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = csBotSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await csBotSettingsService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'Pengaturan AI Customer Service berhasil disimpan',
+            data: {
+                ...settings,
+                apiKey: settings.apiKey ? '********' : '',
+            },
+        };
     });
 
     // GET /api/admin/newsletter/templates

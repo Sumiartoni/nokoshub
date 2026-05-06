@@ -98,6 +98,15 @@
                 <span>SMTP / Email</span>
             </div>
 
+            <div class="nav-item" data-page="cs-bot" id="nav-cs-bot">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3a8 8 0 0 0-8 8c0 2.1.81 4 2.15 5.42L5 21l4.95-1.15A8 8 0 1 0 12 3z"/>
+                    <path d="M8 11h8"/>
+                    <path d="M8 15h5"/>
+                </svg>
+                <span>CS BOT</span>
+            </div>
+
             <div class="nav-item" data-page="newsletter" id="nav-newsletter">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 4h16v16H4z"/>
@@ -614,6 +623,78 @@
                                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                             </svg>
                             Jika port SMTP VPS diblokir, pilih <strong>Brevo API</strong>. Untuk SMTP Brevo biasanya gunakan host <strong>smtp-relay.brevo.com</strong> dan port <strong>587</strong> dengan STARTTLS.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════ CS BOT PAGE ════════ -->
+            <div class="page-section" id="page-cs-bot">
+                <div class="filter-bar">
+                    <div class="search-wrapper" style="pointer-events:none;opacity:.85">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 3a8 8 0 0 0-8 8c0 2.1.81 4 2.15 5.42L5 21l4.95-1.15A8 8 0 1 0 12 3z"/>
+                            <path d="M8 11h8"/><path d="M8 15h5"/>
+                        </svg>
+                        <input type="text" class="search-input" value="Konfigurasi bot Customer Service + OpenRouter AI" readonly>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="loadCsBotSettings()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 3a8 8 0 0 0-8 8c0 2.1.81 4 2.15 5.42L5 21l4.95-1.15A8 8 0 1 0 12 3z"/>
+                                <path d="M8 11h8"/><path d="M8 15h5"/>
+                            </svg>
+                            CS BOT
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="csBotModelInput">Model OpenRouter</label>
+                                <input class="form-input" id="csBotModelInput" type="text" placeholder="openai/gpt-oss-20b:free">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="csBotApiKeyInput">OpenRouter API Key</label>
+                                <input class="form-input" id="csBotApiKeyInput" type="password" placeholder="sk-or-v1-...">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:14px">
+                            <div class="form-group">
+                                <label class="form-label" for="csBotSiteUrlInput">Site URL</label>
+                                <input class="form-input" id="csBotSiteUrlInput" type="url" placeholder="https://nokoshub.com">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="csBotSiteNameInput">Site Name</label>
+                                <input class="form-input" id="csBotSiteNameInput" type="text" placeholder="NokosHUB CS Bot">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:14px">
+                            <label class="form-label" for="csBotKnowledgePromptInput">Prompt Knowledge</label>
+                            <textarea class="form-input" id="csBotKnowledgePromptInput" rows="12" placeholder="Masukkan pengetahuan internal, SOP CS, FAQ, aturan refund, flow top up, batasan jawaban AI, dan konteks bisnis NokosHUB di sini."></textarea>
+                        </div>
+                        <div class="form-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            <strong>Site URL</strong> dan <strong>Site Name</strong> bersifat opsional. Nilai ini hanya dipakai sebagai attribution / analytics aplikasi di OpenRouter, bukan syarat agar AI bisa menjawab.
+                        </div>
+                        <div class="form-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Gunakan prompt knowledge untuk memasukkan SOP, jawaban standar, alur refund, aturan deposit, dan topik mana yang harus langsung di-handoff ke admin manusia.
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+                            <button class="btn btn-primary" id="saveCsBotBtn" onclick="saveCsBotSettings()">Simpan Pengaturan AI</button>
+                            <button class="btn btn-outline" onclick="loadCsBotSettings()">Reset Form</button>
                         </div>
                     </div>
                 </div>

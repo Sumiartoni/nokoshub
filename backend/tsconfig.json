@@ -18,6 +18,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "bot tele/**/*"],
+  "include": ["src/**/*", "bot tele/**/*", "bot cs/**/*"],
   "exclude": ["node_modules", "dist"]
 }

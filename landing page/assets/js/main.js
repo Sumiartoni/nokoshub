@@ -3,6 +3,34 @@
    ================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
+  const supportContact = {
+    label: 'Customer Service',
+    telegramHandle: '@nokoshubsupport',
+    telegramUrl: 'https://t.me/nokoshubsupport',
+  };
+
+  async function loadSupportContact() {
+    try {
+      const response = await fetch('/api/support/contact');
+      const payload = await response.json();
+      const data = payload?.data || payload;
+      if (!response.ok || !data?.telegramUrl) return;
+      supportContact.label = String(data.label || supportContact.label);
+      supportContact.telegramHandle = String(data.telegramHandle || supportContact.telegramHandle);
+      supportContact.telegramUrl = String(data.telegramUrl || supportContact.telegramUrl);
+    } catch (err) {
+      console.error('Failed to load support contact:', err);
+    }
+  }
+
+  function applySupportLinks() {
+    document.querySelectorAll('[data-customer-service-link]').forEach((link) => {
+      link.setAttribute('href', supportContact.telegramUrl);
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
+      link.setAttribute('title', `${supportContact.label} ${supportContact.telegramHandle}`);
+    });
+  }
 
   /* ---- NAVBAR: Scroll effect & active link ---- */
   const navbar = document.getElementById('navbar');
@@ -229,5 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ---- INIT ---- */
+  loadSupportContact().finally(applySupportLinks);
   console.log('🚀 NokosHUB Landing Page initialized!');
 });

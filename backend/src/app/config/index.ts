@@ -28,6 +28,19 @@ const envSchema = z.object({
     TELEGRAM_POLLING_TIMEOUT_SECONDS: z.string().default('25').transform(Number),
     TELEGRAM_REQUEST_TIMEOUT_MS: z.string().default('35000').transform(Number),
 
+    CS_TELEGRAM_BOT_TOKEN: z.string().default(''),
+    CS_TELEGRAM_BOT_USERNAME: z.string().default(''),
+    CS_TELEGRAM_ADMIN_IDS: z.string().default(''),
+    CS_TELEGRAM_POLLING_TIMEOUT_SECONDS: z.string().default('25').transform(Number),
+    CS_TELEGRAM_REQUEST_TIMEOUT_MS: z.string().default('35000').transform(Number),
+    CS_BOT_SYSTEM_PROMPT: z.string().default(''),
+    CS_BOT_MAX_HISTORY: z.string().default('12').transform(Number),
+
+    OPENROUTER_API_KEY: z.string().default(''),
+    OPENROUTER_MODEL: z.string().default('openai/gpt-oss-20b:free'),
+    OPENROUTER_SITE_URL: z.string().default(''),
+    OPENROUTER_SITE_NAME: z.string().default('NokosHUB CS Bot'),
+
     HERO_SMS_API_KEY: z.string().min(1, 'HERO_SMS_API_KEY is required'),
     HERO_SMS_BASE_URL: z.string().url().default('https://hero-sms.com/stubs/handler_api.php'),
     SMSBOWER_API_KEY: z.string().default(''),

@@ -76,6 +76,7 @@
         }
         else if (pageId === 'referral') loadReferralSettings();
         else if (pageId === 'smtp') loadSmtpSettings();
+        else if (pageId === 'cs-bot') loadCsBotSettings();
         else if (pageId === 'newsletter') loadNewsletterPage();
         else if (pageId === 'deposit-settings') loadPaymentSettings();
         else if (pageId === 'maintenance') loadMaintenanceDashboard();
@@ -91,6 +92,7 @@
         services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari seluruh provider OTP' },
         referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
         smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
+        'cs-bot':     { title: 'CS BOT',      sub: 'Atur OpenRouter, API key, dan prompt knowledge untuk bot Customer Service' },
         newsletter:   { title: 'Newsletter',  sub: 'Broadcast email dan Telegram ke pengguna terpilih' },
         'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
         maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
@@ -122,6 +124,7 @@
         }
         else if (page === 'referral') loadReferralSettings();
         else if (page === 'smtp') loadSmtpSettings();
+        else if (page === 'cs-bot') loadCsBotSettings();
         else if (page === 'newsletter') loadNewsletterPage();
         else if (page === 'deposit-settings') loadPaymentSettings();
         else if (page === 'maintenance') loadMaintenanceDashboard();
@@ -1007,6 +1010,63 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Kirim Email Test';
+        }
+    };
+
+    window.loadCsBotSettings = async function () {
+        const modelInput = document.getElementById('csBotModelInput');
+        const apiKeyInput = document.getElementById('csBotApiKeyInput');
+        const siteUrlInput = document.getElementById('csBotSiteUrlInput');
+        const siteNameInput = document.getElementById('csBotSiteNameInput');
+        const knowledgePromptInput = document.getElementById('csBotKnowledgePromptInput');
+        if (!modelInput || !apiKeyInput || !siteUrlInput || !siteNameInput || !knowledgePromptInput) return;
+
+        try {
+            const res = await api('/api/admin/settings/cs-bot');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat pengaturan AI Customer Service');
+
+            const settings = res.data || {};
+            modelInput.value = settings.model || 'openai/gpt-oss-20b:free';
+            apiKeyInput.value = settings.apiKey || '';
+            siteUrlInput.value = settings.siteUrl || '';
+            siteNameInput.value = settings.siteName || 'NokosHUB CS Bot';
+            knowledgePromptInput.value = settings.knowledgePrompt || '';
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat pengaturan AI Customer Service', 'error');
+        }
+    };
+
+    window.saveCsBotSettings = async function () {
+        const btn = document.getElementById('saveCsBotBtn');
+        const payload = {
+            model: document.getElementById('csBotModelInput')?.value.trim() || 'openai/gpt-oss-20b:free',
+            apiKey: document.getElementById('csBotApiKeyInput')?.value.trim() || '',
+            siteUrl: document.getElementById('csBotSiteUrlInput')?.value.trim() || '',
+            siteName: document.getElementById('csBotSiteNameInput')?.value.trim() || '',
+            knowledgePrompt: document.getElementById('csBotKnowledgePromptInput')?.value.trim() || '',
+        };
+
+        if (!payload.model) {
+            showToast('Model OpenRouter wajib diisi', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/cs-bot', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan pengaturan AI Customer Service');
+            showToast(res.message || 'Pengaturan AI Customer Service berhasil disimpan');
+            await loadCsBotSettings();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan pengaturan AI Customer Service', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Pengaturan AI';
         }
     };
 
