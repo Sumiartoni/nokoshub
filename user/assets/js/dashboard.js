@@ -247,6 +247,11 @@ async function loadSupportContact() {
     SUPPORT_CONTACT.label = String(result.label || SUPPORT_CONTACT.label);
     SUPPORT_CONTACT.telegramHandle = String(result.telegramHandle || SUPPORT_CONTACT.telegramHandle);
     SUPPORT_CONTACT.telegramUrl = String(result.telegramUrl || SUPPORT_CONTACT.telegramUrl);
+    const link = document.getElementById('customerServiceButton');
+    if (link) {
+      link.setAttribute('href', SUPPORT_CONTACT.telegramUrl);
+      link.setAttribute('title', `${SUPPORT_CONTACT.label} ${SUPPORT_CONTACT.telegramHandle}`);
+    }
   } catch (err) {
     console.error('Failed to load support contact:', err);
   }
@@ -2089,10 +2094,8 @@ document.getElementById('helpButton')?.addEventListener('click', (event) => {
   nav('help');
 });
 
-document.getElementById('customerServiceButton')?.addEventListener('click', (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-  openCustomerService();
+document.getElementById('customerServiceButton')?.addEventListener('click', () => {
+  closeSidebar();
 });
 
 function closeSidebar() {
