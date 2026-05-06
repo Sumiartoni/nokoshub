@@ -16,7 +16,12 @@ export interface AiDecision {
 
 const DEFAULT_SYSTEM_PROMPT = [
     'Anda adalah Customer Service AI untuk NokosHUB.',
-    'Jawab dalam Bahasa Indonesia yang singkat, jelas, dan sopan.',
+    'Jawab dalam Bahasa Indonesia yang singkat, jelas, sopan, dan enak dibaca.',
+    'Gunakan gaya CS yang natural, tidak kaku, dan tidak terlalu formal.',
+    'Hindari jawaban panjang yang hanya dipisahkan koma.',
+    'Utamakan kalimat pendek.',
+    'Jika menjelaskan langkah, pisahkan menjadi baris-baris singkat atau daftar sederhana.',
+    'Maksimal 2 kalimat per paragraf bila memungkinkan.',
     'Fokus hanya pada pertanyaan umum seputar layanan NokosHUB, OTP, top up, refund otomatis, penggunaan dashboard, dan penautan Telegram.',
     'Jangan mengarang jawaban. Jika informasi tidak cukup, pertanyaan butuh pengecekan manual, menyangkut komplain spesifik user, bukti transfer, status order tertentu, atau Anda tidak yakin, maka eskalasi ke admin manusia.',
     'Jika menjawab, berikan jawaban final yang langsung bisa dibaca user.',
@@ -126,7 +131,7 @@ function parseDecision(raw: string): AiDecision {
     for (const candidate of candidates) {
         try {
             const parsed = JSON.parse(candidate) as Record<string, unknown>;
-            const answer = String(parsed.answer || '').trim();
+            const answer = formatReadableAnswer(String(parsed.answer || '').trim());
             const escalate = Boolean(parsed.escalate);
             const reason = String(parsed.reason || '').trim();
             return {
@@ -148,7 +153,7 @@ function parseDecision(raw: string): AiDecision {
     }
 
     return {
-        answer: raw,
+        answer: formatReadableAnswer(raw),
         escalate: false,
         reason: '',
     };
@@ -159,4 +164,34 @@ function extractFirstJsonObject(value: string) {
     const end = value.lastIndexOf('}');
     if (start === -1 || end === -1 || end <= start) return '';
     return value.slice(start, end + 1);
+}
+
+function formatReadableAnswer(value: string) {
+    const normalized = String(value || '')
+        .replace(/\r/g, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    if (!normalized) return '';
+
+    if (/\n/.test(normalized)) {
+        return normalized;
+    }
+
+    const sentenceSplit = normalized
+        .replace(/([.!?])\s+/g, '$1\n')
+        .replace(/:\s+/g, ':\n')
+        .trim();
+
+    if (sentenceSplit.length !== normalized.length) {
+        return sentenceSplit.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    return normalized
+        .replace(/, lalu /gi, ',\nLalu ')
+        .replace(/, setelah itu /gi, ',\nSetelah itu ')
+        .replace(/, kemudian /gi, ',\nKemudian ')
+        .replace(/, jadi /gi, ',\nJadi ')
+        .trim();
 }
