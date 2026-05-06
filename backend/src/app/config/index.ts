@@ -50,7 +50,7 @@ const envSchema = z.object({
         return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
     }),
     USD_IDR_RATE_API_URL: z.string().url().default('https://api.frankfurter.dev/v2/rate/USD/IDR'),
-    USD_IDR_RATE_BUFFER_PERCENT: z.string().default('3').transform(Number),
+    USD_IDR_RATE_BUFFER_PERCENT: z.string().default('0').transform(Number),
     USD_IDR_RATE_REFRESH_MINUTES: z.string().default('360').transform(Number),
 
     QRIS_STATIC_STRING: z.string().default(''),

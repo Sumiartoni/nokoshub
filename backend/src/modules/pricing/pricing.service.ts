@@ -4,6 +4,7 @@ import { prisma } from '../../database/prisma.client';
 import logger from '../../utils/logger';
 
 const SELL_PRICE_MULTIPLIER_KEY = 'sell_price_multiplier';
+const PRICING_PROTECTION_PERCENT_KEY = 'pricing_protection_percent';
 
 export interface UsdIdrRateInfo {
     baseRate: number;
@@ -43,6 +44,30 @@ export const pricingService = {
         return normalized;
     },
 
+    async getPricingProtectionPercent(): Promise<number> {
+        const setting = await prisma.appSetting.findUnique({
+            where: { key: PRICING_PROTECTION_PERCENT_KEY },
+        });
+
+        const value = Number(setting?.value ?? 0);
+        return Number.isFinite(value) && value >= 0 ? value : 0;
+    },
+
+    async setPricingProtectionPercent(percent: number): Promise<number> {
+        if (!Number.isFinite(percent) || percent < 0) {
+            throw new Error('Proteksi pricing harus 0 atau lebih');
+        }
+
+        const normalized = Number(percent.toFixed(4));
+        await prisma.appSetting.upsert({
+            where: { key: PRICING_PROTECTION_PERCENT_KEY },
+            update: { value: String(normalized) },
+            create: { key: PRICING_PROTECTION_PERCENT_KEY, value: String(normalized) },
+        });
+
+        return normalized;
+    },
+
     async getUsdIdrRate(forceRefresh = false): Promise<UsdIdrRateInfo> {
         const now = Date.now();
         if (!forceRefresh && rateCache && rateCache.expiresAt > now) {
@@ -50,7 +75,7 @@ export const pricingService = {
         }
 
         const fallbackRate = positiveNumber(config.HERO_SMS_PRICE_TO_IDR_RATE, 17000);
-        const bufferPercent = Math.max(0, positiveNumber(config.USD_IDR_RATE_BUFFER_PERCENT, 3));
+        const bufferPercent = 0;
         let info: UsdIdrRateInfo;
 
         if (!config.USD_IDR_RATE_AUTO_ENABLED) {
@@ -83,12 +108,13 @@ export const pricingService = {
     },
 
     async getPricingSnapshot(forceRefresh = false) {
-        const [sellPriceMultiplier, usdIdrRate] = await Promise.all([
+        const [sellPriceMultiplier, pricingProtectionPercent, usdIdrRate] = await Promise.all([
             this.getSellPriceMultiplier(),
+            this.getPricingProtectionPercent(),
             this.getUsdIdrRate(forceRefresh),
         ]);
 
-        return { sellPriceMultiplier, usdIdrRate };
+        return { sellPriceMultiplier, pricingProtectionPercent, usdIdrRate };
     },
 };
 
@@ -102,7 +128,7 @@ function buildRateInfo(
 ): UsdIdrRateInfo {
     return {
         baseRate,
-        effectiveRate: Math.ceil(baseRate * (1 + bufferPercent / 100)),
+        effectiveRate: baseRate,
         bufferPercent,
         autoEnabled,
         source,

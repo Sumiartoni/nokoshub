@@ -21,6 +21,7 @@ import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
     sellPriceMultiplier: z.number().min(1).max(20),
+    pricingProtectionPercent: z.number().min(0).max(100),
 });
 
 const referralSettingsSchema = z.object({
@@ -701,7 +702,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const settings = await pricingService.getPricingSnapshot(true);
         await serviceService.recalculateSellPrices(
             settings.sellPriceMultiplier,
-            settings.usdIdrRate.effectiveRate
+            settings.usdIdrRate.effectiveRate,
+            settings.pricingProtectionPercent
         );
 
         return {
@@ -717,17 +719,22 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
         const parsed = pricingSettingsSchema.safeParse(req.body);
         if (!parsed.success) {
-            return reply.status(400).send({ success: false, error: 'Multiplier harus di antara 1 sampai 20' });
+            return reply.status(400).send({ success: false, error: 'Margin harus di antara 1 sampai 20 dan proteksi pricing harus di antara 0 sampai 100' });
         }
 
         const sellPriceMultiplier = await pricingService.setSellPriceMultiplier(parsed.data.sellPriceMultiplier);
+        const pricingProtectionPercent = await pricingService.setPricingProtectionPercent(parsed.data.pricingProtectionPercent);
         const usdIdrRate = await pricingService.getUsdIdrRate(true);
-        await serviceService.recalculateSellPrices(sellPriceMultiplier, usdIdrRate.effectiveRate);
+        await serviceService.recalculateSellPrices(
+            sellPriceMultiplier,
+            usdIdrRate.effectiveRate,
+            pricingProtectionPercent
+        );
 
         return {
             success: true,
             message: 'Margin berhasil disimpan dan harga sudah dihitung ulang',
-            data: { sellPriceMultiplier, usdIdrRate },
+            data: { sellPriceMultiplier, pricingProtectionPercent, usdIdrRate },
         };
     });
 

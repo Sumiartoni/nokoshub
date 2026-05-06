@@ -39,7 +39,10 @@ export const serviceService = {
             let servicesCount = 0;
             let pricesCount = 0;
             const providerBreakdown: ProviderSyncBreakdown[] = [];
-            const sellPriceMultiplier = await pricingService.getSellPriceMultiplier();
+            const [sellPriceMultiplier, pricingProtectionPercent] = await Promise.all([
+                pricingService.getSellPriceMultiplier(),
+                pricingService.getPricingProtectionPercent(),
+            ]);
             const [existingServices, existingCountries] = await Promise.all([
                 prisma.service.findMany({
                     select: { id: true, name: true, serviceCode: true, isActive: true },
@@ -90,6 +93,7 @@ export const serviceService = {
                                     providerKey,
                                     price,
                                     sellPriceMultiplier,
+                                    pricingProtectionPercent,
                                     String(svc.service_code),
                                     String(ctr.number_id)
                                 )
@@ -266,7 +270,8 @@ export const serviceService = {
         });
     },
 
-    async recalculateSellPrices(multiplier: number, usdIdrRate?: number) {
+    async recalculateSellPrices(multiplier: number, usdIdrRate?: number, pricingProtectionPercent = 0) {
+        const protectionFactor = 1 + (Math.max(0, pricingProtectionPercent) / 100);
         if (usdIdrRate && Number.isFinite(usdIdrRate) && usdIdrRate > 0) {
             await prisma.$executeRaw`
                 UPDATE "Price"
@@ -275,7 +280,7 @@ export const serviceService = {
                         ELSE "providerPrice"
                     END,
                     "sellPrice" = CASE
-                        WHEN "providerPriceUsd" IS NOT NULL THEN CEIL(CEIL("providerPriceUsd" * ${usdIdrRate}::numeric) * ${multiplier}::numeric)::integer
+                        WHEN "providerPriceUsd" IS NOT NULL THEN CEIL((CEIL("providerPriceUsd" * ${usdIdrRate}::numeric) * ${protectionFactor}::numeric) * ${multiplier}::numeric)::integer
                         ELSE CEIL("providerPrice"::numeric * ${multiplier}::numeric)::integer
                     END,
                     "updatedAt" = current_timestamp(3);
@@ -302,6 +307,7 @@ function normalizePriceForSync(
     providerKey: 'server1' | 'herosms',
     price: ProviderPrice,
     multiplier: number,
+    pricingProtectionPercent: number,
     serviceCode: string,
     countryCode: string
 ): NormalizedPriceForSync | null {
@@ -310,7 +316,8 @@ function normalizePriceForSync(
     const providerPrice = Math.ceil(Number(price.price));
     if (!Number.isFinite(providerPrice) || providerPrice <= 0) return null;
 
-    const sellPrice = calculateSellPrice(providerPrice, multiplier);
+    const protectionPercent = price.provider_price_usd !== null ? pricingProtectionPercent : 0;
+    const sellPrice = calculateSellPrice(providerPrice, multiplier, protectionPercent);
     if (!Number.isFinite(sellPrice) || sellPrice <= 0) return null;
 
     const providerPriceUsd = typeof price.provider_price_usd === 'number' && Number.isFinite(price.provider_price_usd)

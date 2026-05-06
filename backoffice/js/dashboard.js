@@ -301,8 +301,6 @@
 
             const providerUsd = Number(summary.providerBalanceUsd ?? 0);
             const exchangeRate = Number(summary.providerRate || 0);
-            const baseRate = Number(summary.providerRateBase || exchangeRate);
-            const bufferPercent = Number(summary.providerRateBufferPercent || 0);
             const providerIdr = Number(summary.providerBalanceIdr ?? (providerUsd * exchangeRate));
             const providerBalances = Array.isArray(summary.providerBalances) ? summary.providerBalances : [];
 
@@ -311,7 +309,7 @@
                 ? providerBalances.map((item) => `${item.serverLabel}: $${Number(item.balanceUsd || 0).toFixed(2)}`).join(' • ')
                 : (
                     Number.isFinite(providerUsd) && Number.isFinite(exchangeRate) && exchangeRate > 0
-                        ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}${bufferPercent ? ` (kurs asli ${formatRupiahFull(baseRate)} + ${bufferPercent}%)` : ''}`
+                        ? `$${providerUsd.toFixed(2)} x ${formatRupiahFull(exchangeRate)}`
                         : ''
                 );
             providerStatus = (Number.isFinite(providerUsd) && providerUsd > 0) ? 'online' : 'offline';
@@ -744,12 +742,13 @@
 
     window.loadPricingSettings = async function (forceRefresh = false) {
         const multiplierInput = document.getElementById('sellMultiplierInput');
+        const protectionInput = document.getElementById('pricingProtectionPercentInput');
         const effectiveRateEl = document.getElementById('pricingEffectiveRate');
         const rateMetaEl = document.getElementById('pricingRateMeta');
         const bufferEl = document.getElementById('pricingBuffer');
         const sourceEl = document.getElementById('pricingRateSource');
 
-        if (!multiplierInput || !effectiveRateEl || !rateMetaEl || !bufferEl || !sourceEl) return;
+        if (!multiplierInput || !protectionInput || !effectiveRateEl || !rateMetaEl || !bufferEl || !sourceEl) return;
 
         effectiveRateEl.textContent = '...';
         rateMetaEl.textContent = 'Memuat kurs...';
@@ -763,12 +762,13 @@
             const settings = res.data;
             const rate = settings.usdIdrRate || {};
             multiplierInput.value = settings.sellPriceMultiplier;
+            protectionInput.value = Number(settings.pricingProtectionPercent || 0);
             effectiveRateEl.textContent = formatRupiahFull(rate.effectiveRate);
-            rateMetaEl.textContent = `Kurs asli ${formatRupiahFull(rate.baseRate)} dari ${rate.autoEnabled ? 'otomatis' : 'fallback .env'}`;
-            bufferEl.textContent = `${rate.bufferPercent}%`;
+            rateMetaEl.textContent = `Kurs referensi ${formatRupiahFull(rate.baseRate)} dari ${rate.autoEnabled ? 'otomatis' : 'fallback .env'}`;
+            bufferEl.textContent = `${Number(settings.pricingProtectionPercent || 0).toFixed(1).replace(/\.0$/, '')}%`;
             sourceEl.textContent = rate.error
                 ? `Fallback aktif: ${rate.error}`
-                : `Sumber: ${rate.source}`;
+                : `Sumber: ${rate.source} • Hanya memengaruhi harga jual provider USD`;
         } catch (err) {
             effectiveRateEl.textContent = '—';
             rateMetaEl.textContent = err.message;
@@ -778,11 +778,17 @@
 
     window.savePricingSettings = async function () {
         const input = document.getElementById('sellMultiplierInput');
+        const protectionInput = document.getElementById('pricingProtectionPercentInput');
         const btn = document.getElementById('savePricingBtn');
         const sellPriceMultiplier = Number(input.value);
+        const pricingProtectionPercent = Number(protectionInput.value);
 
         if (!Number.isFinite(sellPriceMultiplier) || sellPriceMultiplier < 1 || sellPriceMultiplier > 20) {
             showToast('Margin multiplier harus di antara 1 sampai 20', 'warning');
+            return;
+        }
+        if (!Number.isFinite(pricingProtectionPercent) || pricingProtectionPercent < 0 || pricingProtectionPercent > 100) {
+            showToast('Proteksi pricing harus di antara 0 sampai 100%', 'warning');
             return;
         }
 
@@ -792,7 +798,7 @@
         try {
             const res = await api('/api/admin/settings/pricing', {
                 method: 'PATCH',
-                body: JSON.stringify({ sellPriceMultiplier }),
+                body: JSON.stringify({ sellPriceMultiplier, pricingProtectionPercent }),
             });
             if (!res.success) throw new Error(res.error || 'Gagal menyimpan margin');
 

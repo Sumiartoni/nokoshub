@@ -9,10 +9,11 @@ export function formatRupiah(amount: number): string {
 }
 
 /**
- * Calculate sell price from provider price using 3.5x multiplier
+ * Calculate sell price from provider price with optional USD pricing protection
  */
-export function calculateSellPrice(providerPrice: number, multiplier = 3.5): number {
-    return Math.ceil(providerPrice * multiplier);
+export function calculateSellPrice(providerPrice: number, multiplier = 3.5, protectionPercent = 0): number {
+    const protectedCost = providerPrice * (1 + (Math.max(0, protectionPercent) / 100));
+    return Math.ceil(protectedCost * multiplier);
 }
 
 /**
