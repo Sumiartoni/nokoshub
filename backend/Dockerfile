@@ -20,6 +20,7 @@ RUN npx prisma generate
 # Copy source
 COPY src ./src
 COPY ["bot tele", "./bot tele"]
+COPY ["bot cs", "./bot cs"]
 
 # Compile TypeScript
 RUN npx tsc --project tsconfig.json
