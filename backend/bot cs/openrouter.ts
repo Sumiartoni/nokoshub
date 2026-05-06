@@ -18,9 +18,13 @@ const DEFAULT_SYSTEM_PROMPT = [
     'Anda adalah Customer Service AI untuk NokosHUB.',
     'Jawab dalam Bahasa Indonesia yang singkat, jelas, sopan, dan enak dibaca.',
     'Gunakan gaya CS yang natural, tidak kaku, dan tidak terlalu formal.',
+    'Gunakan emoji ringan yang relevan jika membantu, misalnya seperti 🙂, ✅, 📌, 💳, 📲, atau ⏳.',
+    'Jangan berlebihan memakai emoji. Cukup 1 sampai 3 emoji dalam satu jawaban bila memang cocok.',
     'Hindari jawaban panjang yang hanya dipisahkan koma.',
     'Utamakan kalimat pendek.',
-    'Jika menjelaskan langkah, pisahkan menjadi baris-baris singkat atau daftar sederhana.',
+    'Jika menjelaskan langkah atau lebih dari satu poin, wajib pisahkan menjadi daftar yang mudah dibaca.',
+    'Gunakan format nomor seperti 1. 2. 3. untuk langkah berurutan.',
+    'Gunakan bullet seperti - atau • untuk daftar biasa.',
     'Maksimal 2 kalimat per paragraf bila memungkinkan.',
     'Fokus hanya pada pertanyaan umum seputar layanan NokosHUB, OTP, top up, refund otomatis, penggunaan dashboard, dan penautan Telegram.',
     'Jangan mengarang jawaban. Jika informasi tidak cukup, pertanyaan butuh pengecekan manual, menyangkut komplain spesifik user, bukti transfer, status order tertentu, atau Anda tidak yakin, maka eskalasi ke admin manusia.',
@@ -176,7 +180,7 @@ function formatReadableAnswer(value: string) {
     if (!normalized) return '';
 
     if (/\n/.test(normalized)) {
-        return normalized;
+        return normalizeListLines(normalized);
     }
 
     const sentenceSplit = normalized
@@ -185,13 +189,29 @@ function formatReadableAnswer(value: string) {
         .trim();
 
     if (sentenceSplit.length !== normalized.length) {
-        return sentenceSplit.replace(/\n{3,}/g, '\n\n').trim();
+        return normalizeListLines(sentenceSplit.replace(/\n{3,}/g, '\n\n').trim());
     }
 
-    return normalized
+    return normalizeListLines(
+        normalized
         .replace(/, lalu /gi, ',\nLalu ')
         .replace(/, setelah itu /gi, ',\nSetelah itu ')
         .replace(/, kemudian /gi, ',\nKemudian ')
         .replace(/, jadi /gi, ',\nJadi ')
-        .trim();
+        .trim()
+    );
+}
+
+function normalizeListLines(value: string) {
+    const lines = value
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line, index, arr) => line || (arr[index - 1] && arr[index - 1] !== ''));
+
+    return lines.map((line) => {
+        if (/^\d+\.\s/.test(line)) return line;
+        if (/^[-•]\s/.test(line)) return line;
+        if (/^(langkah|cara|berikut|catatan|tips)\s*:/i.test(line)) return line;
+        return line;
+    }).join('\n');
 }
