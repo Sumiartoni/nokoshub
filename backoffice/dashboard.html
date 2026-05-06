@@ -107,6 +107,13 @@
                 <span>CS BOT</span>
             </div>
 
+            <div class="nav-item" data-page="promo" id="nav-promo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2l3.2 6.49L22 9.27l-5 4.87L18.18 22 12 18.77 5.82 22 7 14.14 2 9.27l6.8-.78L12 2z"/>
+                </svg>
+                <span>Promo</span>
+            </div>
+
             <div class="nav-item" data-page="newsletter" id="nav-newsletter">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 4h16v16H4z"/>
@@ -700,6 +707,81 @@
                 </div>
             </div>
 
+            <!-- ════════ PROMO PAGE ════════ -->
+            <div class="page-section" id="page-promo">
+                <div class="filter-bar">
+                    <div class="search-wrapper" style="pointer-events:none;opacity:.85">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2l3.2 6.49L22 9.27l-5 4.87L18.18 22 12 18.77 5.82 22 7 14.14 2 9.27l6.8-.78L12 2z"/>
+                        </svg>
+                        <input type="text" class="search-input" value="Atur promo aktif, nominal bonus, dan alur klaim bot CS" readonly>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="loadPromoSettings()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2l3.2 6.49L22 9.27l-5 4.87L18.18 22 12 18.77 5.82 22 7 14.14 2 9.27l6.8-.78L12 2z"/>
+                            </svg>
+                            Promo Deposit
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="promoEnabledInput">Status Promo</label>
+                                <select class="form-select" id="promoEnabledInput">
+                                    <option value="true">Aktif</option>
+                                    <option value="false">Nonaktif</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="promoTitleInput">Judul Promo</label>
+                                <input class="form-input" id="promoTitleInput" type="text" placeholder="Promo Deposit NokosHUB">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:14px">
+                            <label class="form-label" for="promoDescriptionInput">Deskripsi Promo</label>
+                            <textarea class="form-input" id="promoDescriptionInput" rows="4" placeholder="Contoh: Deposit minimal Rp20.000 dan dapatkan bonus saldo Rp2.000."></textarea>
+                        </div>
+                        <div class="form-row" style="margin-top:14px">
+                            <div class="form-group">
+                                <label class="form-label" for="promoMinimumDepositInput">Minimal Deposit (Rp)</label>
+                                <input class="form-input" id="promoMinimumDepositInput" type="number" min="1000" step="1000" placeholder="20000">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="promoBonusAmountInput">Bonus Promo (Rp)</label>
+                                <input class="form-input" id="promoBonusAmountInput" type="number" min="0" step="1000" placeholder="2000">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:14px">
+                            <label class="form-label" for="promoTopupUrlInput">URL Tombol Top Up</label>
+                            <input class="form-input" id="promoTopupUrlInput" type="url" placeholder="https://nokoshub.store/user/#topup">
+                        </div>
+                        <div class="form-group" style="margin-top:14px">
+                            <label class="form-label" for="promoClaimInstructionsInput">Instruksi Klaim di Bot</label>
+                            <textarea class="form-input" id="promoClaimInstructionsInput" rows="5" placeholder="Contoh: Ketik /klaim, upload bukti transfer, lalu kirim email yang terdaftar untuk direview admin."></textarea>
+                        </div>
+                        <div class="form-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Saat promo aktif, bot CS akan menjawab <strong>/klaim</strong>, meminta bukti transfer, lalu meminta email terdaftar sebelum meneruskan klaim ke admin.
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+                            <button class="btn btn-primary" id="savePromoBtn" onclick="savePromoSettings()">Simpan Promo</button>
+                            <button class="btn btn-outline" onclick="loadPromoSettings()">Reset Form</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ════════ NEWSLETTER PAGE ════════ -->
             <div class="page-section" id="page-newsletter">
                 <div class="filter-bar">
@@ -1221,7 +1303,7 @@
 </div>
 
 <script src="js/auth.js?v=20260424-1"></script>
-<script src="js/dashboard.js?v=20260506-1"></script>
+<script src="js/dashboard.js?v=20260506-2"></script>
 </body>
 </html>
 

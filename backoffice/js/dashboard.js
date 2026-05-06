@@ -77,6 +77,7 @@
         else if (pageId === 'referral') loadReferralSettings();
         else if (pageId === 'smtp') loadSmtpSettings();
         else if (pageId === 'cs-bot') loadCsBotSettings();
+        else if (pageId === 'promo') loadPromoSettings();
         else if (pageId === 'newsletter') loadNewsletterPage();
         else if (pageId === 'deposit-settings') loadPaymentSettings();
         else if (pageId === 'maintenance') loadMaintenanceDashboard();
@@ -93,6 +94,7 @@
         referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
         smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
         'cs-bot':     { title: 'CS BOT',      sub: 'Atur OpenRouter, API key, dan prompt knowledge untuk bot Customer Service' },
+        promo:        { title: 'Promo',       sub: 'Kelola promo aktif, bonus deposit, dan alur klaim di bot CS' },
         newsletter:   { title: 'Newsletter',  sub: 'Broadcast email dan Telegram ke pengguna terpilih' },
         'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
         maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
@@ -125,6 +127,7 @@
         else if (page === 'referral') loadReferralSettings();
         else if (page === 'smtp') loadSmtpSettings();
         else if (page === 'cs-bot') loadCsBotSettings();
+        else if (page === 'promo') loadPromoSettings();
         else if (page === 'newsletter') loadNewsletterPage();
         else if (page === 'deposit-settings') loadPaymentSettings();
         else if (page === 'maintenance') loadMaintenanceDashboard();
@@ -1067,6 +1070,79 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Simpan Pengaturan AI';
+        }
+    };
+
+    window.loadPromoSettings = async function () {
+        const enabledInput = document.getElementById('promoEnabledInput');
+        const titleInput = document.getElementById('promoTitleInput');
+        const descriptionInput = document.getElementById('promoDescriptionInput');
+        const minimumDepositInput = document.getElementById('promoMinimumDepositInput');
+        const bonusAmountInput = document.getElementById('promoBonusAmountInput');
+        const topupUrlInput = document.getElementById('promoTopupUrlInput');
+        const claimInstructionsInput = document.getElementById('promoClaimInstructionsInput');
+        if (!enabledInput || !titleInput || !descriptionInput || !minimumDepositInput || !bonusAmountInput || !topupUrlInput || !claimInstructionsInput) return;
+
+        try {
+            const res = await api('/api/admin/settings/promo');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat pengaturan promo');
+
+            const settings = res.data || {};
+            enabledInput.value = String(Boolean(settings.enabled));
+            titleInput.value = settings.title || 'Promo Deposit NokosHUB';
+            descriptionInput.value = settings.description || '';
+            minimumDepositInput.value = String(settings.minimumDeposit || 20000);
+            bonusAmountInput.value = String(settings.bonusAmount || 2000);
+            topupUrlInput.value = settings.topupUrl || 'https://nokoshub.store/user/#topup';
+            claimInstructionsInput.value = settings.claimInstructions || '';
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat pengaturan promo', 'error');
+        }
+    };
+
+    window.savePromoSettings = async function () {
+        const btn = document.getElementById('savePromoBtn');
+        const payload = {
+            enabled: document.getElementById('promoEnabledInput')?.value === 'true',
+            title: document.getElementById('promoTitleInput')?.value.trim() || '',
+            description: document.getElementById('promoDescriptionInput')?.value.trim() || '',
+            minimumDeposit: Number(document.getElementById('promoMinimumDepositInput')?.value || 0),
+            bonusAmount: Number(document.getElementById('promoBonusAmountInput')?.value || 0),
+            topupUrl: document.getElementById('promoTopupUrlInput')?.value.trim() || '',
+            claimInstructions: document.getElementById('promoClaimInstructionsInput')?.value.trim() || '',
+        };
+
+        if (!payload.title || !payload.description || !payload.topupUrl || !payload.claimInstructions) {
+            showToast('Semua field promo wajib diisi', 'warning');
+            return;
+        }
+
+        if (!payload.minimumDeposit || payload.minimumDeposit < 1000) {
+            showToast('Minimal deposit promo harus di atas Rp1.000', 'warning');
+            return;
+        }
+
+        if (payload.bonusAmount < 0) {
+            showToast('Bonus promo tidak boleh negatif', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/promo', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan pengaturan promo');
+            showToast(res.message || 'Pengaturan promo berhasil disimpan');
+            await loadPromoSettings();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan pengaturan promo', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Promo';
         }
     };
 

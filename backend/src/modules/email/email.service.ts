@@ -19,6 +19,7 @@ const BREVO_API_TIMEOUT_MS = 15000;
 const WEBSITE_URL = 'https://nokoshub.store';
 const WEBSITE_LABEL = 'nokoshub.store';
 const EMAIL_LOGO_URL = `${WEBSITE_URL}/user/assets/images/logo-email.png`;
+const WEBSITE_TOPUP_URL = `${WEBSITE_URL}/user/#topup`;
 
 export const emailService = {
     async sendRegistrationOtp(input: {
@@ -180,11 +181,21 @@ export function renderBrandedEmail(input: {
     footerHtml?: string;
 }) {
     const supportHandle = normalizeSupportHandle(config.CS_TELEGRAM_BOT_USERNAME || config.TELEGRAM_SUPPORT_HANDLE);
+    const supportUrl = buildTelegramUrl(supportHandle);
     const ctaHtml = input.ctaLabel && input.ctaUrl
         ? `
             <div style="margin-top:24px;text-align:center">
               <a href="${escapeHtmlAttr(input.ctaUrl)}" style="display:inline-block;padding:13px 24px;border-radius:999px;background:linear-gradient(135deg,#1aa0e8 0%,#38d6d1 100%);color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;box-shadow:0 10px 20px rgba(26,160,232,0.18)">
                 ${escapeHtml(input.ctaLabel)}
+              </a>
+            </div>
+        `
+        : '';
+    const supportButtonHtml = supportUrl
+        ? `
+            <div style="margin-top:14px;text-align:center">
+              <a href="${escapeHtmlAttr(supportUrl)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:#ffffff;color:#0f6db5;font-size:14px;font-weight:700;text-decoration:none;border:1px solid #b9d7ee">
+                Chat Customer Service
               </a>
             </div>
         `
@@ -203,6 +214,7 @@ export function renderBrandedEmail(input: {
               ${input.introHtml || ''}
               ${input.contentHtml}
               ${ctaHtml}
+              ${supportButtonHtml}
             </div>
 
             <div style="padding:18px 28px;background:#f8fbfe;border-top:1px solid #e2edf5">
@@ -524,6 +536,11 @@ function normalizeSupportHandle(value: string) {
     const trimmed = String(value || '').trim();
     if (!trimmed) return '@nokoshubsupport';
     return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+function buildTelegramUrl(handle: string) {
+    const normalized = normalizeSupportHandle(handle);
+    return `https://t.me/${normalized.replace(/^@/, '')}`;
 }
 
 function escapeHtmlAttr(value: string) {

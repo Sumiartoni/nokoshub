@@ -1,6 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from '../src/app/config';
 import logger from '../src/utils/logger';
+import { PromoSettings, promoSettingsService } from '../src/modules/settings/promo-settings.service';
 import { AiDecision, generateCsReply, HistoryMessage } from './openrouter';
 
 const BOT_TOKEN = config.CS_TELEGRAM_BOT_TOKEN.trim();
@@ -14,15 +15,31 @@ const TELEGRAM_NETWORK_WARNING_INTERVAL_MS = 60000;
 const BOT_COMMANDS = [
     { command: '/start', description: 'Mulai bot Customer Service' },
     { command: '/help', description: 'Bantuan penggunaan bot CS' },
+    { command: '/klaim', description: 'Klaim promo deposit aktif' },
     { command: '/myid', description: 'Lihat Telegram ID Anda' },
     { command: '/reply', description: 'Admin: /reply <chatId> <pesan>' },
     { command: '/done', description: 'Admin: akhiri mode handoff user' },
 ];
 
+interface ClaimProof {
+    kind: 'photo' | 'document';
+    fileId: string;
+    caption: string;
+    fileName?: string;
+    mimeType?: string;
+}
+
+interface ClaimSession {
+    step: 'awaiting_proof' | 'awaiting_email';
+    promoTitle: string;
+    proof?: ClaimProof;
+}
+
 interface Session {
     history: HistoryMessage[];
     handoffActive: boolean;
     lastEscalationReason?: string;
+    claim?: ClaimSession;
 }
 
 type ReplyTarget = {
@@ -76,6 +93,14 @@ export function createCsBot() {
         await sendHelp(bot, msg.chat.id, isAdmin(msg) ? 'admin' : 'user');
     });
 
+    bot.onText(/\/klaim/, async (msg) => {
+        if (isAdmin(msg)) {
+            await bot.sendMessage(msg.chat.id, 'Perintah /klaim dipakai oleh user untuk klaim promo yang sedang aktif.');
+            return;
+        }
+        await startPromoClaim(bot, msg);
+    });
+
     bot.onText(/\/myid/, async (msg) => {
         await bot.sendMessage(msg.chat.id, `Telegram ID Anda: ${msg.from?.id ?? msg.chat.id}`);
     });
@@ -112,6 +137,16 @@ export function createCsBot() {
 
     bot.on('message', async (msg) => {
         try {
+            if (isSupportedMediaMessage(msg)) {
+                if (isAdmin(msg)) {
+                    await safeSendMessage(bot, msg.chat.id, 'Balasan admin via media belum didukung. Gunakan teks biasa atau /reply <chatId> <pesan>.');
+                    return;
+                }
+
+                await handleUserMedia(bot, msg);
+                return;
+            }
+
             const text = getIncomingText(msg);
             if (!text || text.startsWith('/')) return;
 
@@ -147,6 +182,30 @@ async function handleUserMessage(
 ) {
     const chatId = msg.chat.id;
     const session = getSession(chatId);
+
+    if (session.claim?.step === 'awaiting_proof') {
+        await safeSendMessage(
+            bot,
+            chatId,
+            '📎 Promo masih menunggu bukti transfer.\n\nSilakan upload screenshot atau foto bukti pembayaran terlebih dahulu, lalu saya lanjut minta email terdaftar Anda.'
+        );
+        return;
+    }
+
+    if (session.claim?.step === 'awaiting_email') {
+        const email = text.trim();
+        if (!isValidEmail(email)) {
+            await safeSendMessage(
+                bot,
+                chatId,
+                '✉️ Format email belum valid.\n\nSilakan kirim email yang terdaftar di NokosHUB, misalnya `nama@email.com`.'
+            );
+            return;
+        }
+
+        await submitPromoClaim(bot, msg, session, email);
+        return;
+    }
 
     if (session.handoffActive) {
         if (options.adminTestMode) {
@@ -222,9 +281,7 @@ async function forwardUserMessageToAdmins(
     for (const adminId of ADMIN_IDS) {
         try {
             const sent = await bot.sendMessage(Number(adminId), body);
-            adminReplyTargets.set(buildReplyTargetKey(Number(adminId), sent.message_id), {
-                userChatId: msg.chat.id,
-            });
+            registerAdminReplyTarget(Number(adminId), sent.message_id, msg.chat.id);
         } catch (err) {
             logger.warn({ err, adminId, userChatId: msg.chat.id }, 'Failed to forward CS escalation to admin');
         }
@@ -250,6 +307,37 @@ async function relayAdminReply(
 
 function getIncomingText(msg: TelegramBot.Message) {
     return String(msg.text || msg.caption || '').trim();
+}
+
+function isSupportedMediaMessage(msg: TelegramBot.Message) {
+    return Boolean(getClaimProofFromMessage(msg));
+}
+
+function getClaimProofFromMessage(msg: TelegramBot.Message): ClaimProof | null {
+    if (msg.photo?.length) {
+        const selected = msg.photo[msg.photo.length - 1];
+        if (!selected?.file_id) return null;
+        return {
+            kind: 'photo',
+            fileId: selected.file_id,
+            caption: getIncomingText(msg),
+            fileName: `bukti-transfer-${msg.message_id}.jpg`,
+            mimeType: 'image/jpeg',
+        };
+    }
+
+    const mimeType = String(msg.document?.mime_type || '').trim().toLowerCase();
+    if (msg.document?.file_id && mimeType.startsWith('image/')) {
+        return {
+            kind: 'document',
+            fileId: msg.document.file_id,
+            caption: getIncomingText(msg),
+            fileName: msg.document.file_name || `bukti-transfer-${msg.message_id}`,
+            mimeType,
+        };
+    }
+
+    return null;
 }
 
 function getSession(chatId: number): Session {
@@ -296,6 +384,12 @@ function isAdmin(msg: TelegramBot.Message) {
     return ADMIN_IDS.includes(telegramId);
 }
 
+function registerAdminReplyTarget(adminChatId: number, messageId: number, userChatId: number) {
+    adminReplyTargets.set(buildReplyTargetKey(adminChatId, messageId), {
+        userChatId,
+    });
+}
+
 function buildReplyTargetKey(adminChatId: number, messageId: number) {
     return `${adminChatId}:${messageId}`;
 }
@@ -325,12 +419,13 @@ async function sendWelcome(bot: TelegramBot, chatId: number, mode: 'user' | 'adm
 
     await bot.sendMessage(
         chatId,
-        [
-            `Halo, ini ${BOT_USERNAME || 'Customer Service NokosHUB'}.`,
-            'Silakan kirim pertanyaan Anda. AI akan menjawab pertanyaan umum terlebih dahulu.',
-            'Jika pertanyaan membutuhkan bantuan manual, percakapan akan otomatis dialihkan ke admin Customer Service.',
-        ].join('\n')
-    );
+            [
+                `Halo, ini ${BOT_USERNAME || 'Customer Service NokosHUB'}.`,
+                'Silakan kirim pertanyaan Anda. AI akan menjawab pertanyaan umum terlebih dahulu.',
+                'Jika ada promo aktif dan Anda ingin klaim bonus deposit, gunakan perintah /klaim.',
+                'Jika pertanyaan membutuhkan bantuan manual, percakapan akan otomatis dialihkan ke admin Customer Service.',
+            ].join('\n')
+        );
 }
 
 async function sendHelp(bot: TelegramBot, chatId: number, mode: 'user' | 'admin') {
@@ -350,14 +445,15 @@ async function sendHelp(bot: TelegramBot, chatId: number, mode: 'user' | 'admin'
 
     await bot.sendMessage(
         chatId,
-        [
-            'Panduan Customer Service:',
-            '- Kirim pertanyaan Anda dengan teks biasa',
-            '- AI akan menjawab pertanyaan umum seputar NokosHUB',
-            '- Jika dibutuhkan, admin manusia akan mengambil alih percakapan',
-        ].join('\n')
-    );
-}
+            [
+                'Panduan Customer Service:',
+                '- Kirim pertanyaan Anda dengan teks biasa',
+                '- Gunakan /klaim untuk klaim promo deposit yang sedang aktif',
+                '- AI akan menjawab pertanyaan umum seputar NokosHUB',
+                '- Jika dibutuhkan, admin manusia akan mengambil alih percakapan',
+            ].join('\n')
+        );
+    }
 
 async function safeSendMessage(bot: TelegramBot, chatId: number, text: string) {
     try {
@@ -382,4 +478,232 @@ function summarizeTelegramError(err: any) {
         message: err?.message,
         body,
     };
+}
+
+async function startPromoClaim(bot: TelegramBot, msg: TelegramBot.Message) {
+    const promo = await promoSettingsService.getRuntimeSettings();
+    const chatId = msg.chat.id;
+    const session = getSession(chatId);
+
+    if (!promo.enabled) {
+        session.claim = undefined;
+        await safeSendMessage(
+            bot,
+            chatId,
+            '📭 Saat ini belum ada promo yang sedang berjalan.\n\nKalau nanti ada promo aktif, Anda bisa ketik /klaim lagi dari bot ini.'
+        );
+        return;
+    }
+
+    session.claim = {
+        step: 'awaiting_proof',
+        promoTitle: promo.title,
+    };
+
+    await bot.sendMessage(
+        chatId,
+        [
+            `🎁 Promo aktif: ${promo.title}`,
+            '',
+            `• Minimal deposit: ${formatRupiah(promo.minimumDeposit)}`,
+            `• Bonus: ${formatRupiah(promo.bonusAmount)}`,
+            `• Detail: ${promo.description}`,
+            '',
+            promo.claimInstructions,
+        ].join('\n'),
+        {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '💳 Buka Halaman Top Up', url: promo.topupUrl }],
+                ],
+            },
+        }
+    );
+}
+
+async function handleUserMedia(bot: TelegramBot, msg: TelegramBot.Message) {
+    const proof = getClaimProofFromMessage(msg);
+    if (!proof) return;
+
+    const session = getSession(msg.chat.id);
+
+    if (session.claim?.step === 'awaiting_proof') {
+        session.claim.proof = proof;
+        session.claim.step = 'awaiting_email';
+
+        await safeSendMessage(
+            bot,
+            msg.chat.id,
+            '✅ Bukti transfer sudah saya terima.\n\nSekarang silakan kirim email yang terdaftar di NokosHUB agar klaim bisa saya teruskan ke admin.'
+        );
+        return;
+    }
+
+    if (session.claim?.step === 'awaiting_email') {
+        session.claim.proof = proof;
+        await safeSendMessage(
+            bot,
+            msg.chat.id,
+            '✅ Bukti transfer diperbarui.\n\nSekarang kirim email yang terdaftar di NokosHUB agar klaim bisa saya teruskan ke admin.'
+        );
+        return;
+    }
+
+    const sentCount = await sendProofToAdmins(
+        bot,
+        proof,
+        buildGenericProofCaption(msg, proof, 'User mengirim bukti transfer / gambar ke bot CS'),
+        msg.chat.id
+    );
+
+    if (!sentCount) {
+        await safeSendMessage(
+            bot,
+            msg.chat.id,
+            'Terjadi gangguan saat meneruskan bukti transfer ke admin. Silakan coba kirim ulang beberapa saat lagi.'
+        );
+        return;
+    }
+
+    session.handoffActive = true;
+    session.lastEscalationReason = 'User mengirim bukti transfer / gambar ke bot CS';
+
+    await safeSendMessage(
+        bot,
+        msg.chat.id,
+        '📩 Bukti transfer Anda sudah saya teruskan ke admin untuk direview.\n\nJika perlu, balas lagi dengan email terdaftar atau nomor invoice agar admin lebih mudah mengecek.'
+    );
+}
+
+async function submitPromoClaim(
+    bot: TelegramBot,
+    msg: TelegramBot.Message,
+    session: Session,
+    email: string
+) {
+    const proof = session.claim?.proof;
+    if (!session.claim || !proof) {
+        session.claim = undefined;
+        await safeSendMessage(
+            bot,
+            msg.chat.id,
+            'Flow klaim promo tidak lengkap. Silakan ketik /klaim lagi lalu upload bukti transfer terlebih dahulu.'
+        );
+        return;
+    }
+
+    const promo = await promoSettingsService.getRuntimeSettings();
+    const caption = buildPromoClaimCaption(msg, proof, promo, email);
+    const sentCount = await sendProofToAdmins(bot, proof, caption, msg.chat.id);
+
+    if (!sentCount) {
+        await safeSendMessage(
+            bot,
+            msg.chat.id,
+            'Terjadi gangguan saat meneruskan klaim promo ke admin. Silakan coba lagi beberapa saat.'
+        );
+        return;
+    }
+
+    session.claim = undefined;
+    session.handoffActive = true;
+    session.lastEscalationReason = `Klaim promo menunggu review admin: ${promo.title}`;
+
+    await safeSendMessage(
+        bot,
+        msg.chat.id,
+        '✅ Klaim promo Anda sudah saya teruskan ke admin.\n\nMohon tunggu review manual dari Customer Service. Balasan admin akan dikirim lewat bot ini.'
+    );
+}
+
+async function sendProofToAdmins(
+    bot: TelegramBot,
+    proof: ClaimProof,
+    caption: string,
+    userChatId: number
+) {
+    let sentCount = 0;
+
+    for (const adminId of ADMIN_IDS) {
+        try {
+            const sent = proof.kind === 'photo'
+                ? await bot.sendPhoto(Number(adminId), proof.fileId, {
+                    caption: trimTelegramCaption(caption),
+                })
+                : await bot.sendDocument(Number(adminId), proof.fileId, {
+                    caption: trimTelegramCaption(caption),
+                });
+
+            registerAdminReplyTarget(Number(adminId), sent.message_id, userChatId);
+            sentCount += 1;
+        } catch (err) {
+            logger.warn({ err, adminId, userChatId }, 'Failed to forward CS proof to admin');
+        }
+    }
+
+    return sentCount;
+}
+
+function buildGenericProofCaption(msg: TelegramBot.Message, proof: ClaimProof, reason: string) {
+    const displayName = buildDisplayName(msg);
+    const username = msg.from?.username ? `@${msg.from.username}` : '-';
+    const captionNote = proof.caption ? `Caption user: ${proof.caption}` : 'Caption user: -';
+
+    return [
+        'Bukti transfer masuk ke bot CS',
+        '',
+        `User chat ID: ${msg.chat.id}`,
+        `Nama: ${displayName}`,
+        `Username: ${username}`,
+        `Alasan review: ${reason}`,
+        captionNote,
+        '',
+        'Balas pesan ini untuk mengirim jawaban ke user.',
+        `Atau gunakan /reply ${msg.chat.id} <pesan>`,
+        `Gunakan /done ${msg.chat.id} jika review selesai.`,
+    ].join('\n');
+}
+
+function buildPromoClaimCaption(
+    msg: TelegramBot.Message,
+    proof: ClaimProof,
+    promo: PromoSettings,
+    email: string
+) {
+    const displayName = buildDisplayName(msg);
+    const username = msg.from?.username ? `@${msg.from.username}` : '-';
+    const captionNote = proof.caption ? `Caption bukti: ${proof.caption}` : 'Caption bukti: -';
+
+    return [
+        'Klaim promo deposit menunggu review admin',
+        '',
+        `Promo: ${promo.title}`,
+        `Minimal deposit: ${formatRupiah(promo.minimumDeposit)}`,
+        `Bonus promo: ${formatRupiah(promo.bonusAmount)}`,
+        `Email terdaftar: ${email}`,
+        `Top up URL: ${promo.topupUrl}`,
+        '',
+        `User chat ID: ${msg.chat.id}`,
+        `Nama: ${displayName}`,
+        `Username: ${username}`,
+        captionNote,
+        '',
+        'Bukti transfer terlampir. Balas pesan ini untuk menjawab user.',
+        `Atau gunakan /reply ${msg.chat.id} <pesan>`,
+        `Gunakan /done ${msg.chat.id} jika review selesai.`,
+    ].join('\n');
+}
+
+function trimTelegramCaption(value: string) {
+    const trimmed = String(value || '').trim();
+    if (trimmed.length <= 1024) return trimmed;
+    return `${trimmed.slice(0, 1020).trim()}...`;
+}
+
+function isValidEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function formatRupiah(value: number) {
+    return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 }

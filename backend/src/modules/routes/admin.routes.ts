@@ -13,6 +13,7 @@ import { referralService } from '../referrals/referral.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { csBotSettingsService } from '../settings/cs-bot-settings.service';
+import { promoSettingsService } from '../settings/promo-settings.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { userService } from '../users/user.service';
 import { newsletterService } from '../newsletter/newsletter.service';
@@ -29,6 +30,16 @@ const referralSettingsSchema = z.object({
 
 const paymentSettingsSchema = z.object({
     minimumDeposit: z.number().int().min(1000).max(10000000),
+});
+
+const promoSettingsSchema = z.object({
+    enabled: z.boolean(),
+    title: z.string().min(3, 'Judul promo minimal 3 karakter').max(120),
+    description: z.string().min(8, 'Deskripsi promo minimal 8 karakter').max(500),
+    minimumDeposit: z.number().int().min(1000).max(10000000),
+    bonusAmount: z.number().int().min(0).max(10000000),
+    topupUrl: z.string().min(1, 'URL top up wajib diisi').url('URL top up harus valid'),
+    claimInstructions: z.string().min(8, 'Instruksi klaim minimal 8 karakter').max(500),
 });
 
 const smtpSettingsSchema = z.object({
@@ -794,6 +805,33 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 ...settings,
                 apiKey: settings.apiKey ? '********' : '',
             },
+        };
+    });
+
+    // GET /api/admin/settings/promo
+    fastify.get('/settings/promo', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await promoSettingsService.getSettings();
+        return {
+            success: true,
+            data: settings,
+        };
+    });
+
+    // PATCH /api/admin/settings/promo
+    fastify.patch('/settings/promo', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = promoSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await promoSettingsService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'Pengaturan promo berhasil disimpan',
+            data: settings,
         };
     });
 

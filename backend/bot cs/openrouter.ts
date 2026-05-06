@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '../src/app/config';
 import logger from '../src/utils/logger';
 import { csBotSettingsService } from '../src/modules/settings/cs-bot-settings.service';
+import { promoSettingsService } from '../src/modules/settings/promo-settings.service';
 
 export interface HistoryMessage {
     role: 'user' | 'assistant';
@@ -40,7 +41,10 @@ export async function generateCsReply(input: {
     username?: string;
     history: HistoryMessage[];
 }): Promise<AiDecision> {
-    const settings = await csBotSettingsService.getRuntimeSettings();
+    const [settings, promoSettings] = await Promise.all([
+        csBotSettingsService.getRuntimeSettings(),
+        promoSettingsService.getRuntimeSettings(),
+    ]);
 
     if (!settings.apiKey.trim()) {
         return {
@@ -62,6 +66,18 @@ export async function generateCsReply(input: {
                 'Konteks user:',
                 `- Nama: ${input.displayName}`,
                 `- Username Telegram: ${input.username || '-'}`,
+                '',
+                'Konteks promo saat ini:',
+                promoSettings.enabled
+                    ? `- Promo aktif: YA
+- Judul promo: ${promoSettings.title}
+- Deskripsi: ${promoSettings.description}
+- Minimal deposit: ${formatRupiah(promoSettings.minimumDeposit)}
+- Bonus: ${formatRupiah(promoSettings.bonusAmount)}
+- URL top up: ${promoSettings.topupUrl}
+- Instruksi klaim: ${promoSettings.claimInstructions}
+- Jika user ingin klaim promo, arahkan ke perintah /klaim lalu upload bukti transfer dan kirim email yang terdaftar.`
+                    : '- Promo aktif: TIDAK ADA. Jika user bertanya promo atau mengetik /klaim, jawab bahwa saat ini belum ada promo yang sedang berjalan.',
             ].join('\n'),
         },
         ...input.history.map((item) => ({
@@ -214,4 +230,8 @@ function normalizeListLines(value: string) {
         if (/^(langkah|cara|berikut|catatan|tips)\s*:/i.test(line)) return line;
         return line;
     }).join('\n');
+}
+
+function formatRupiah(value: number) {
+    return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 }

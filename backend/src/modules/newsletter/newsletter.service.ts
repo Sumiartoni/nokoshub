@@ -341,8 +341,8 @@ function wrapNewsletterHtml(subject: string, body: string) {
         eyebrow: 'Newsletter NokosHUB',
         title: subject,
         contentHtml: renderBodyHtml(body),
-        ctaLabel: 'Buka Website NokosHUB',
-        ctaUrl: 'https://nokoshub.store',
+        ctaLabel: 'Top Up Saldo Sekarang',
+        ctaUrl: 'https://nokoshub.store/user/#topup',
         footerHtml: `
           <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
             Email ini dikirim dari panel admin NokosHUB.

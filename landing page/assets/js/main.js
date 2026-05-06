@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     label: 'Customer Service',
     telegramHandle: '@nokoshubsupport',
     telegramUrl: 'https://t.me/nokoshubsupport',
+    topupUrl: '/user/#topup',
   };
 
   async function loadSupportContact() {
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
       supportContact.label = String(data.label || supportContact.label);
       supportContact.telegramHandle = String(data.telegramHandle || supportContact.telegramHandle);
       supportContact.telegramUrl = String(data.telegramUrl || supportContact.telegramUrl);
+      supportContact.topupUrl = String(data.topupUrl || supportContact.topupUrl);
     } catch (err) {
       console.error('Failed to load support contact:', err);
     }
@@ -29,6 +31,11 @@ document.addEventListener('DOMContentLoaded', () => {
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener noreferrer');
       link.setAttribute('title', `${supportContact.label} ${supportContact.telegramHandle}`);
+    });
+
+    document.querySelectorAll('[data-topup-link]').forEach((link) => {
+      link.setAttribute('href', supportContact.topupUrl || '/user/#topup');
+      link.setAttribute('title', 'Buka halaman top up NokosHUB');
     });
   }
 

@@ -14,6 +14,7 @@ import { referralService } from '../referrals/referral.service';
 import { turnstileService } from '../security/turnstile.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
+import { promoSettingsService } from '../settings/promo-settings.service';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -103,12 +104,14 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/support/contact
     fastify.get('/support/contact', async () => {
         const telegramHandle = normalizeTelegramHandle(config.CS_TELEGRAM_BOT_USERNAME || config.TELEGRAM_SUPPORT_HANDLE);
+        const promoSettings = await promoSettingsService.getRuntimeSettings();
         return {
             success: true,
             data: {
                 label: 'Customer Service',
                 telegramHandle,
                 telegramUrl: buildTelegramUrl(telegramHandle),
+                topupUrl: promoSettings.topupUrl,
             },
         };
     });
@@ -706,6 +709,15 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/settings/payment
     fastify.get('/settings/payment', async () => {
         const settings = await paymentSettingsService.getSettings();
+        return {
+            success: true,
+            data: settings,
+        };
+    });
+
+    // GET /api/settings/promo
+    fastify.get('/settings/promo', async () => {
+        const settings = await promoSettingsService.getRuntimeSettings();
         return {
             success: true,
             data: settings,
