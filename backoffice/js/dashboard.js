@@ -76,6 +76,7 @@
         }
         else if (pageId === 'referral') loadReferralSettings();
         else if (pageId === 'smtp') loadSmtpSettings();
+        else if (pageId === 'newsletter') loadNewsletterPage();
         else if (pageId === 'deposit-settings') loadPaymentSettings();
         else if (pageId === 'maintenance') loadMaintenanceDashboard();
         else if (pageId === 'users') loadUsers();
@@ -90,6 +91,7 @@
         services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari seluruh provider OTP' },
         referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
         smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
+        newsletter:   { title: 'Newsletter',  sub: 'Broadcast email dan Telegram ke pengguna terpilih' },
         'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
         maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
         users:        { title: 'Users',       sub: 'Manajemen pengguna & penyesuaian saldo' },
@@ -120,6 +122,7 @@
         }
         else if (page === 'referral') loadReferralSettings();
         else if (page === 'smtp') loadSmtpSettings();
+        else if (page === 'newsletter') loadNewsletterPage();
         else if (page === 'deposit-settings') loadPaymentSettings();
         else if (page === 'maintenance') loadMaintenanceDashboard();
         else if (page === 'users') loadUsers();
@@ -1004,6 +1007,149 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Kirim Email Test';
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  NEWSLETTER PAGE
+    // ═══════════════════════════════════════════════════════════════════════════
+    let _newsletterTemplates = [];
+
+    window.loadNewsletterPage = async function () {
+        const templateInput = document.getElementById('newsletterTemplateInput');
+        const recipientInput = document.getElementById('newsletterRecipientInput');
+        const subjectInput = document.getElementById('newsletterSubjectInput');
+        const bodyInput = document.getElementById('newsletterBodyInput');
+        if (!templateInput || !recipientInput || !subjectInput || !bodyInput) return;
+
+        recipientInput.value = '';
+        subjectInput.value = '';
+        bodyInput.value = '';
+
+        try {
+            const res = await api('/api/admin/newsletter/templates');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat template newsletter');
+            _newsletterTemplates = res.data || [];
+
+            templateInput.innerHTML = _newsletterTemplates.map((tpl) => (
+                `<option value="${escText(tpl.key)}">${escText(tpl.label)} — ${escText(tpl.description)}</option>`
+            )).join('');
+
+            syncNewsletterFields();
+            applyNewsletterTemplate();
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat template newsletter', 'error');
+        }
+    };
+
+    window.syncNewsletterFields = function () {
+        const channel = document.getElementById('newsletterChannelInput')?.value || 'email';
+        const audienceInput = document.getElementById('newsletterAudienceInput');
+        if (!audienceInput) return;
+        const currentAudience = audienceInput.value || 'all_web';
+        const recipientGroup = document.getElementById('newsletterRecipientGroup');
+        const recipientLabel = document.getElementById('newsletterRecipientLabel');
+        const recipientInput = document.getElementById('newsletterRecipientInput');
+        const subjectGroup = document.getElementById('newsletterSubjectGroup');
+
+        const options = channel === 'email'
+            ? [
+                ['all_web', 'Semua User Web'],
+                ['single_email', 'Satu Email'],
+            ]
+            : [
+                ['all_bot', 'Semua User Bot Telegram'],
+                ['single_telegram', 'Satu Telegram ID'],
+            ];
+
+        audienceInput.innerHTML = options.map(([value, label]) => (
+            `<option value="${value}">${label}</option>`
+        )).join('');
+
+        audienceInput.value = options.some(([value]) => value === currentAudience)
+            ? currentAudience
+            : options[0][0];
+
+        const audience = audienceInput.value;
+
+        const isSingleEmail = audience === 'single_email';
+        const isSingleTelegram = audience === 'single_telegram';
+        const needsRecipient = isSingleEmail || isSingleTelegram;
+
+        if (recipientGroup) recipientGroup.hidden = !needsRecipient;
+        if (recipientLabel) {
+            recipientLabel.textContent = isSingleTelegram ? 'Telegram ID Tujuan' : 'Email Tujuan';
+        }
+        if (recipientInput) {
+            recipientInput.placeholder = isSingleTelegram ? 'Contoh: 123456789' : 'user@example.com';
+        }
+        if (subjectGroup) subjectGroup.hidden = channel !== 'email';
+    };
+
+    window.applyNewsletterTemplate = function () {
+        const templateKey = document.getElementById('newsletterTemplateInput')?.value || '';
+        const subjectInput = document.getElementById('newsletterSubjectInput');
+        const bodyInput = document.getElementById('newsletterBodyInput');
+        const template = _newsletterTemplates.find((item) => item.key === templateKey) || _newsletterTemplates[0];
+        if (!template || !subjectInput || !bodyInput) return;
+
+        subjectInput.value = template.subject || '';
+        bodyInput.value = template.body || '';
+    };
+
+    window.sendNewsletter = async function () {
+        const btn = document.getElementById('sendNewsletterBtn');
+        const channel = document.getElementById('newsletterChannelInput')?.value || 'email';
+        const audience = document.getElementById('newsletterAudienceInput')?.value || 'all_web';
+        const recipient = document.getElementById('newsletterRecipientInput')?.value.trim() || '';
+        const subject = document.getElementById('newsletterSubjectInput')?.value.trim() || '';
+        const body = document.getElementById('newsletterBodyInput')?.value.trim() || '';
+        const templateKey = document.getElementById('newsletterTemplateInput')?.value || '';
+
+        if (!body || body.length < 8) {
+            showToast('Isi pesan minimal 8 karakter', 'warning');
+            return;
+        }
+        if (channel === 'email' && !subject) {
+            showToast('Subject email wajib diisi', 'warning');
+            return;
+        }
+        if ((audience === 'single_email' || audience === 'single_telegram') && !recipient) {
+            showToast('Isi tujuan terlebih dahulu', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-inline"></span> Mengirim...';
+
+        try {
+            const res = await api('/api/admin/newsletter/send', {
+                method: 'POST',
+                body: JSON.stringify({
+                    channel,
+                    audience,
+                    recipient,
+                    subject,
+                    body,
+                    templateKey,
+                }),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal mengirim newsletter');
+
+            const summary = res.data
+                ? ` Berhasil ${res.data.sent}/${res.data.total}${res.data.failed ? `, gagal ${res.data.failed}` : ''}.`
+                : '';
+            showToast((res.message || 'Newsletter berhasil dikirim') + summary, 'success');
+        } catch (err) {
+            showToast(err.message || 'Gagal mengirim newsletter', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+                Kirim Broadcast`;
         }
     };
 

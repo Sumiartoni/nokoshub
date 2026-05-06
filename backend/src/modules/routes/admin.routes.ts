@@ -14,6 +14,7 @@ import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { userService } from '../users/user.service';
+import { newsletterService } from '../newsletter/newsletter.service';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
@@ -78,6 +79,51 @@ const smtpSettingsSchema = z.object({
 
 const smtpTestSchema = z.object({
     to: z.string().email('Email tujuan test tidak valid'),
+});
+
+const newsletterSendSchema = z.object({
+    channel: z.enum(['email', 'telegram']),
+    audience: z.enum(['single_email', 'all_web', 'single_telegram', 'all_bot']),
+    recipient: z.string().optional().default(''),
+    subject: z.string().optional().default(''),
+    body: z.string().min(8, 'Isi pesan minimal 8 karakter').max(10000, 'Isi pesan terlalu panjang'),
+    templateKey: z.string().optional().default(''),
+}).superRefine((value, ctx) => {
+    if (value.channel === 'email' && !value.subject.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['subject'],
+            message: 'Subject email wajib diisi',
+        });
+    }
+    if (value.channel === 'email' && ['all_bot', 'single_telegram'].includes(value.audience)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['audience'],
+            message: 'Channel email hanya bisa dikirim ke user web atau satu email tujuan',
+        });
+    }
+    if (value.channel === 'telegram' && ['all_web', 'single_email'].includes(value.audience)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['audience'],
+            message: 'Channel Telegram hanya bisa dikirim ke user bot atau satu Telegram ID tujuan',
+        });
+    }
+    if (value.audience === 'single_email' && !value.recipient.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['recipient'],
+            message: 'Email tujuan wajib diisi',
+        });
+    }
+    if (value.audience === 'single_telegram' && !value.recipient.trim()) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['recipient'],
+            message: 'Telegram ID tujuan wajib diisi',
+        });
+    }
 });
 
 const maintenanceSettingsSchema = z.object({
@@ -692,6 +738,37 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             return {
                 success: true,
                 message: `Email test berhasil dikirim ke ${parsed.data.to}`,
+            };
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: (err as Error).message });
+        }
+    });
+
+    // GET /api/admin/newsletter/templates
+    fastify.get('/newsletter/templates', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        return {
+            success: true,
+            data: newsletterService.getTemplates(),
+        };
+    });
+
+    // POST /api/admin/newsletter/send
+    fastify.post('/newsletter/send', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = newsletterSendSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        try {
+            const result = await newsletterService.send(parsed.data);
+            const base = parsed.data.channel === 'email' ? 'Email' : 'Pesan Telegram';
+            return {
+                success: true,
+                message: `${base} selesai dikirim. Berhasil ${result.sent}/${result.total}${result.failed ? `, gagal ${result.failed}` : ''}.`,
+                data: result,
             };
         } catch (err) {
             return reply.status(400).send({ success: false, error: (err as Error).message });

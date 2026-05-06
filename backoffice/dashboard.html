@@ -98,6 +98,16 @@
                 <span>SMTP / Email</span>
             </div>
 
+            <div class="nav-item" data-page="newsletter" id="nav-newsletter">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16v16H4z"/>
+                    <path d="m22 6-10 7L2 6"/>
+                    <path d="M8 11h8"/>
+                    <path d="M8 15h5"/>
+                </svg>
+                <span>Newsletter</span>
+            </div>
+
             <div class="nav-item" data-page="deposit-settings" id="nav-deposit-settings">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1v22"/>
@@ -609,6 +619,97 @@
                 </div>
             </div>
 
+            <!-- ════════ NEWSLETTER PAGE ════════ -->
+            <div class="page-section" id="page-newsletter">
+                <div class="filter-bar">
+                    <div class="search-wrapper" style="pointer-events:none;opacity:.85">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z"/><path d="m22 6-10 7L2 6"/><path d="M8 11h8"/><path d="M8 15h5"/>
+                        </svg>
+                        <input type="text" class="search-input" value="Broadcast email dan Telegram ke user web atau user bot" readonly>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="loadNewsletterPage()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M4 4h16v16H4z"/><path d="m22 6-10 7L2 6"/><path d="M8 11h8"/><path d="M8 15h5"/>
+                            </svg>
+                            Broadcast Newsletter
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="newsletterChannelInput">Channel</label>
+                                <select class="form-select" id="newsletterChannelInput" onchange="syncNewsletterFields()">
+                                    <option value="email">Email</option>
+                                    <option value="telegram">Telegram</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="newsletterAudienceInput">Target Penerima</label>
+                                <select class="form-select" id="newsletterAudienceInput" onchange="syncNewsletterFields()">
+                                    <option value="all_web">Semua User Web</option>
+                                    <option value="single_email">Satu Email</option>
+                                    <option value="all_bot">Semua User Bot Telegram</option>
+                                    <option value="single_telegram">Satu Telegram ID</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:14px">
+                            <div class="form-group">
+                                <label class="form-label" for="newsletterTemplateInput">Template Pesan</label>
+                                <select class="form-select" id="newsletterTemplateInput"></select>
+                            </div>
+                            <div class="form-group" style="align-self:end">
+                                <button class="btn btn-sm btn-outline" id="applyNewsletterTemplateBtn" onclick="applyNewsletterTemplate()">Pakai Template</button>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:14px" id="newsletterRecipientGroup" hidden>
+                            <label class="form-label" for="newsletterRecipientInput" id="newsletterRecipientLabel">Tujuan</label>
+                            <input class="form-input" id="newsletterRecipientInput" type="text" placeholder="user@example.com">
+                        </div>
+                        <div class="form-group" style="margin-top:14px" id="newsletterSubjectGroup">
+                            <label class="form-label" for="newsletterSubjectInput">Subject Email</label>
+                            <input class="form-input" id="newsletterSubjectInput" type="text" placeholder="Update penting NokosHUB">
+                        </div>
+                        <div class="form-group" style="margin-top:14px">
+                            <label class="form-label" for="newsletterBodyInput">Isi Pesan</label>
+                            <textarea class="form-input" id="newsletterBodyInput" rows="12" placeholder="Tulis isi pesan di sini..."></textarea>
+                        </div>
+                        <div class="form-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Placeholder tersedia: <code>{{name}}</code>, <code>{{email}}</code>, <code>{{telegramId}}</code>, <code>{{balance}}</code>, <code>{{supportHandle}}</code>, <code>{{maintenanceNotice}}</code>.
+                        </div>
+                        <div class="form-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Email memakai konfigurasi SMTP / Brevo aktif. Telegram memakai bot transaksi utama dan akan dikirim satu per satu agar lebih aman dari limit.
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+                            <button class="btn btn-primary" id="sendNewsletterBtn" onclick="sendNewsletter()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"/>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                </svg>
+                                Kirim Broadcast
+                            </button>
+                            <button class="btn btn-outline" onclick="loadNewsletterPage()">Reset Form</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ════════ DEPOSIT SETTINGS PAGE ════════ -->
             <div class="page-section" id="page-deposit-settings">
                 <div class="filter-bar">
@@ -1039,7 +1140,7 @@
 </div>
 
 <script src="js/auth.js?v=20260424-1"></script>
-<script src="js/dashboard.js?v=20260505-2"></script>
+<script src="js/dashboard.js?v=20260506-1"></script>
 </body>
 </html>
 
