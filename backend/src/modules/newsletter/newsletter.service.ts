@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma.client';
-import { emailService } from '../email/email.service';
+import { emailService, renderBrandedEmail } from '../email/email.service';
 import { config } from '../../app/config';
 import { userService } from '../users/user.service';
 import logger from '../../utils/logger';
@@ -93,6 +93,29 @@ const NEWSLETTER_TEMPLATES: NewsletterTemplate[] = [
             'Kalau butuh bantuan, hubungi {{supportHandle}}.',
             '',
             'Salam,',
+            'Tim NokosHUB',
+        ].join('\n'),
+    },
+    {
+        key: 'deposit_bonus_2000',
+        label: 'Promo Deposit 20K Bonus 2K',
+        description: 'Promo deposit minimal Rp20.000 bonus Rp2.000 dan klaim melalui CS admin.',
+        channels: ['email', 'telegram'],
+        subject: 'Promo Deposit NokosHUB: Min. Rp20.000 Free Rp2.000',
+        body: [
+            'Halo {{name}},',
+            '',
+            'Ada promo deposit terbaru dari NokosHUB khusus untuk Anda.',
+            '',
+            '- Deposit minimal Rp20.000',
+            '- Bonus saldo Rp2.000',
+            '- Promo berlaku terbatas',
+            '',
+            'Untuk klaim bonus promo ini, silakan langsung hubungi CS admin di {{supportHandle}}.',
+            '',
+            'Buka website: https://nokoshub.store',
+            '',
+            'Terima kasih,',
             'Tim NokosHUB',
         ].join('\n'),
     },
@@ -297,12 +320,13 @@ function buildDisplayName(
 
 function renderTemplate(template: string, recipient: RecipientRecord) {
     const balanceText = formatRupiah(recipient.balance ?? 0);
+    const supportHandle = normalizeSupportHandle(config.CS_TELEGRAM_BOT_USERNAME || config.TELEGRAM_SUPPORT_HANDLE);
     const replacements: Record<string, string> = {
         name: recipient.name || 'Pengguna NokosHUB',
         email: recipient.email || '—',
         telegramId: recipient.telegramId || '—',
         balance: balanceText,
-        supportHandle: config.TELEGRAM_SUPPORT_HANDLE,
+        supportHandle,
         maintenanceNotice: config.TELEGRAM_MAINTENANCE_NOTICE,
     };
 
@@ -313,24 +337,18 @@ function renderTemplate(template: string, recipient: RecipientRecord) {
 }
 
 function wrapNewsletterHtml(subject: string, body: string) {
-    return `
-        <div style="margin:0;padding:24px 12px;background:#f4f7fb;font-family:Arial,sans-serif;color:#0f172a">
-          <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.08)">
-            <div style="padding:22px 28px;background:linear-gradient(135deg,#10213a 0%,#1d3557 100%);color:#ffffff">
-              <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;opacity:0.72;margin-bottom:8px">NokosHUB</div>
-              <h1 style="margin:0;font-size:24px;line-height:1.3">${escapeHtml(subject)}</h1>
-            </div>
-            <div style="padding:28px;font-size:15px;line-height:1.85;color:#334155">
-              ${escapeHtml(body).replace(/\n/g, '<br>')}
-            </div>
-            <div style="padding:18px 28px;background:#f8fafc;border-top:1px solid #e2e8f0">
-              <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
-                Email ini dikirim dari panel admin NokosHUB.
-              </p>
-            </div>
-          </div>
-        </div>
-    `;
+    return renderBrandedEmail({
+        eyebrow: 'Newsletter NokosHUB',
+        title: subject,
+        contentHtml: renderBodyHtml(body),
+        ctaLabel: 'Buka Website NokosHUB',
+        ctaUrl: 'https://nokoshub.store',
+        footerHtml: `
+          <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
+            Email ini dikirim dari panel admin NokosHUB.
+          </p>
+        `,
+    });
 }
 
 function escapeHtml(value: string) {
@@ -344,6 +362,47 @@ function escapeHtml(value: string) {
 
 function formatRupiah(value: number) {
     return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+}
+
+function normalizeSupportHandle(value: string) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return '@nokoshubsupport';
+    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+function renderBodyHtml(body: string) {
+    const lines = String(body || '').replace(/\r/g, '').split('\n');
+    const chunks: string[] = [];
+    let listBuffer: string[] = [];
+
+    const flushList = () => {
+        if (!listBuffer.length) return;
+        chunks.push(`
+            <ul style="margin:0 0 16px;padding-left:20px;color:#334155">
+              ${listBuffer.map((item) => `<li style="margin:0 0 8px">${escapeHtml(item)}</li>`).join('')}
+            </ul>
+        `);
+        listBuffer = [];
+    };
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+            flushList();
+            continue;
+        }
+
+        if (line.startsWith('- ')) {
+            listBuffer.push(line.slice(2).trim());
+            continue;
+        }
+
+        flushList();
+        chunks.push(`<p style="margin:0 0 14px;font-size:15px;line-height:1.8;color:#334155">${escapeHtml(line)}</p>`);
+    }
+
+    flushList();
+    return chunks.join('');
 }
 
 async function sendTelegramBroadcast(chatId: string, text: string) {

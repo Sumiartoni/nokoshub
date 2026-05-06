@@ -2,6 +2,7 @@ import net from 'node:net';
 import tls from 'node:tls';
 import os from 'node:os';
 import { smtpSettingsService } from '../settings/smtp-settings.service';
+import { config } from '../../app/config';
 import logger from '../../utils/logger';
 
 interface EmailPayload {
@@ -15,6 +16,9 @@ const SMTP_CONNECT_TIMEOUT_MS = 10000;
 const SMTP_RESPONSE_TIMEOUT_MS = 15000;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_API_TIMEOUT_MS = 15000;
+const WEBSITE_URL = 'https://nokoshub.store';
+const WEBSITE_LABEL = 'nokoshub.store';
+const EMAIL_LOGO_URL = `${WEBSITE_URL}/user/assets/images/logo-email.png`;
 
 export const emailService = {
     async sendRegistrationOtp(input: {
@@ -47,56 +51,46 @@ export const emailService = {
                 '',
                 'Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini.',
                 '',
-                'Website: https://nokoshub.store',
+                `Website: ${WEBSITE_URL}`,
                 'Email ini dikirim otomatis oleh sistem NokosHUB.',
             ].join('\n'),
-            html: `
-                <div style="margin:0;padding:24px 12px;background:#f4f7fb;font-family:Arial,sans-serif;color:#0f172a">
-                  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(15,23,42,0.08)">
-                    <div style="padding:22px 28px;background:linear-gradient(135deg,#10213a 0%,#1d3557 100%);color:#ffffff">
-                      <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;opacity:0.72;margin-bottom:8px">NokosHUB</div>
-                      <h1 style="margin:0;font-size:24px;line-height:1.3">Verifikasi Email Anda</h1>
-                      <p style="margin:10px 0 0;font-size:14px;line-height:1.7;color:rgba(255,255,255,0.86)">
-                        Satu langkah lagi untuk menyelesaikan pendaftaran akun NokosHUB.
-                      </p>
-                    </div>
-
-                    <div style="padding:28px">
-                      <p style="margin:0 0 14px;font-size:15px;line-height:1.8">Halo <strong>${escapedName}</strong>,</p>
-                      <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#334155">
-                        Gunakan kode OTP berikut untuk memverifikasi email Anda dan melanjutkan pembuatan akun.
-                      </p>
-
-                      <div style="margin:0 0 20px;padding:18px;border-radius:18px;background:#fff7d6;border:1px solid #f1d99b;text-align:center">
-                        <div style="font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#8a6a18;margin-bottom:10px">Kode OTP Anda</div>
-                        <div style="font-size:34px;line-height:1;font-weight:700;letter-spacing:8px;color:#1d3557">${escapedOtp}</div>
-                      </div>
-
-                      <div style="margin:0 0 18px;padding:16px 18px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0">
-                        <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#334155">
-                          Kode ini berlaku sekitar <strong>${minutes} menit</strong>.
-                        </p>
-                        <p style="margin:0;font-size:14px;line-height:1.7;color:#334155">
-                          Demi keamanan akun, jangan bagikan kode ini kepada siapa pun.
-                        </p>
-                      </div>
-
-                      <p style="margin:0 0 10px;font-size:14px;line-height:1.8;color:#475569">
-                        Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini. Tidak ada perubahan apa pun pada akun Anda sampai kode diverifikasi.
-                      </p>
-                    </div>
-
-                    <div style="padding:18px 28px;background:#f8fafc;border-top:1px solid #e2e8f0">
-                      <p style="margin:0 0 6px;font-size:13px;line-height:1.7;color:#64748b">
-                        Website: <a href="https://nokoshub.store" style="color:#1d4ed8;text-decoration:none">https://nokoshub.store</a>
-                      </p>
-                      <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
-                        Email ini dikirim otomatis oleh sistem NokosHUB.
-                      </p>
-                    </div>
+            html: renderBrandedEmail({
+                eyebrow: 'Verifikasi Email',
+                title: 'Satu langkah lagi untuk aktivasi akun Anda',
+                introHtml: `<p style="margin:0 0 14px;font-size:15px;line-height:1.8">Halo <strong>${escapedName}</strong>,</p>
+                  <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#334155">
+                    Gunakan kode OTP berikut untuk memverifikasi email Anda dan melanjutkan pembuatan akun NokosHUB.
+                  </p>`,
+                contentHtml: `
+                  <div style="margin:0 0 20px;padding:18px;border-radius:18px;background:#eef9ff;border:1px solid #bfe7f8;text-align:center">
+                    <div style="font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#0d7490;margin-bottom:10px">Kode OTP Anda</div>
+                    <div style="font-size:34px;line-height:1;font-weight:700;letter-spacing:8px;color:#0f3f73">${escapedOtp}</div>
                   </div>
-                </div>
-            `,
+
+                  <div style="margin:0 0 18px;padding:16px 18px;border-radius:16px;background:#f8fbff;border:1px solid #d9e9f7">
+                    <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#334155">
+                      Kode ini berlaku sekitar <strong>${minutes} menit</strong>.
+                    </p>
+                    <p style="margin:0;font-size:14px;line-height:1.7;color:#334155">
+                      Demi keamanan akun, jangan bagikan kode ini kepada siapa pun.
+                    </p>
+                  </div>
+
+                  <p style="margin:0;font-size:14px;line-height:1.8;color:#475569">
+                    Jika Anda tidak merasa melakukan pendaftaran, abaikan email ini. Tidak ada perubahan apa pun pada akun Anda sampai kode diverifikasi.
+                  </p>
+                `,
+                ctaLabel: 'Buka Website NokosHUB',
+                ctaUrl: WEBSITE_URL,
+                footerHtml: `
+                  <p style="margin:0 0 6px;font-size:13px;line-height:1.7;color:#64748b">
+                    Website: <a href="${WEBSITE_URL}" style="color:#0f6db5;text-decoration:none">${WEBSITE_LABEL}</a>
+                  </p>
+                  <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
+                    Email ini dikirim otomatis oleh sistem NokosHUB.
+                  </p>
+                `,
+            }),
         });
     },
 
@@ -105,12 +99,24 @@ export const emailService = {
             to,
             subject: 'Tes SMTP NokosHUB berhasil',
             text: 'Jika Anda menerima email ini, konfigurasi SMTP pada panel super admin NokosHUB sudah aktif.',
-            html: `
-                <div style="font-family:Arial,sans-serif;line-height:1.7;color:#0f172a">
-                  <h2 style="margin:0 0 12px">Tes SMTP Berhasil</h2>
-                  <p>Jika Anda menerima email ini, konfigurasi SMTP pada panel super admin NokosHUB sudah aktif.</p>
-                </div>
-            `,
+            html: renderBrandedEmail({
+                eyebrow: 'Tes Konfigurasi',
+                title: 'Koneksi email NokosHUB berhasil',
+                introHtml: `<p style="margin:0;font-size:15px;line-height:1.8;color:#334155">Jika Anda menerima email ini, konfigurasi SMTP pada panel super admin NokosHUB sudah aktif dan siap dipakai.</p>`,
+                contentHtml: `
+                  <div style="padding:16px 18px;border-radius:16px;background:#f4fcf7;border:1px solid #c6efd4;color:#166534">
+                    <strong>SMTP aktif ✅</strong><br>
+                    Pengiriman email dari sistem NokosHUB sudah berhasil diuji.
+                  </div>
+                `,
+                ctaLabel: 'Buka Website NokosHUB',
+                ctaUrl: WEBSITE_URL,
+                footerHtml: `
+                  <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
+                    Email test ini dikirim dari panel super admin NokosHUB.
+                  </p>
+                `,
+            }),
         });
     },
 
@@ -163,6 +169,52 @@ export const emailService = {
         }
     },
 };
+
+export function renderBrandedEmail(input: {
+    eyebrow: string;
+    title: string;
+    introHtml?: string;
+    contentHtml: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    footerHtml?: string;
+}) {
+    const supportHandle = normalizeSupportHandle(config.CS_TELEGRAM_BOT_USERNAME || config.TELEGRAM_SUPPORT_HANDLE);
+    const ctaHtml = input.ctaLabel && input.ctaUrl
+        ? `
+            <div style="margin-top:24px;text-align:center">
+              <a href="${escapeHtmlAttr(input.ctaUrl)}" style="display:inline-block;padding:13px 24px;border-radius:999px;background:linear-gradient(135deg,#1aa0e8 0%,#38d6d1 100%);color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;box-shadow:0 10px 20px rgba(26,160,232,0.18)">
+                ${escapeHtml(input.ctaLabel)}
+              </a>
+            </div>
+        `
+        : '';
+
+    return `
+        <div style="margin:0;padding:24px 12px;background:#f3f8fc;font-family:Arial,sans-serif;color:#0f172a">
+          <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #d9e8f4;border-radius:24px;overflow:hidden;box-shadow:0 12px 34px rgba(15,23,42,0.08)">
+            <div style="padding:24px 28px 18px;background:linear-gradient(180deg,#f4fbff 0%,#ebf8ff 100%);border-bottom:1px solid #d6ecf9;text-align:center">
+              <img src="${EMAIL_LOGO_URL}" alt="NokosHUB" width="96" height="96" style="display:block;margin:0 auto 14px;max-width:96px;height:auto">
+              <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#0f6db5;font-weight:700;margin-bottom:8px">${escapeHtml(input.eyebrow)}</div>
+              <h1 style="margin:0;font-size:24px;line-height:1.35;color:#12344d">${escapeHtml(input.title)}</h1>
+            </div>
+
+            <div style="padding:28px">
+              ${input.introHtml || ''}
+              ${input.contentHtml}
+              ${ctaHtml}
+            </div>
+
+            <div style="padding:18px 28px;background:#f8fbfe;border-top:1px solid #e2edf5">
+              ${input.footerHtml || ''}
+              <p style="margin:8px 0 0;font-size:12px;line-height:1.7;color:#94a3b8">
+                Butuh bantuan? Hubungi CS admin di ${escapeHtml(supportHandle)}.
+              </p>
+            </div>
+          </div>
+        </div>
+    `;
+}
 
 async function sendBrevoApiMail(
     settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>,
@@ -466,6 +518,16 @@ function encodeMimeHeader(value: string) {
 
 function dotStuff(value: string) {
     return value.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..');
+}
+
+function normalizeSupportHandle(value: string) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return '@nokoshubsupport';
+    return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+function escapeHtmlAttr(value: string) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
 }
 
 function stripHtml(value: string) {
