@@ -80,19 +80,19 @@ const NEWSLETTER_TEMPLATES: NewsletterTemplate[] = [
         label: 'Broadcast Promo',
         description: 'Template generik untuk promo, bonus deposit, atau pengumuman layanan baru.',
         channels: ['email', 'telegram'],
-        subject: 'Promo Terbaru NokosHUB',
+        subject: 'Informasi Layanan NokosHUB',
         body: [
             'Halo {{name}},',
             '',
-            'Ada update promo dari NokosHUB untuk Anda.',
+            'Kami ingin menyampaikan informasi layanan terbaru dari NokosHUB.',
             '',
-            '- Bonus / promo berlaku terbatas',
-            '- Cek dashboard atau bot untuk detail lengkap',
+            '- Silakan cek dashboard untuk informasi yang sedang berjalan',
             '- Saldo Anda saat ini: {{balance}}',
+            '- Jika ada pertanyaan, Anda dapat menghubungi Customer Service',
             '',
-            'Kalau butuh bantuan, hubungi {{supportHandle}}.',
+            'Hubungi {{supportHandle}} bila Anda memerlukan bantuan lebih lanjut.',
             '',
-            'Salam,',
+            'Terima kasih,',
             'Tim NokosHUB',
         ].join('\n'),
     },
@@ -101,19 +101,19 @@ const NEWSLETTER_TEMPLATES: NewsletterTemplate[] = [
         label: 'Promo Deposit 20K Bonus 2K',
         description: 'Promo deposit minimal Rp20.000 bonus Rp2.000 dan klaim melalui CS admin.',
         channels: ['email', 'telegram'],
-        subject: 'Promo Deposit NokosHUB: Min. Rp20.000 Free Rp2.000',
+        subject: 'Informasi Deposit NokosHUB',
         body: [
             'Halo {{name}},',
             '',
-            'Ada promo deposit terbaru dari NokosHUB khusus untuk Anda.',
+            'Kami ingin menyampaikan informasi terkait program deposit yang saat ini tersedia di NokosHUB.',
             '',
             '- Deposit minimal Rp20.000',
-            '- Bonus saldo Rp2.000',
-            '- Promo berlaku terbatas',
+            '- Tambahan saldo Rp2.000 setelah klaim diverifikasi',
+            '- Klaim diproses melalui Customer Service admin',
             '',
-            'Untuk klaim bonus promo ini, silakan langsung hubungi CS admin di {{supportHandle}}.',
+            'Jika Anda ingin mengajukan klaim, silakan hubungi {{supportHandle}} dengan menyertakan bukti transfer dan email yang terdaftar.',
             '',
-            'Buka website: https://nokoshub.store',
+            'Halaman top up: https://nokoshub.store/user/#topup',
             '',
             'Terima kasih,',
             'Tim NokosHUB',
@@ -338,16 +338,18 @@ function renderTemplate(template: string, recipient: RecipientRecord) {
 
 function wrapNewsletterHtml(subject: string, body: string) {
     return renderBrandedEmail({
-        eyebrow: 'Newsletter NokosHUB',
+        eyebrow: 'NokosHUB',
         title: subject,
+        introHtml: `<p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#475569">Pesan ini berisi informasi layanan dari NokosHUB.</p>`,
         contentHtml: renderBodyHtml(body),
-        ctaLabel: 'Top Up Saldo Sekarang',
+        ctaLabel: 'Buka Dashboard NokosHUB',
         ctaUrl: 'https://nokoshub.store/user/#topup',
         footerHtml: `
           <p style="margin:0;font-size:12px;line-height:1.7;color:#94a3b8">
-            Email ini dikirim dari panel admin NokosHUB.
+            Pesan ini dikirim untuk menyampaikan informasi layanan NokosHUB.
           </p>
         `,
+        variant: 'neutral',
     });
 }
 

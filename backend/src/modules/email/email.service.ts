@@ -179,13 +179,16 @@ export function renderBrandedEmail(input: {
     ctaLabel?: string;
     ctaUrl?: string;
     footerHtml?: string;
+    variant?: 'brand' | 'neutral';
 }) {
     const supportHandle = normalizeSupportHandle(config.CS_TELEGRAM_BOT_USERNAME || config.TELEGRAM_SUPPORT_HANDLE);
     const supportUrl = buildTelegramUrl(supportHandle);
+    const variant = input.variant || 'brand';
+    const isNeutral = variant === 'neutral';
     const ctaHtml = input.ctaLabel && input.ctaUrl
         ? `
             <div style="margin-top:24px;text-align:center">
-              <a href="${escapeHtmlAttr(input.ctaUrl)}" style="display:inline-block;padding:13px 24px;border-radius:999px;background:linear-gradient(135deg,#1aa0e8 0%,#38d6d1 100%);color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;box-shadow:0 10px 20px rgba(26,160,232,0.18)">
+              <a href="${escapeHtmlAttr(input.ctaUrl)}" style="display:inline-block;padding:13px 24px;border-radius:${isNeutral ? '14px' : '999px'};background:${isNeutral ? '#ffffff' : 'linear-gradient(135deg,#1aa0e8 0%,#38d6d1 100%)'};color:${isNeutral ? '#0f3f73' : '#ffffff'};font-size:14px;font-weight:700;text-decoration:none;${isNeutral ? 'border:1px solid #cbdde9;' : 'box-shadow:0 10px 20px rgba(26,160,232,0.18)'}">
                 ${escapeHtml(input.ctaLabel)}
               </a>
             </div>
@@ -194,7 +197,7 @@ export function renderBrandedEmail(input: {
     const supportButtonHtml = supportUrl
         ? `
             <div style="margin-top:14px;text-align:center">
-              <a href="${escapeHtmlAttr(supportUrl)}" style="display:inline-block;padding:12px 22px;border-radius:999px;background:#ffffff;color:#0f6db5;font-size:14px;font-weight:700;text-decoration:none;border:1px solid #b9d7ee">
+              <a href="${escapeHtmlAttr(supportUrl)}" style="display:inline-block;padding:12px 22px;border-radius:${isNeutral ? '14px' : '999px'};background:#ffffff;color:#0f6db5;font-size:14px;font-weight:700;text-decoration:none;border:1px solid ${isNeutral ? '#d5e1ea' : '#b9d7ee'}">
                 Chat Customer Service
               </a>
             </div>
@@ -202,11 +205,11 @@ export function renderBrandedEmail(input: {
         : '';
 
     return `
-        <div style="margin:0;padding:24px 12px;background:#f3f8fc;font-family:Arial,sans-serif;color:#0f172a">
-          <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #d9e8f4;border-radius:24px;overflow:hidden;box-shadow:0 12px 34px rgba(15,23,42,0.08)">
-            <div style="padding:24px 28px 18px;background:linear-gradient(180deg,#f4fbff 0%,#ebf8ff 100%);border-bottom:1px solid #d6ecf9;text-align:center">
+        <div style="margin:0;padding:24px 12px;background:${isNeutral ? '#f7f9fb' : '#f3f8fc'};font-family:Arial,sans-serif;color:#0f172a">
+          <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid ${isNeutral ? '#dde6ec' : '#d9e8f4'};border-radius:24px;overflow:hidden;box-shadow:${isNeutral ? '0 6px 18px rgba(15,23,42,0.05)' : '0 12px 34px rgba(15,23,42,0.08)'}">
+            <div style="padding:24px 28px 18px;background:${isNeutral ? '#ffffff' : 'linear-gradient(180deg,#f4fbff 0%,#ebf8ff 100%)'};border-bottom:1px solid ${isNeutral ? '#e4ebf0' : '#d6ecf9'};text-align:center">
               <img src="${EMAIL_LOGO_URL}" alt="NokosHUB" width="96" height="96" style="display:block;margin:0 auto 14px;max-width:96px;height:auto">
-              <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:#0f6db5;font-weight:700;margin-bottom:8px">${escapeHtml(input.eyebrow)}</div>
+              <div style="font-size:12px;letter-spacing:1.8px;text-transform:uppercase;color:${isNeutral ? '#4b6478' : '#0f6db5'};font-weight:700;margin-bottom:8px">${escapeHtml(input.eyebrow)}</div>
               <h1 style="margin:0;font-size:24px;line-height:1.35;color:#12344d">${escapeHtml(input.title)}</h1>
             </div>
 
@@ -217,7 +220,7 @@ export function renderBrandedEmail(input: {
               ${supportButtonHtml}
             </div>
 
-            <div style="padding:18px 28px;background:#f8fbfe;border-top:1px solid #e2edf5">
+            <div style="padding:18px 28px;background:${isNeutral ? '#fbfcfd' : '#f8fbfe'};border-top:1px solid ${isNeutral ? '#e6edf2' : '#e2edf5'}">
               ${input.footerHtml || ''}
               <p style="margin:8px 0 0;font-size:12px;line-height:1.7;color:#94a3b8">
                 Butuh bantuan? Hubungi CS admin di ${escapeHtml(supportHandle)}.
