@@ -116,11 +116,6 @@ services:
       OTP_POLL_MAX_MS: ${OTP_POLL_MAX_MS:-1200000}
     ports:
       - '127.0.0.1:${API_PORT:-3000}:3000'
-    command: >
-      sh -c "
-        npx prisma migrate deploy &&
-        node dist/src/index.js
-      "
     volumes:
       - ./backend/prisma:/app/prisma
 
