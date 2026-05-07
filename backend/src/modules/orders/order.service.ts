@@ -58,6 +58,7 @@ export const orderService = {
                 countryCode: providerRuntime.parsedPrice.countryCode,
                 providerId: providerRuntime.parsedPrice.providerId,
                 maxPrice: price.providerPrice,
+                providerPriceUsd: toOptionalNumber(price.providerPriceUsd),
             });
             if (!result.success || !result.phone_number || !result.order_id) {
                 await failReservedOrder(reservedOrder.id, {
@@ -339,6 +340,20 @@ export const orderService = {
         });
     },
 };
+
+function toOptionalNumber(value: unknown): number | undefined {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    if (typeof value === 'object' && value && typeof (value as { toString?: () => string }).toString === 'function') {
+        const parsed = Number((value as { toString: () => string }).toString());
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
+}
 
 async function reserveOrderBalance(
     userId: string,

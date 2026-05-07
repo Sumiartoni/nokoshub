@@ -30,6 +30,7 @@ export interface ProviderOrderParams {
     countryCode: string;
     providerId?: string;
     maxPrice?: number;
+    providerPriceUsd?: number;
 }
 
 export interface ProviderOrderResult {
@@ -312,8 +313,7 @@ class HeroSMSProvider {
                 requestParams.provider_id = params.providerId;
             }
 
-            const rateInfo = await pricingService.getUsdIdrRate();
-            const maxPrice = this.toProviderPrice(params.maxPrice, rateInfo.effectiveRate);
+            const maxPrice = await this.resolveMaxPrice(params);
             if (maxPrice) {
                 requestParams.maxPrice = maxPrice;
             }
@@ -530,6 +530,15 @@ class HeroSMSProvider {
             return Number((price / usdIdrRate).toFixed(4));
         }
         return price;
+    }
+
+    private async resolveMaxPrice(params: ProviderOrderParams): Promise<number | undefined> {
+        if (params.providerPriceUsd && params.providerPriceUsd > 0) {
+            return Number(params.providerPriceUsd.toFixed(6));
+        }
+
+        const rateInfo = await pricingService.getUsdIdrRate();
+        return this.toProviderPrice(params.maxPrice, rateInfo.effectiveRate);
     }
 
     private errorSummary(err: any) {
