@@ -124,6 +124,16 @@
                 <span>Newsletter</span>
             </div>
 
+            <div class="nav-item" data-page="seo-pages" id="nav-seo-pages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 5h16"/>
+                    <path d="M4 12h10"/>
+                    <path d="M4 19h16"/>
+                    <path d="M18 9l2 3 2-3"/>
+                </svg>
+                <span>SEO Pages</span>
+            </div>
+
             <div class="nav-item" data-page="deposit-settings" id="nav-deposit-settings">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 1v22"/>
@@ -878,6 +888,120 @@
                 </div>
             </div>
 
+            <!-- ════════ SEO PAGES PAGE ════════ -->
+            <div class="page-section" id="page-seo-pages">
+                <div class="filter-bar">
+                    <div class="search-wrapper">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input type="text" class="search-input" id="seoPageSearchInput" placeholder="Cari slug atau judul halaman SEO…" oninput="filterSeoPagesList()">
+                    </div>
+                    <button class="btn btn-sm btn-success" onclick="createSeoPageDraft()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Halaman Baru
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="loadSeoPagesPage()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="content-grid" style="margin-top:16px">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Daftar Halaman SEO</div>
+                        </div>
+                        <div class="panel-body scrollable" id="seoPagesListBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">Editor Halaman SEO</div>
+                        </div>
+                        <div class="panel-body">
+                            <input type="hidden" id="seoPageIdInput">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPageSlugInput">Slug</label>
+                                    <input class="form-input" id="seoPageSlugInput" type="text" placeholder="contoh: nokos-instagram">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPagePublishedInput">Status Publish</label>
+                                    <select class="form-select" id="seoPagePublishedInput">
+                                        <option value="true">Published</option>
+                                        <option value="false">Draft</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:14px">
+                                <label class="form-label" for="seoPageTitleInput">Title Tag</label>
+                                <input class="form-input" id="seoPageTitleInput" type="text" placeholder="Judul SEO halaman">
+                            </div>
+                            <div class="form-group" style="margin-top:14px">
+                                <label class="form-label" for="seoPageMetaInput">Meta Description</label>
+                                <textarea class="form-input" id="seoPageMetaInput" rows="3" placeholder="Deskripsi singkat yang muncul di Google."></textarea>
+                            </div>
+                            <div class="form-row" style="margin-top:14px">
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPageBadgeInput">Hero Badge</label>
+                                    <input class="form-input" id="seoPageBadgeInput" type="text" placeholder="Contoh: Nokos Instagram">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPageHeroTitleInput">Hero Title</label>
+                                    <input class="form-input" id="seoPageHeroTitleInput" type="text" placeholder="Judul utama halaman">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:14px">
+                                <label class="form-label" for="seoPageIntroInput">Intro Singkat</label>
+                                <textarea class="form-input" id="seoPageIntroInput" rows="4" placeholder="Paragraf pembuka sebelum isi artikel."></textarea>
+                            </div>
+                            <div class="form-group" style="margin-top:14px">
+                                <label class="form-label" for="seoPageContentInput">Isi Artikel</label>
+                                <textarea class="form-input" id="seoPageContentInput" rows="14" placeholder="Gunakan format sederhana:&#10;## Judul Seksi&#10;Paragraf isi&#10;- Bullet point&#10;- Bullet point"></textarea>
+                            </div>
+                            <div class="form-row" style="margin-top:14px">
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPagePrimaryLabelInput">Label CTA Utama</label>
+                                    <input class="form-input" id="seoPagePrimaryLabelInput" type="text" placeholder="Daftar Gratis">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPagePrimaryHrefInput">URL CTA Utama</label>
+                                    <input class="form-input" id="seoPagePrimaryHrefInput" type="text" placeholder="/register/">
+                                </div>
+                            </div>
+                            <div class="form-row" style="margin-top:14px">
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPageSecondaryLabelInput">Label CTA Kedua</label>
+                                    <input class="form-input" id="seoPageSecondaryLabelInput" type="text" placeholder="Lihat FAQ">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="seoPageSecondaryHrefInput">URL CTA Kedua</label>
+                                    <input class="form-input" id="seoPageSecondaryHrefInput" type="text" placeholder="/#faq">
+                                </div>
+                            </div>
+                            <div class="form-hint" style="margin-top:14px">
+                                Slug akan dipublish sebagai URL `https://domainanda/slug/`. Isi artikel mendukung format `## judul`, `### subjudul`, paragraf biasa, dan bullet `-`.
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--border)">
+                            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                                <button class="btn btn-primary" id="saveSeoPageBtn" onclick="saveSeoPage()">Simpan Halaman</button>
+                                <button class="btn btn-outline" onclick="createSeoPageDraft()">Reset Form</button>
+                            </div>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                                <button class="btn btn-outline" onclick="previewSeoPage()">Preview URL</button>
+                                <button class="btn btn-danger" onclick="deleteSeoPage()">Hapus Halaman</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- ════════ DEPOSIT SETTINGS PAGE ════════ -->
             <div class="page-section" id="page-deposit-settings">
                 <div class="filter-bar">
@@ -1308,7 +1432,7 @@
 </div>
 
 <script src="js/auth.js?v=20260424-1"></script>
-<script src="js/dashboard.js?v=20260506-2"></script>
+<script src="js/dashboard.js?v=20260507-1"></script>
 </body>
 </html>
 

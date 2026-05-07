@@ -15,6 +15,7 @@ import { turnstileService } from '../security/turnstile.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { promoSettingsService } from '../settings/promo-settings.service';
+import { seoPagesService, normalizeSlug, type SeoPageRecord } from '../settings/seo-pages.service';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,43 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 topupUrl: promoSettings.topupUrl,
             },
         };
+    });
+
+    fastify.get('/seo/render', async (req, reply) => {
+        const query = req.query as { path?: string };
+        const rawPath = String(query.path || '/');
+        const slug = normalizeSlug(rawPath);
+        if (!slug) {
+            return reply.status(404).type('text/html').send('<h1>Not Found</h1>');
+        }
+
+        const page = await seoPagesService.getBySlug(slug);
+        if (!page || !page.isPublished) {
+            return reply.status(404).type('text/html').send('<h1>Not Found</h1>');
+        }
+
+        const normalizedPath = `/${page.slug}/`;
+        if (rawPath !== normalizedPath) {
+            return reply.code(301).redirect(normalizedPath);
+        }
+
+        const allPages = (await seoPagesService.list()).filter((item) => item.isPublished && item.slug !== page.slug).slice(0, 4);
+        const siteUrl = `${String(req.headers['x-forwarded-proto'] || 'https')}://${String(req.headers.host || 'nokoshub.store')}`;
+        reply.type('text/html; charset=utf-8').send(renderSeoPageHtml(page, allPages, siteUrl));
+    });
+
+    fastify.get('/seo/sitemap.xml', async (req, reply) => {
+        const siteUrl = `${String(req.headers['x-forwarded-proto'] || 'https')}://${String(req.headers.host || 'nokoshub.store')}`;
+        const pages = (await seoPagesService.list()).filter((page) => page.isPublished);
+        const urls = [
+            `${siteUrl}/`,
+            `${siteUrl}/kebijakan-privasi/`,
+            `${siteUrl}/syarat-ketentuan/`,
+            `${siteUrl}/refund/`,
+            ...pages.map((page) => `${siteUrl}/${page.slug}/`),
+        ];
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `  <url>\n    <loc>${escapeXml(url)}</loc>\n    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${url === `${siteUrl}/` ? '1.0' : '0.8'}</priority>\n  </url>`).join('\n')}\n</urlset>`;
+        reply.type('application/xml; charset=utf-8').send(xml);
     });
 
     // GET /api/auth/register/config
@@ -995,4 +1033,124 @@ function normalizeTelegramHandle(value?: string | null) {
 
 function buildTelegramUrl(handle: string) {
     return `https://t.me/${handle.replace(/^@/, '')}`;
+}
+
+function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], siteUrl: string) {
+    const canonical = `${siteUrl}/${page.slug}/`;
+    const body = renderSeoMarkdown(page.content);
+    const related = relatedPages.length
+        ? relatedPages.map((item) => `<a href="/${escapeHtml(item.slug)}/">${escapeHtml(item.heroBadge || item.title)}</a>`).join('')
+        : `<a href="/kebijakan-privasi/">Kebijakan Privasi</a><a href="/syarat-ketentuan/">Syarat & Ketentuan</a>`;
+
+    return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(page.title)}</title>
+  <meta name="description" content="${escapeHtml(page.metaDescription)}" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="${escapeHtml(canonical)}" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${escapeHtml(page.title)}" />
+  <meta property="og:description" content="${escapeHtml(page.metaDescription)}" />
+  <meta property="og:url" content="${escapeHtml(canonical)}" />
+  <meta property="og:image" content="${escapeHtml(siteUrl)}/assets/images/hero-bg.png" />
+  <meta name="theme-color" content="#4F9CF9" />
+  <link rel="stylesheet" href="/assets/css/style.css?v=20260507-1" />
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="seo-page-body">
+  <main class="seo-page-shell">
+    <div class="seo-page-topbar">
+      <a href="/" class="seo-page-back"><i data-lucide="arrow-left"></i> Kembali ke Beranda</a>
+      <div class="section-badge"><i data-lucide="file-text"></i> Halaman SEO NokosHUB</div>
+    </div>
+    <section class="seo-page-hero">
+      <div>
+        <div class="section-badge">${escapeHtml(page.heroBadge)}</div>
+        <h1>${escapeHtml(page.heroTitle)}</h1>
+        <p>${escapeHtml(page.intro)}</p>
+        <div class="seo-page-actions">
+          <a href="${escapeHtml(page.primaryCtaHref)}" class="btn btn-primary">${escapeHtml(page.primaryCtaLabel)}</a>
+          <a href="${escapeHtml(page.secondaryCtaHref)}" class="btn btn-outline">${escapeHtml(page.secondaryCtaLabel)}</a>
+        </div>
+      </div>
+      <div class="seo-page-stat-grid">
+        <div class="seo-page-stat"><strong>SEO Ready</strong><span>Slug, canonical, meta, dan sitemap aktif</span></div>
+        <div class="seo-page-stat"><strong>Dynamic</strong><span>Dikelola dari backoffice tanpa edit file</span></div>
+        <div class="seo-page-stat"><strong>Fast</strong><span>Landing page ringan untuk crawl Google</span></div>
+        <div class="seo-page-stat"><strong>Internal Link</strong><span>Terhubung ke cluster halaman SEO lain</span></div>
+      </div>
+    </section>
+    <section class="seo-page-grid">
+      <div class="seo-page-main">
+        <article class="seo-page-card">
+          ${body}
+        </article>
+      </div>
+      <aside class="seo-page-side">
+        <div class="seo-page-card">
+          <h2>Halaman Terkait</h2>
+          <div class="seo-page-mini-links">${related}</div>
+        </div>
+      </aside>
+    </section>
+  </main>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>`;
+}
+
+function renderSeoMarkdown(input: string) {
+    const lines = String(input || '').split(/\r?\n/);
+    const chunks: string[] = [];
+    let listBuffer: string[] = [];
+
+    const flushList = () => {
+        if (!listBuffer.length) return;
+        chunks.push(`<ul>${listBuffer.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`);
+        listBuffer = [];
+    };
+
+    for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+            flushList();
+            continue;
+        }
+        if (line.startsWith('## ')) {
+            flushList();
+            chunks.push(`<h2>${escapeHtml(line.slice(3))}</h2>`);
+            continue;
+        }
+        if (line.startsWith('### ')) {
+            flushList();
+            chunks.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
+            continue;
+        }
+        if (line.startsWith('- ')) {
+            listBuffer.push(line.slice(2));
+            continue;
+        }
+        flushList();
+        chunks.push(`<p>${escapeHtml(line)}</p>`);
+    }
+
+    flushList();
+    return chunks.join('');
+}
+
+function escapeHtml(value: string) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeXml(value: string) {
+    return escapeHtml(value);
 }
