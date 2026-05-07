@@ -2,43 +2,49 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://nokoshub.store/</loc>
-    <lastmod>2026-04-22</lastmod>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://nokoshub.store/#layanan</loc>
-    <lastmod>2026-04-22</lastmod>
+    <loc>https://nokoshub.store/nokos-whatsapp/</loc>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nokoshub.store/#cara-kerja</loc>
-    <lastmod>2026-04-22</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <loc>https://nokoshub.store/nokos-tele/</loc>
+    <lastmod>2026-05-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://nokoshub.store/#faq</loc>
-    <lastmod>2026-04-22</lastmod>
+    <loc>https://nokoshub.store/otp-google/</loc>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://nokoshub.store/nomor-virtual-shopee/</loc>
+    <lastmod>2026-05-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
   <url>
     <loc>https://nokoshub.store/kebijakan-privasi/</loc>
-    <lastmod>2026-04-22</lastmod>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://nokoshub.store/syarat-ketentuan/</loc>
-    <lastmod>2026-04-22</lastmod>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://nokoshub.store/refund/</loc>
-    <lastmod>2026-04-22</lastmod>
+    <lastmod>2026-05-07</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
