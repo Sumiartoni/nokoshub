@@ -922,7 +922,10 @@ function scheduleBotCommandsSetup(bot: TelegramBot, attempt = 1) {
                 return;
             }
 
-            const retryMs = Math.min(TELEGRAM_COMMANDS_RETRY_MAX_MS, attempt * 15000);
+            const retryAfterSeconds = extractTelegramRetryAfterSeconds(err);
+            const retryMs = retryAfterSeconds
+                ? Math.min(TELEGRAM_COMMANDS_RETRY_MAX_MS, retryAfterSeconds * 1000)
+                : Math.min(TELEGRAM_COMMANDS_RETRY_MAX_MS, attempt * 15000);
             logger.warn(
                 {
                     ...summarizeTelegramNetworkIssue(err),
@@ -945,9 +948,10 @@ function logTelegramNetworkWarning(err: any, message: string) {
 
 function summarizeTelegramNetworkIssue(err: any) {
     return {
-        code: 'TELEGRAM_NETWORK_TIMEOUT',
+        code: isTelegramRateLimitIssue(err) ? 'TELEGRAM_RATE_LIMIT' : 'TELEGRAM_NETWORK_TIMEOUT',
         retryable: true,
         networkCodes: extractTelegramNetworkCodes(err),
+        retryAfterSeconds: extractTelegramRetryAfterSeconds(err),
     };
 }
 
@@ -968,6 +972,8 @@ function summarizeTelegramError(err: any, includeStack = true) {
 }
 
 function isTelegramNetworkIssue(err: any): boolean {
+    if (isTelegramRateLimitIssue(err)) return true;
+
     const text = collectTelegramErrorText(err).toUpperCase();
     return [
         'ETIMEDOUT',
@@ -980,6 +986,21 @@ function isTelegramNetworkIssue(err: any): boolean {
         'TLSWRAP',
         'SOCKET',
     ].some((needle) => text.includes(needle));
+}
+
+function isTelegramRateLimitIssue(err: any): boolean {
+    const code = Number(err?.response?.body?.error_code ?? err?.response?.data?.error_code ?? err?.code);
+    const text = collectTelegramErrorText(err).toUpperCase();
+    return code === 429 || text.includes('TOO MANY REQUESTS') || text.includes('RETRY AFTER');
+}
+
+function extractTelegramRetryAfterSeconds(err: any): number | undefined {
+    const retryAfter = Number(
+        err?.response?.body?.parameters?.retry_after
+        ?? err?.response?.data?.parameters?.retry_after
+        ?? err?.parameters?.retry_after
+    );
+    return Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined;
 }
 
 function collectTelegramErrorText(err: any): string {

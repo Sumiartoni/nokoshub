@@ -4,6 +4,14 @@ import { createCsBot } from '../bot cs/bot';
 import { config } from './app/config';
 import logger from './utils/logger';
 
+process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled promise rejection');
+});
+
+process.on('uncaughtException', (err) => {
+    logger.error({ err }, 'Uncaught exception');
+});
+
 async function main() {
     // Start Fastify server first so the API remains available even if
     // Telegram or other auxiliary services fail during boot.
