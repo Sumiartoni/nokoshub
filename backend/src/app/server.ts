@@ -46,7 +46,6 @@ export async function buildServer() {
     await app.register(rateLimit, {
         max: 100,
         timeWindow: '1 minute',
-        redis: redisConnection,
         keyGenerator: (req) =>
             req.headers['x-forwarded-for']?.toString() || req.ip,
     });

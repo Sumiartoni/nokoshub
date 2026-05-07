@@ -5,6 +5,7 @@ import { otpQueue } from '../../queue/queue';
 import logger from '../../utils/logger';
 import { formatRupiah } from '../../utils/helpers';
 import type { OtpProviderKey } from '../providers/provider-registry';
+import { runOtpPollingJob, type OtpJobData } from '../../workers/otp-poll-runner';
 
 export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
 
@@ -91,20 +92,35 @@ export const orderService = {
 
             const user = await prisma.user.findUnique({ where: { id: userId } });
             if (user) {
-                await otpQueue.add(
-                    'poll-otp',
-                    {
-                        providerKey: providerRuntime.providerKey,
-                        orderId: activatedOrder.id,
-                        providerOrderId: result.order_id,
-                        telegramId: user.telegramId,
-                    },
-                    {
-                        attempts: 1,
-                        removeOnComplete: true,
-                        removeOnFail: false,
-                    }
-                );
+                const pollingJob: OtpJobData = {
+                    providerKey: providerRuntime.providerKey,
+                    orderId: activatedOrder.id,
+                    providerOrderId: result.order_id,
+                    telegramId: user.telegramId,
+                };
+
+                try {
+                    await otpQueue.add(
+                        'poll-otp',
+                        pollingJob,
+                        {
+                            attempts: 1,
+                            removeOnComplete: true,
+                            removeOnFail: false,
+                        }
+                    );
+                } catch (queueErr) {
+                    logger.warn(
+                        { err: queueErr, orderId: activatedOrder.id, providerOrderId: result.order_id },
+                        'Failed to enqueue OTP polling job, using local fallback runner'
+                    );
+                    void runOtpPollingJob(pollingJob).catch((fallbackErr) => {
+                        logger.error(
+                            { err: fallbackErr, orderId: activatedOrder.id, providerOrderId: result.order_id },
+                            'Local OTP fallback runner failed'
+                        );
+                    });
+                }
             }
 
             logger.info(
