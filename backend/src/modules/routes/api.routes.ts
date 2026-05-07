@@ -412,13 +412,13 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             paymentService.getInvoices(user.id, 50),
         ]);
 
-        const successOrders = orders.filter((order) => order.status === 'SUCCESS').length;
+        const successfulOrders = orders.filter((order) => order.status === 'SUCCESS');
+        const successOrders = successfulOrders.length;
         const depositTotal = transactions
             .filter((tx) => tx.type === 'DEPOSIT')
             .reduce((sum, tx) => sum + tx.amount, 0);
-        const spentTotal = Math.abs(transactions
-            .filter((tx) => tx.type === 'DEDUCT')
-            .reduce((sum, tx) => sum + tx.amount, 0));
+        const spentTotal = successfulOrders
+            .reduce((sum, order) => sum + (order.price?.sellPrice ?? 0), 0);
         const refundTotal = transactions
             .filter((tx) => tx.type === 'REFUND')
             .reduce((sum, tx) => sum + tx.amount, 0);

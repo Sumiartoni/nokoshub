@@ -741,7 +741,7 @@ function updateDashboardStats() {
   set('tx-total-deposit', FMT(S.summary.depositTotal));
   set('tx-total-deposit-note', `${depositCount} transaksi`);
   set('tx-total-spent', FMT(S.summary.spentTotal));
-  set('tx-total-spent-note', `${totalOrders} pesanan`);
+  set('tx-total-spent-note', `${successOrders} pesanan sukses`);
   set('prof-orders', String(totalOrders));
   set('prof-success-rate', `${Math.round(successRate)}%`);
 
