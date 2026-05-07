@@ -1542,7 +1542,7 @@
         const webOnly = users.filter((u) => u.accountType === 'WEB_ONLY').length;
         const linked = users.filter((u) => u.accountType === 'WEB_LINKED').length;
         const totalBalance = users.reduce((sum, u) => sum + Number(u.balance || 0), 0);
-        const totalPurchase = users.reduce((sum, u) => sum + Number(u.totalDeduct || 0), 0);
+        const totalPurchase = users.reduce((sum, u) => sum + Number(u.totalPurchase || 0), 0);
         const totalDeposit = users.reduce((sum, u) => sum + Number(u.totalDeposit || 0), 0);
 
         document.getElementById('user-total').textContent = String(total);
@@ -1580,9 +1580,9 @@
                             <div class="text-sm text-muted">${u.username ? '@' + escText(u.username) : (u.telegramId ? 'Belum ada username' : 'Belum linked')}</div>
                         </td>
                         <td class="mono fw-600">${formatRupiahFull(u.balance || 0)}</td>
-                        <td class="mono text-rose fw-600">${formatRupiahFull(u.totalDeduct || 0)}</td>
+                        <td class="mono text-rose fw-600">${formatRupiahFull(u.totalPurchase || 0)}</td>
                         <td class="mono text-emerald fw-600">${formatRupiahFull(u.totalDeposit)}</td>
-                        <td class="mono">${u.orderCount || 0}</td>
+                        <td class="mono">${u.successOrderCount || 0} / ${u.orderCount || 0}</td>
                         <td class="text-muted text-sm">${formatDateShort(u.lastActivity)}</td>
                         <td class="actions-cell">
                             <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjustForUser(${escAttr(u.accountType)}, ${escAttr(u.telegramId || '')}, ${escAttr(u.webUserId || '')}, ${escAttr(u.email || displayName)})"` : 'disabled title="Target user tidak valid"'} >

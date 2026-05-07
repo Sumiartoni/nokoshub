@@ -348,11 +348,39 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             ])
             : [[], []];
 
+        const successfulOrderSummary = new Map<string, { totalPurchase: number; successOrderCount: number }>();
+        if (relevantUserIds.length) {
+            const successfulOrders = await prisma.order.findMany({
+                where: {
+                    userId: { in: relevantUserIds },
+                    status: 'SUCCESS',
+                },
+                select: {
+                    userId: true,
+                    price: {
+                        select: { sellPrice: true },
+                    },
+                },
+            });
+
+            for (const order of successfulOrders) {
+                const summary = successfulOrderSummary.get(order.userId) ?? {
+                    totalPurchase: 0,
+                    successOrderCount: 0,
+                };
+                summary.totalPurchase += order.price.sellPrice;
+                summary.successOrderCount += 1;
+                successfulOrderSummary.set(order.userId, summary);
+            }
+        }
+
         const txSummary = new Map<string, {
             txCount: number;
             totalDeposit: number;
             totalRefund: number;
             totalDeduct: number;
+            totalPurchase: number;
+            successOrderCount: number;
             lastActivity: Date | null;
         }>();
 
@@ -362,6 +390,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 totalDeposit: 0,
                 totalRefund: 0,
                 totalDeduct: 0,
+                totalPurchase: 0,
+                successOrderCount: 0,
                 lastActivity: null,
             };
             const amount = group._sum.amount ?? 0;
@@ -378,10 +408,27 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 totalDeposit: 0,
                 totalRefund: 0,
                 totalDeduct: 0,
+                totalPurchase: 0,
+                successOrderCount: 0,
                 lastActivity: null,
             };
             summary.lastActivity = group._max.createdAt;
             txSummary.set(group.userId, summary);
+        }
+
+        for (const [userId, successSummary] of successfulOrderSummary.entries()) {
+            const summary = txSummary.get(userId) ?? {
+                txCount: 0,
+                totalDeposit: 0,
+                totalRefund: 0,
+                totalDeduct: 0,
+                totalPurchase: 0,
+                successOrderCount: 0,
+                lastActivity: null,
+            };
+            summary.totalPurchase = successSummary.totalPurchase;
+            summary.successOrderCount = successSummary.successOrderCount;
+            txSummary.set(userId, summary);
         }
 
         const rows = new Map<string, any>();
@@ -406,6 +453,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 totalDeposit: summary?.totalDeposit ?? 0,
                 totalRefund: summary?.totalRefund ?? 0,
                 totalDeduct: summary?.totalDeduct ?? 0,
+                totalPurchase: summary?.totalPurchase ?? 0,
+                successOrderCount: summary?.successOrderCount ?? 0,
                 lastActivity: summary?.lastActivity ?? user.updatedAt,
                 createdAt: user.createdAt,
                 webCreatedAt: null,
@@ -436,6 +485,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                     totalDeposit: summary?.totalDeposit ?? 0,
                     totalRefund: summary?.totalRefund ?? 0,
                     totalDeduct: summary?.totalDeduct ?? 0,
+                    totalPurchase: summary?.totalPurchase ?? 0,
+                    successOrderCount: summary?.successOrderCount ?? 0,
                     lastActivity: maxDate(summary?.lastActivity ?? webWallet?.updatedAt ?? null, webUser.updatedAt),
                     createdAt: webUser.createdAt,
                     webCreatedAt: webUser.createdAt,
