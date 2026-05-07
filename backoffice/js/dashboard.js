@@ -1361,7 +1361,7 @@
             showToast('Isi slug terlebih dahulu', 'warning');
             return;
         }
-        window.open(`/${slug}/`, '_blank', 'noopener');
+        window.open(buildPublicSeoUrl(slug), '_blank', 'noopener');
     };
 
     window.saveSeoPage = async function () {
@@ -1476,6 +1476,12 @@
         document.getElementById('seoPageSecondaryLabelInput').value = page.secondaryCtaLabel || 'Lihat FAQ';
         document.getElementById('seoPageSecondaryHrefInput').value = page.secondaryCtaHref || '/#faq';
         document.getElementById('seoPagePublishedInput').value = page.isPublished === false ? 'false' : 'true';
+    }
+
+    function buildPublicSeoUrl(slug) {
+        const host = window.location.host || '';
+        const publicHost = host.startsWith('admin.') ? host.slice(6) : host;
+        return `${window.location.protocol}//${publicHost}/${slug}/`;
     }
 
     window.loadServices = async function () {

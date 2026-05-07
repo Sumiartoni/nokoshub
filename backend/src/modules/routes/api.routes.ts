@@ -140,11 +140,18 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         reply.type('text/html; charset=utf-8').send(renderSeoPageHtml(page, allPages, siteUrl));
     });
 
+    fastify.get('/blog/render', async (req, reply) => {
+        const siteUrl = `${String(req.headers['x-forwarded-proto'] || 'https')}://${String(req.headers.host || 'nokoshub.store')}`;
+        const pages = (await seoPagesService.list()).filter((item) => item.isPublished);
+        reply.type('text/html; charset=utf-8').send(renderBlogIndexHtml(pages, siteUrl));
+    });
+
     fastify.get('/seo/sitemap.xml', async (req, reply) => {
         const siteUrl = `${String(req.headers['x-forwarded-proto'] || 'https')}://${String(req.headers.host || 'nokoshub.store')}`;
         const pages = (await seoPagesService.list()).filter((page) => page.isPublished);
         const urls = [
             `${siteUrl}/`,
+            `${siteUrl}/blog/`,
             `${siteUrl}/kebijakan-privasi/`,
             `${siteUrl}/syarat-ketentuan/`,
             `${siteUrl}/refund/`,
@@ -1065,7 +1072,7 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
   <main class="seo-page-shell">
     <div class="seo-page-topbar">
       <a href="/" class="seo-page-back"><i data-lucide="arrow-left"></i> Kembali ke Beranda</a>
-      <div class="section-badge"><i data-lucide="file-text"></i> Halaman SEO NokosHUB</div>
+      <div class="section-badge"><i data-lucide="file-text"></i> Blog NokosHUB</div>
     </div>
     <section class="seo-page-hero">
       <div>
@@ -1076,12 +1083,6 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
           <a href="${escapeHtml(page.primaryCtaHref)}" class="btn btn-primary">${escapeHtml(page.primaryCtaLabel)}</a>
           <a href="${escapeHtml(page.secondaryCtaHref)}" class="btn btn-outline">${escapeHtml(page.secondaryCtaLabel)}</a>
         </div>
-      </div>
-      <div class="seo-page-stat-grid">
-        <div class="seo-page-stat"><strong>SEO Ready</strong><span>Slug, canonical, meta, dan sitemap aktif</span></div>
-        <div class="seo-page-stat"><strong>Dynamic</strong><span>Dikelola dari backoffice tanpa edit file</span></div>
-        <div class="seo-page-stat"><strong>Fast</strong><span>Landing page ringan untuk crawl Google</span></div>
-        <div class="seo-page-stat"><strong>Internal Link</strong><span>Terhubung ke cluster halaman SEO lain</span></div>
       </div>
     </section>
     <section class="seo-page-grid">
@@ -1096,6 +1097,59 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
           <div class="seo-page-mini-links">${related}</div>
         </div>
       </aside>
+    </section>
+  </main>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>`;
+}
+
+function renderBlogIndexHtml(pages: SeoPageRecord[], siteUrl: string) {
+    const cards = pages.map((page) => `
+        <a class="seo-cluster-card cartoon-card" href="/${escapeHtml(page.slug)}/">
+          <div class="seo-cluster-icon">📝</div>
+          <h3>${escapeHtml(page.heroTitle || page.title)}</h3>
+          <p>${escapeHtml(page.metaDescription)}</p>
+          <span>Baca artikel →</span>
+        </a>
+    `).join('');
+
+    return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blog NokosHUB | Artikel Nokos, Nomor Virtual, dan OTP</title>
+  <meta name="description" content="Kumpulan artikel NokosHUB seputar nokos, nomor virtual, SMS OTP, verifikasi akun, dan panduan penggunaan layanan." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="${escapeHtml(siteUrl)}/blog/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Blog NokosHUB | Artikel Nokos, Nomor Virtual, dan OTP" />
+  <meta property="og:description" content="Baca seluruh artikel NokosHUB tentang nokos WhatsApp, nokos Telegram, OTP Google, OTP Shopee, dan topik nomor virtual lainnya." />
+  <meta property="og:url" content="${escapeHtml(siteUrl)}/blog/" />
+  <meta property="og:image" content="${escapeHtml(siteUrl)}/assets/images/hero-bg.png" />
+  <meta name="theme-color" content="#4F9CF9" />
+  <link rel="stylesheet" href="/assets/css/style.css?v=20260507-1" />
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="seo-page-body">
+  <main class="seo-page-shell">
+    <div class="seo-page-topbar">
+      <a href="/" class="seo-page-back"><i data-lucide="arrow-left"></i> Kembali ke Beranda</a>
+      <div class="section-badge"><i data-lucide="newspaper"></i> Blog NokosHUB</div>
+    </div>
+    <section class="seo-page-hero">
+      <div>
+        <div class="section-badge">Artikel NokosHUB</div>
+        <h1>Blog NokosHUB untuk Nokos, Nomor Virtual, dan OTP</h1>
+        <p>Temukan seluruh artikel NokosHUB tentang nokos WhatsApp, nokos Telegram, OTP Google, OTP Shopee, nomor virtual, dan panduan terkait verifikasi akun.</p>
+      </div>
+    </section>
+    <section class="section seo-cluster-section" style="padding-top:0">
+      <div class="seo-cluster-grid">
+        ${cards || `<div class="seo-page-card"><p>Belum ada artikel yang dipublish.</p></div>`}
+      </div>
     </section>
   </main>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
