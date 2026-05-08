@@ -64,7 +64,7 @@ const S = {
     price: null,
     pendingPriceOptionIndex: 0,
     priceOptions: [],
-    serverFilter: 'all',
+    serverFilter: 'server1',
     order: null,
     countries: [],
     busy: false,
@@ -146,16 +146,11 @@ const FALLBACK_COUNTRIES = [
 ];
 
 const SERVER_FILTER_LABEL = {
-  all: 'Semua Server',
   server1: 'Server 1',
   server2: 'Server 2',
 };
 
 const SERVER_PUBLIC_COPY = {
-  all: {
-    title: 'Semua Server',
-    description: 'Tampilkan semua opsi terbaik',
-  },
   server1: {
     title: 'Server 1',
     description: 'Jalur utama untuk layanan OTP',
@@ -803,9 +798,7 @@ function renderSvcs() {
   const q = (document.getElementById('svcSearch')?.value || '').toLowerCase().trim();
   const filtered = SVC.filter(s => {
     const matchesQuery = !q || s.n.toLowerCase().includes(q);
-    const matchesServer = S.buy.serverFilter === 'all'
-      ? true
-      : normalizeServerFilter(s.serverLabel) === S.buy.serverFilter;
+    const matchesServer = normalizeServerFilter(s.serverLabel) === S.buy.serverFilter;
     return matchesQuery && matchesServer;
   });
 
@@ -856,19 +849,18 @@ function goStep(n) {
 function clearServerOptions() {
   S.buy.pendingPriceOptionIndex = 0;
   S.buy.priceOptions = [];
-  const wrap = document.getElementById('serverOptionsWrap');
   const list = document.getElementById('serverOptionsList');
   const sub = document.getElementById('serverOptionsSub');
   if (list) list.innerHTML = '';
   if (sub) sub.textContent = 'Pilih server yang ingin dipakai untuk order.';
-  if (wrap) wrap.style.display = 'none';
+  closeModal('modalServerOptions');
 }
 
 function setServerFilter(filter, button) {
-  S.buy.serverFilter = ['server1', 'server2'].includes(filter) ? filter : 'all';
+  S.buy.serverFilter = ['server1', 'server2'].includes(filter) ? filter : 'server1';
   updateServerFilterUi(button);
   clearServerOptions();
-  if (S.buy.svc && S.buy.serverFilter !== 'all' && normalizeServerFilter(S.buy.svc.serverLabel) !== S.buy.serverFilter) {
+  if (S.buy.svc && normalizeServerFilter(S.buy.svc.serverLabel) !== S.buy.serverFilter) {
     S.buy.svc = null;
     S.buy.countries = [];
     S.buy.country = null;
@@ -892,7 +884,7 @@ function updateServerFilterUi(activeButton) {
     el.classList.toggle('active', el.id === `serverPick-${S.buy.serverFilter}`);
   });
   if (activeButton) activeButton.classList.add('active');
-  set('selectedServerLabel', SERVER_FILTER_LABEL[S.buy.serverFilter] || 'Semua Server');
+  set('selectedServerLabel', SERVER_FILTER_LABEL[S.buy.serverFilter] || 'Server 1');
 }
 
 async function selectSvc(id) {
@@ -991,10 +983,7 @@ async function selectCountry(countryId, el) {
       }))
       .sort((a, b) => Number(a.sellPrice) - Number(b.sellPrice));
 
-    const options = allOptions.filter((option) => {
-      if (S.buy.serverFilter === 'all') return true;
-      return normalizeServerFilter(option.serverLabel) === S.buy.serverFilter;
-    });
+    const options = allOptions.filter((option) => normalizeServerFilter(option.serverLabel) === S.buy.serverFilter);
 
     if (!options.length) {
       const serverName = SERVER_FILTER_LABEL[S.buy.serverFilter] || 'server pilihan';
@@ -1004,14 +993,9 @@ async function selectCountry(countryId, el) {
     S.buy.priceOptions = options;
     S.buy.pendingPriceOptionIndex = 0;
 
-    if (options.length === 1) {
-      await chooseServerOption(options[0]);
-      return;
-    }
-
     set('selSvcPrice', `Mulai ${FMT(options[0].sellPrice)}`);
     renderServerOptions();
-    showToast('Pilih server yang ingin digunakan.', 'info');
+    openModal('modalServerOptions');
   } catch (err) {
     console.error(err);
     showToast(`Gagal order: ${err.message}`, 'error');
@@ -1022,22 +1006,19 @@ async function selectCountry(countryId, el) {
 }
 
 function renderServerOptions() {
-  const wrap = document.getElementById('serverOptionsWrap');
   const list = document.getElementById('serverOptionsList');
   const sub = document.getElementById('serverOptionsSub');
-  if (!wrap || !list) return;
+  if (!list) return;
 
   const options = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions : [];
   if (!options.length) {
-    wrap.style.display = 'none';
     list.innerHTML = '';
     return;
   }
 
-  wrap.style.display = 'block';
   if (sub) {
     sub.textContent = S.buy.country
-      ? `Tersedia ${options.length} opsi server untuk ${S.buy.country.n}.`
+      ? `Tersedia ${options.length} opsi ${SERVER_FILTER_LABEL[S.buy.serverFilter] || 'server'} untuk ${S.buy.country.n}.`
       : 'Pilih server yang ingin dipakai untuk order.';
   }
 
@@ -1129,6 +1110,7 @@ async function chooseServerOption(option) {
     return;
   }
 
+  closeModal('modalServerOptions');
   set('selSvcPrice', `${S.buy.price.serverLabel} • ${FMT(S.buy.price.sellPrice)}`);
   await createOrder();
 }

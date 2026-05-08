@@ -277,15 +277,10 @@
                 <div class="buy-server-title">Pilih Server</div>
                 <div class="buy-server-sub">Tentukan jalur server dulu, lalu pilih layanan OTP yang ingin dipakai.</div>
               </div>
-              <div class="buy-server-status" id="selectedServerLabel">Semua Server</div>
+              <div class="buy-server-status" id="selectedServerLabel">Server 1</div>
             </div>
             <div class="buy-server-grid">
-              <button class="server-pick active" id="serverPick-all" type="button" onclick="setServerFilter('all', this)">
-                <span class="server-pick-badge">Auto</span>
-                <span class="server-pick-name">Semua Server</span>
-                <span class="server-pick-desc">Tampilkan semua opsi terbaik</span>
-              </button>
-              <button class="server-pick" id="serverPick-server1" type="button" onclick="setServerFilter('server1', this)">
+              <button class="server-pick active" id="serverPick-server1" type="button" onclick="setServerFilter('server1', this)">
                 <span class="server-pick-badge">Server 1</span>
                 <span class="server-pick-name">Server 1</span>
                 <span class="server-pick-desc">Jalur utama untuk layanan OTP</span>
@@ -328,13 +323,6 @@
               </div>
             </div>
             <div class="country-grid" id="countryGrid"><!-- JS --></div>
-            <div class="server-options-wrap" id="serverOptionsWrap" style="display:none;">
-              <div class="server-options-head">
-                <div class="server-options-title">Pilih Server</div>
-                <div class="server-options-sub" id="serverOptionsSub">Pilih server yang ingin dipakai untuk order.</div>
-              </div>
-              <div class="server-options-list" id="serverOptionsList"><!-- JS --></div>
-            </div>
           </div>
 
           <!-- SUB-PAGE 3: Waiting / Result -->
@@ -940,6 +928,15 @@
       </div>
       <button class="btn btn-outline btn-full" onclick="refreshTopupInvoiceStatus()" style="margin-top:8px;">Cek Status Pembayaran</button>
       <button class="btn btn-outline btn-full" onclick="closeModal('modalTopupOk');nav('transactions');" style="margin-top:8px;">Lihat Riwayat</button>
+    </div>
+  </div>
+
+  <div class="modal-ov" id="modalServerOptions">
+    <div class="modal-box">
+      <div class="modal-x" onclick="closeModal('modalServerOptions')">✕</div>
+      <div class="modal-title">Pilih Harga</div>
+      <div class="modal-sub" id="serverOptionsSub">Pilih server yang ingin dipakai untuk order.</div>
+      <div class="server-options-list" id="serverOptionsList"><!-- JS --></div>
     </div>
   </div>
 
