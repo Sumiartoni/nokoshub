@@ -933,37 +933,31 @@ input, textarea, select { user-select: text; }
 }
 
 .server-options-list {
+  display: block;
+}
+
+.server-option-picker {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
-.server-option-card {
+.server-option-label {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.server-option-select {
+  min-height: 48px;
+  font-weight: 800;
+}
+
+.server-option-detail {
   padding: 14px;
   background: #fffdf6;
   border: var(--bw) solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-xs);
-  cursor: pointer;
-  transition: var(--ease);
-}
-
-.server-option-card:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-s);
-}
-
-.server-option-card.loading {
-  opacity: 0.68;
-  pointer-events: none;
-}
-
-.server-option-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
 }
 
 .server-option-badge {
@@ -986,6 +980,14 @@ input, textarea, select { user-select: text; }
   color: var(--muted);
 }
 
+.server-option-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .server-option-price {
   font-family: var(--font-h);
   font-size: 1.05rem;
@@ -997,6 +999,11 @@ input, textarea, select { user-select: text; }
   font-size: 0.72rem;
   font-weight: 700;
   color: var(--muted);
+}
+
+.server-option-cta.loading {
+  opacity: 0.68;
+  pointer-events: none;
 }
 
 .buy-selection-head {

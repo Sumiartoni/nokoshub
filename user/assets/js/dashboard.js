@@ -62,6 +62,7 @@ const S = {
     svc: null,
     country: null,
     price: null,
+    pendingPriceOptionIndex: 0,
     priceOptions: [],
     serverFilter: 'all',
     order: null,
@@ -831,6 +832,7 @@ function resetBuySteps() {
   stopOtpWatch();
   S.buy.country = null;
   S.buy.price = null;
+  S.buy.pendingPriceOptionIndex = 0;
   S.buy.priceOptions = [];
   S.buy.order = null;
   clearServerOptions();
@@ -852,6 +854,7 @@ function goStep(n) {
 }
 
 function clearServerOptions() {
+  S.buy.pendingPriceOptionIndex = 0;
   S.buy.priceOptions = [];
   const wrap = document.getElementById('serverOptionsWrap');
   const list = document.getElementById('serverOptionsList');
@@ -899,6 +902,7 @@ async function selectSvc(id) {
   S.buy.countries = [];
   S.buy.country = null;
   S.buy.price = null;
+  S.buy.pendingPriceOptionIndex = 0;
   S.buy.priceOptions = [];
 
   set('selSvcIcon', s.e);
@@ -969,6 +973,7 @@ async function selectCountry(countryId, el) {
 
   S.buy.country = country;
   S.buy.price = null;
+  S.buy.pendingPriceOptionIndex = 0;
   clearServerOptions();
   S.buy.busy = true;
   el?.classList.add('loading');
@@ -997,6 +1002,7 @@ async function selectCountry(countryId, el) {
     }
 
     S.buy.priceOptions = options;
+    S.buy.pendingPriceOptionIndex = 0;
 
     if (options.length === 1) {
       await chooseServerOption(options[0]);
@@ -1035,16 +1041,35 @@ function renderServerOptions() {
       : 'Pilih server yang ingin dipakai untuk order.';
   }
 
-  list.innerHTML = options.map((option, index) => `
-    <div class="server-option-card" onclick="selectServerOption(${index}, this)">
-      <div class="server-option-top">
-        <span class="server-option-badge">${esc(option.serverLabel || `Server ${index + 1}`)}</span>
-        <span class="server-option-provider">${esc((SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {}).description || 'Pilih jalur server yang ingin digunakan')}</span>
+  const selectedIndex = Math.min(
+    Math.max(Number(S.buy.pendingPriceOptionIndex || 0), 0),
+    Math.max(options.length - 1, 0)
+  );
+  S.buy.pendingPriceOptionIndex = selectedIndex;
+  const option = options[selectedIndex];
+  const publicCopy = SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {};
+
+  list.innerHTML = `
+    <div class="server-option-picker">
+      <label class="server-option-label" for="serverOptionSelect">Server & Harga</label>
+      <select id="serverOptionSelect" class="f-input server-option-select" onchange="previewServerOption(this.value)">
+        ${options.map((item, index) => `
+          <option value="${index}" ${index === selectedIndex ? 'selected' : ''}>
+            ${esc(item.serverLabel || `Server ${index + 1}`)} - ${esc(FMT(item.sellPrice))}
+          </option>
+        `).join('')}
+      </select>
+      <div class="server-option-detail">
+        <div class="server-option-top">
+          <span class="server-option-badge">${esc(option.serverLabel || `Server ${selectedIndex + 1}`)}</span>
+          <span class="server-option-provider">${esc(publicCopy.description || 'Pilih jalur server yang ingin digunakan')}</span>
+        </div>
+        <div class="server-option-price">${FMT(option.sellPrice)}</div>
+        <div class="server-option-note">Server ini siap dipakai untuk negara ${esc(S.buy.country?.n || 'terpilih')}.</div>
       </div>
-      <div class="server-option-price">${FMT(option.sellPrice)}</div>
-      <div class="server-option-note">Pilih server ini untuk lanjut membuat nomor OTP.</div>
+      <button class="btn btn-primary btn-sm server-option-cta" type="button" onclick="confirmServerOptionSelection()">Checkout</button>
     </div>
-  `).join('');
+  `;
 }
 
 async function selectServerOption(index, el) {
@@ -1061,6 +1086,31 @@ async function selectServerOption(index, el) {
   } finally {
     S.buy.busy = false;
     el?.classList.remove('loading');
+  }
+}
+
+function previewServerOption(index) {
+  const parsedIndex = Number(index);
+  S.buy.pendingPriceOptionIndex = Number.isFinite(parsedIndex) ? parsedIndex : 0;
+  renderServerOptions();
+}
+
+async function confirmServerOptionSelection() {
+  const index = Number(S.buy.pendingPriceOptionIndex || 0);
+  const option = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions[index] : null;
+  if (!option || S.buy.busy) return;
+
+  S.buy.busy = true;
+  const cta = document.querySelector('.server-option-cta');
+  cta?.classList.add('loading');
+  try {
+    await chooseServerOption(option);
+  } catch (err) {
+    console.error(err);
+    showToast(`Gagal order: ${err.message}`, 'error');
+  } finally {
+    S.buy.busy = false;
+    cta?.classList.remove('loading');
   }
 }
 
