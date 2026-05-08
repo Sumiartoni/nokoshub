@@ -1016,40 +1016,52 @@ function renderServerOptions() {
     return;
   }
 
-  if (sub) {
-    sub.textContent = S.buy.country
-      ? `Tersedia ${options.length} opsi ${SERVER_FILTER_LABEL[S.buy.serverFilter] || 'server'} untuk ${S.buy.country.n}.`
-      : 'Pilih server yang ingin dipakai untuk order.';
-  }
-
   const selectedIndex = Math.min(
     Math.max(Number(S.buy.pendingPriceOptionIndex || 0), 0),
     Math.max(options.length - 1, 0)
   );
   S.buy.pendingPriceOptionIndex = selectedIndex;
+  const activeOption = options[selectedIndex] || null;
+
+  if (sub) {
+    if (S.buy.busy && activeOption) {
+      sub.textContent = `Sedang membuat nomor untuk ${S.buy.country?.n || 'negara ini'} lewat ${activeOption.serverLabel || 'server pilihan'}...`;
+    } else {
+      sub.textContent = S.buy.country
+        ? `Tersedia ${options.length} opsi ${SERVER_FILTER_LABEL[S.buy.serverFilter] || 'server'} untuk ${S.buy.country.n}.`
+        : 'Pilih server yang ingin dipakai untuk order.';
+    }
+  }
 
   list.innerHTML = options.map((option, index) => {
     const publicCopy = SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {};
+    const isProcessing = S.buy.busy && index === selectedIndex;
     return `
-      <div class="server-option-card ${index === selectedIndex ? 'selected' : ''}">
+      <div class="server-option-card ${index === selectedIndex ? 'selected' : ''} ${isProcessing ? 'loading' : ''}">
         <div class="server-option-top">
           <span class="server-option-badge">${esc(option.serverLabel || `Server ${index + 1}`)}</span>
           <span class="server-option-provider">${esc(publicCopy.description || 'Pilih jalur server yang ingin digunakan')}</span>
         </div>
         <div class="server-option-price">${FMT(option.sellPrice)}</div>
         <div class="server-option-note">Server ini siap dipakai untuk negara ${esc(S.buy.country?.n || 'terpilih')}.</div>
-        <button class="btn btn-primary btn-sm server-option-cta" type="button" onclick="selectServerOption(${index}, this.closest('.server-option-card'))">Checkout</button>
+        <button class="btn btn-primary btn-sm server-option-cta ${isProcessing ? 'loading' : ''}" type="button" onclick="selectServerOption(${index})" ${S.buy.busy ? 'disabled' : ''}>
+          <span class="server-option-cta-idle">Checkout</span>
+          <span class="server-option-cta-progress">Memproses Order</span>
+          <span class="server-option-cta-road" aria-hidden="true"></span>
+          <span class="server-option-cta-truck" aria-hidden="true">🚚</span>
+        </button>
       </div>
     `;
   }).join('');
 }
 
-async function selectServerOption(index, el) {
+async function selectServerOption(index) {
   const option = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions[index] : null;
   if (!option || S.buy.busy) return;
 
+  S.buy.pendingPriceOptionIndex = index;
   S.buy.busy = true;
-  el?.classList.add('loading');
+  renderServerOptions();
   try {
     await chooseServerOption(option);
   } catch (err) {
@@ -1057,7 +1069,7 @@ async function selectServerOption(index, el) {
     showToast(`Gagal order: ${err.message}`, 'error');
   } finally {
     S.buy.busy = false;
-    el?.classList.remove('loading');
+    renderServerOptions();
   }
 }
 
@@ -1076,9 +1088,9 @@ async function chooseServerOption(option) {
     return;
   }
 
-  closeModal('modalServerOptions');
   set('selSvcPrice', `${S.buy.price.serverLabel} • ${FMT(S.buy.price.sellPrice)}`);
   await createOrder();
+  document.getElementById('modalServerOptions')?.classList.remove('open');
 }
 
 async function createOrder() {
@@ -2103,6 +2115,10 @@ function closeSidebar() {
 
 function openModal(id) { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) {
+  if (id === 'modalServerOptions' && S.buy?.busy) {
+    showToast('Tunggu sebentar, order sedang diproses.', 'info');
+    return;
+  }
   document.getElementById(id)?.classList.remove('open');
   if (id === 'modalTopupOk') {
     stopTopupCountdown();

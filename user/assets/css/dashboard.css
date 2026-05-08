@@ -955,6 +955,11 @@ input, textarea, select { user-select: text; }
   box-shadow: 3px 3px 0 rgba(73, 145, 255, 0.18);
 }
 
+.server-option-card.loading {
+  border-color: var(--primary);
+  box-shadow: 4px 4px 0 rgba(73, 145, 255, 0.24);
+}
+
 .server-option-badge {
   display: inline-flex;
   align-items: center;
@@ -996,9 +1001,126 @@ input, textarea, select { user-select: text; }
   color: var(--muted);
 }
 
+.server-option-cta {
+  position: relative;
+  overflow: hidden;
+  min-height: 46px;
+}
+
+.server-option-cta-idle,
+.server-option-cta-progress {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .24s ease, transform .24s ease;
+}
+
+.server-option-cta-progress {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(8px);
+  font-weight: 900;
+  letter-spacing: .01em;
+}
+
+.server-option-cta-road {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 11px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  opacity: 0;
+  overflow: hidden;
+}
+
+.server-option-cta-road::before,
+.server-option-cta-road::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 34px;
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.server-option-cta-road::before {
+  left: -34px;
+  animation: checkout-road-move 1.15s linear infinite;
+}
+
+.server-option-cta-road::after {
+  left: -74px;
+  animation: checkout-road-move 1.15s linear .32s infinite;
+}
+
+.server-option-cta-truck {
+  position: absolute;
+  top: 50%;
+  left: -28px;
+  z-index: 2;
+  font-size: 1.1rem;
+  opacity: 0;
+  transform: translate(-16px, -50%);
+}
+
 .server-option-cta.loading {
-  opacity: 0.68;
+  opacity: 1;
   pointer-events: none;
+}
+
+.server-option-cta.loading .server-option-cta-idle {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.server-option-cta.loading .server-option-cta-progress {
+  opacity: 1;
+  transform: translateY(0);
+  animation: checkout-progress-pulse 1s ease-in-out infinite;
+}
+
+.server-option-cta.loading .server-option-cta-road,
+.server-option-cta.loading .server-option-cta-truck {
+  opacity: 1;
+}
+
+.server-option-cta.loading .server-option-cta-truck {
+  animation: checkout-truck-drive 2.2s linear infinite;
+}
+
+@keyframes checkout-truck-drive {
+  0% {
+    left: -28px;
+    transform: translateY(-50%);
+  }
+  100% {
+    left: calc(100% - 22px);
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes checkout-road-move {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(140px);
+  }
+}
+
+@keyframes checkout-progress-pulse {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-1px);
+  }
 }
 
 .buy-selection-head {
