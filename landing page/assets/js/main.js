@@ -5,25 +5,10 @@
 document.addEventListener('DOMContentLoaded', () => {
   const supportContact = {
     label: 'Customer Service',
-    telegramHandle: '@nokoshubsupport',
-    telegramUrl: 'https://t.me/nokoshubsupport',
+    telegramHandle: '@nokoshubcs_bot',
+    telegramUrl: 'https://t.me/nokoshubcs_bot',
     topupUrl: '/user/#topup',
   };
-
-  async function loadSupportContact() {
-    try {
-      const response = await fetch('/api/support/contact');
-      const payload = await response.json();
-      const data = payload?.data || payload;
-      if (!response.ok || !data?.telegramUrl) return;
-      supportContact.label = String(data.label || supportContact.label);
-      supportContact.telegramHandle = String(data.telegramHandle || supportContact.telegramHandle);
-      supportContact.telegramUrl = String(data.telegramUrl || supportContact.telegramUrl);
-      supportContact.topupUrl = String(data.topupUrl || supportContact.topupUrl);
-    } catch (err) {
-      console.error('Failed to load support contact:', err);
-    }
-  }
 
   function applySupportLinks() {
     document.querySelectorAll('[data-customer-service-link]').forEach((link) => {
@@ -264,6 +249,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ---- INIT ---- */
-  loadSupportContact().finally(applySupportLinks);
+  applySupportLinks();
   console.log('🚀 NokosHUB Landing Page initialized!');
 });
