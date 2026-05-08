@@ -968,7 +968,7 @@ async function selectSvc(id) {
   if (countrySearch) countrySearch.value = '';
 
   const grid = document.getElementById('countryGrid');
-  if (grid) grid.innerHTML = loadingBlock('Mengambil negara dari backend...');
+  if (grid) renderLoadingState(grid, 'Mengambil negara dari backend...');
   goStep(2);
 
   try {
@@ -2401,7 +2401,41 @@ function emptyBlock(icon, title, desc) {
 }
 
 function loadingBlock(text) {
-  return `<div class="empty"><div class="empty-emoji anim-pulse">⏳</div><div class="empty-title">Memuat</div><div class="empty-desc">${esc(text)}</div></div>`;
+  return `
+    <div class="empty empty-loading">
+      <div class="empty-lottie" data-waiting-lottie="true"></div>
+      <div class="empty-title">Memuat</div>
+      <div class="empty-desc">${esc(text)}</div>
+    </div>
+  `;
+}
+
+function renderLoadingState(target, text) {
+  if (!target) return;
+  target.innerHTML = loadingBlock(text);
+  mountWaitingLottie(target);
+}
+
+function mountWaitingLottie(root = document) {
+  if (!root) return;
+  if (typeof lottie === 'undefined') {
+    window.setTimeout(() => mountWaitingLottie(root), 120);
+    return;
+  }
+  root.querySelectorAll?.('[data-waiting-lottie="true"]').forEach((el) => {
+    if (el.dataset.lottieMounted === 'true') return;
+    el.dataset.lottieMounted = 'true';
+    lottie.loadAnimation({
+      container: el,
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      path: 'assets/lottie/waiting.json',
+      rendererSettings: {
+        preserveAspectRatio: 'xMidYMid meet',
+      },
+    });
+  });
 }
 
 function emptyInline(text) {

@@ -2156,6 +2156,17 @@ input, textarea, select { user-select: text; }
 .empty-emoji { font-size:3.5rem; margin-bottom:12px; }
 .empty-title { font-family:var(--font-h); font-size:1.15rem; margin-bottom:4px; }
 .empty-desc  { font-size:0.84rem; color:var(--muted); font-weight:600; }
+.empty-loading { min-height: 320px; gap: 6px; }
+.empty-lottie {
+  width: 150px;
+  height: 150px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.empty-lottie svg {
+  width: 100% !important;
+  height: 100% !important;
+}
 
 /* =============================================
    MOBILE BOTTOM NAV (≤ 768px)
