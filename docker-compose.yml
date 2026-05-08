@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -13,6 +19,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - '127.0.0.1:5432:5432'
+    logging: *default-logging
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U nokos -d nokos_db']
       interval: 10s
@@ -28,6 +35,7 @@ services:
       - redis_data:/data
     ports:
       - '127.0.0.1:6379:6379'
+    logging: *default-logging
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
@@ -118,6 +126,13 @@ services:
       - '127.0.0.1:${API_PORT:-3000}:3000'
     volumes:
       - ./backend/prisma:/app/prisma
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   worker:
     build:
@@ -160,6 +175,7 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       JWT_SECRET: ${JWT_SECRET}
     command: ['node', 'dist/src/worker.js']
+    logging: *default-logging
 
   frontend:
     build:
@@ -168,9 +184,20 @@ services:
     container_name: nokos_frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - '127.0.0.1:${FRONTEND_PORT:-8081}:80'
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/user/ >/dev/null 2>&1 || exit 1']
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   backoffice:
     build:
@@ -179,9 +206,20 @@ services:
     container_name: nokos_backoffice
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - '127.0.0.1:${BACKOFFICE_PORT:-8080}:80'
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/dashboard.html >/dev/null 2>&1 || exit 1']
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:

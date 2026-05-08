@@ -14,6 +14,8 @@ const API_BASE = detectApiBase();
 const OTP_WAIT_SECONDS = 1200;
 const ORDER_CANCEL_DELAY_MS = 2 * 60 * 1000;
 const POLL_MS = 5000;
+const API_REQUEST_TIMEOUT_MS = 12000;
+const API_HEALTH_TIMEOUT_MS = 3500;
 const SUPPORT_CONTACT = {
   label: 'Customer Service',
   telegramHandle: '@nokoshubsupport',
@@ -203,18 +205,31 @@ function apiUrl(path, params = {}) {
 }
 
 async function apiFetch(path, options = {}) {
-  const { params, body, ...fetchOptions } = options;
+  const { params, body, timeoutMs = API_REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
   const token = localStorage.getItem(STORE_KEYS.token);
-  const response = await fetch(apiUrl(path, params), {
-    method: body ? 'POST' : 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(fetchOptions.headers || {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+  try {
+    response = await fetch(apiUrl(path, params), {
+      method: body ? 'POST' : 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(fetchOptions.headers || {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
       ...fetchOptions,
     });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`Request timeout setelah ${Math.round(timeoutMs / 1000)} detik`);
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
+  }
   const text = await response.text();
   let payload;
   try {
@@ -236,6 +251,33 @@ async function apiFetch(path, options = {}) {
     throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
   }
   return payload.data ?? payload;
+}
+
+function getErrorMessage(err) {
+  if (!err) return 'Terjadi kesalahan';
+  if (typeof err === 'string') return err;
+  return String(err.message || err);
+}
+
+function isUnauthorizedError(err) {
+  return getErrorMessage(err).toLowerCase().includes('unauthorized');
+}
+
+async function pingBackendHealth() {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), API_HEALTH_TIMEOUT_MS);
+  try {
+    const response = await fetch(apiUrl('/health'), {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 async function loadSupportContact() {
@@ -434,54 +476,74 @@ function initRouter() {
 }
 
 async function loadDashboardData({ silent = false } = {}) {
-  try {
-    const [me, profile, services] = await Promise.all([
-      apiFetch('/auth/me'),
-      apiFetch('/user/profile'),
-      apiFetch('/services'),
-    ]);
+  const [meResult, profileResult, servicesResult] = await Promise.allSettled([
+    apiFetch('/auth/me'),
+    apiFetch('/user/profile'),
+    apiFetch('/services'),
+  ]);
 
-    S.backendOnline = true;
-    applyWebUser(me.user);
-    if (profile.webUser) applyWebUser(profile.webUser);
-    if (profile.user) applyBackendUser(profile.user);
+  const errors = [meResult, profileResult, servicesResult]
+    .filter((item) => item.status === 'rejected')
+    .map((item) => item.reason);
+
+  const unauthorized = errors.find(isUnauthorizedError);
+  if (unauthorized) {
+    localStorage.removeItem(STORE_KEYS.token);
+    window.location.href = '/login/';
+    return;
+  }
+
+  const me = meResult.status === 'fulfilled' ? meResult.value : null;
+  const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+  const services = servicesResult.status === 'fulfilled' ? servicesResult.value : null;
+
+  const hasCoreData = Boolean(me || profile);
+  S.backendOnline = hasCoreData || await pingBackendHealth();
+
+  if (me?.user) applyWebUser(me.user);
+  if (profile?.webUser) applyWebUser(profile.webUser);
+  if (profile?.user) applyBackendUser(profile.user);
+  if (profile?.summary) {
     S.summary = { ...S.summary, ...(profile.summary || {}) };
+  }
+  if (profile?.referral || me?.user?.referralCode) {
     S.referral = {
-      code: profile.referral?.code || me.user?.referralCode || S.referral.code || '',
+      code: profile?.referral?.code || me?.user?.referralCode || S.referral.code || '',
       settings: {
-        enabled: Boolean(profile.referral?.settings?.enabled),
-        rewardAmount: Number(profile.referral?.settings?.rewardAmount || 0),
+        enabled: Boolean(profile?.referral?.settings?.enabled),
+        rewardAmount: Number(profile?.referral?.settings?.rewardAmount || 0),
       },
       stats: {
-        totalInvited: Number(profile.referral?.stats?.totalInvited || 0),
-        qualifiedInvites: Number(profile.referral?.stats?.qualifiedInvites || 0),
-        rewardedInvites: Number(profile.referral?.stats?.rewardedInvites || 0),
-        totalRewardEarned: Number(profile.referral?.stats?.totalRewardEarned || 0),
-        pendingRewardAmount: Number(profile.referral?.stats?.pendingRewardAmount || 0),
+        totalInvited: Number(profile?.referral?.stats?.totalInvited || 0),
+        qualifiedInvites: Number(profile?.referral?.stats?.qualifiedInvites || 0),
+        rewardedInvites: Number(profile?.referral?.stats?.rewardedInvites || 0),
+        totalRewardEarned: Number(profile?.referral?.stats?.totalRewardEarned || 0),
+        pendingRewardAmount: Number(profile?.referral?.stats?.pendingRewardAmount || 0),
       },
-      invites: Array.isArray(profile.referral?.invites) ? profile.referral.invites : [],
+      invites: Array.isArray(profile?.referral?.invites) ? profile.referral.invites : S.referral.invites,
     };
-    S.orders = profile.recentOrders || [];
-    S.transactions = profile.recentTransactions || [];
-    S.invoices = Array.isArray(profile.recentInvoices)
-      ? profile.recentInvoices.map(normalizeInvoiceRecord)
-      : [];
-    SVC = mapServices(Array.isArray(services) ? services : []);
+  }
+  if (profile?.recentOrders) S.orders = profile.recentOrders;
+  if (profile?.recentTransactions) S.transactions = profile.recentTransactions;
+  if (Array.isArray(profile?.recentInvoices)) {
+    S.invoices = profile.recentInvoices.map(normalizeInvoiceRecord);
+  }
+  if (Array.isArray(services)) {
+    SVC = mapServices(services);
+  }
 
-    updateUI();
-    renderSvcs();
-    renderDashboardData();
-    if (!silent) showToast('Dashboard tersambung ke backend.', 'success');
-  } catch (err) {
-    S.backendOnline = false;
-    console.error(err);
-    if (String(err.message).toLowerCase().includes('unauthorized')) {
-      localStorage.removeItem(STORE_KEYS.token);
-      window.location.href = '/login/';
-      return;
+  updateUI();
+  renderSvcs();
+  renderDashboardData();
+
+  if (errors.length && !silent) {
+    if (S.backendOnline) {
+      showToast('Sebagian data dashboard belum termuat. Backend masih online.', 'warning');
+    } else {
+      showToast(`Gagal konek backend: ${getErrorMessage(errors[0])}`, 'error');
     }
-    if (!silent) showToast(`Gagal konek backend: ${err.message}`, 'error');
-    renderSvcs();
+  } else if (!silent && S.backendOnline) {
+    showToast('Dashboard tersambung ke backend.', 'success');
   }
 }
 
