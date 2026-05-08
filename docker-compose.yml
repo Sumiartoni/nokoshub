@@ -4,6 +4,16 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+x-public-dns: &public-dns
+  dns:
+    - 1.1.1.1
+    - 1.0.0.1
+    - 8.8.8.8
+  dns_opt:
+    - timeout:2
+    - attempts:2
+    - rotate
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -127,6 +137,7 @@ services:
     volumes:
       - ./backend/prisma:/app/prisma
     logging: *default-logging
+    <<: *public-dns
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1']
       interval: 15s
@@ -176,6 +187,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     command: ['node', 'dist/src/worker.js']
     logging: *default-logging
+    <<: *public-dns
 
   frontend:
     build:
@@ -192,6 +204,7 @@ services:
       - /var/cache/nginx
       - /var/run
     logging: *default-logging
+    <<: *public-dns
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/user/ >/dev/null 2>&1 || exit 1']
       interval: 20s
@@ -214,6 +227,7 @@ services:
       - /var/cache/nginx
       - /var/run
     logging: *default-logging
+    <<: *public-dns
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/dashboard.html >/dev/null 2>&1 || exit 1']
       interval: 20s
