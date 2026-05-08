@@ -933,31 +933,26 @@ input, textarea, select { user-select: text; }
 }
 
 .server-options-list {
-  display: block;
-}
-
-.server-option-picker {
   display: grid;
   gap: 12px;
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
-.server-option-label {
-  font-size: 0.82rem;
-  font-weight: 800;
-  color: var(--muted);
-}
-
-.server-option-select {
-  min-height: 48px;
-  font-weight: 800;
-}
-
-.server-option-detail {
+.server-option-card {
   padding: 14px;
   background: #fffdf6;
   border: var(--bw) solid var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-xs);
+  display: grid;
+  gap: 10px;
+}
+
+.server-option-card.selected {
+  border-color: var(--primary);
+  box-shadow: 3px 3px 0 rgba(73, 145, 255, 0.18);
 }
 
 .server-option-badge {

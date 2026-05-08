@@ -1027,30 +1027,21 @@ function renderServerOptions() {
     Math.max(options.length - 1, 0)
   );
   S.buy.pendingPriceOptionIndex = selectedIndex;
-  const option = options[selectedIndex];
-  const publicCopy = SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {};
 
-  list.innerHTML = `
-    <div class="server-option-picker">
-      <label class="server-option-label" for="serverOptionSelect">Server & Harga</label>
-      <select id="serverOptionSelect" class="f-input server-option-select" onchange="previewServerOption(this.value)">
-        ${options.map((item, index) => `
-          <option value="${index}" ${index === selectedIndex ? 'selected' : ''}>
-            ${esc(item.serverLabel || `Server ${index + 1}`)} - ${esc(FMT(item.sellPrice))}
-          </option>
-        `).join('')}
-      </select>
-      <div class="server-option-detail">
+  list.innerHTML = options.map((option, index) => {
+    const publicCopy = SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {};
+    return `
+      <div class="server-option-card ${index === selectedIndex ? 'selected' : ''}">
         <div class="server-option-top">
-          <span class="server-option-badge">${esc(option.serverLabel || `Server ${selectedIndex + 1}`)}</span>
+          <span class="server-option-badge">${esc(option.serverLabel || `Server ${index + 1}`)}</span>
           <span class="server-option-provider">${esc(publicCopy.description || 'Pilih jalur server yang ingin digunakan')}</span>
         </div>
         <div class="server-option-price">${FMT(option.sellPrice)}</div>
         <div class="server-option-note">Server ini siap dipakai untuk negara ${esc(S.buy.country?.n || 'terpilih')}.</div>
+        <button class="btn btn-primary btn-sm server-option-cta" type="button" onclick="selectServerOption(${index}, this.closest('.server-option-card'))">Checkout</button>
       </div>
-      <button class="btn btn-primary btn-sm server-option-cta" type="button" onclick="confirmServerOptionSelection()">Checkout</button>
-    </div>
-  `;
+    `;
+  }).join('');
 }
 
 async function selectServerOption(index, el) {
@@ -1067,31 +1058,6 @@ async function selectServerOption(index, el) {
   } finally {
     S.buy.busy = false;
     el?.classList.remove('loading');
-  }
-}
-
-function previewServerOption(index) {
-  const parsedIndex = Number(index);
-  S.buy.pendingPriceOptionIndex = Number.isFinite(parsedIndex) ? parsedIndex : 0;
-  renderServerOptions();
-}
-
-async function confirmServerOptionSelection() {
-  const index = Number(S.buy.pendingPriceOptionIndex || 0);
-  const option = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions[index] : null;
-  if (!option || S.buy.busy) return;
-
-  S.buy.busy = true;
-  const cta = document.querySelector('.server-option-cta');
-  cta?.classList.add('loading');
-  try {
-    await chooseServerOption(option);
-  } catch (err) {
-    console.error(err);
-    showToast(`Gagal order: ${err.message}`, 'error');
-  } finally {
-    S.buy.busy = false;
-    cta?.classList.remove('loading');
   }
 }
 
