@@ -68,6 +68,7 @@ const S = {
     order: null,
     countries: [],
     busy: false,
+    ordering: false,
   },
   api: { visible: false, key: 'nk_live_a8f2c3d9e1b7634512098765fedcba43' },
   orders: [],
@@ -1024,7 +1025,7 @@ function renderServerOptions() {
   const activeOption = options[selectedIndex] || null;
 
   if (sub) {
-    if (S.buy.busy && activeOption) {
+    if (S.buy.ordering && activeOption) {
       sub.textContent = `Sedang membuat nomor untuk ${S.buy.country?.n || 'negara ini'} lewat ${activeOption.serverLabel || 'server pilihan'}...`;
     } else {
       sub.textContent = S.buy.country
@@ -1035,7 +1036,7 @@ function renderServerOptions() {
 
   list.innerHTML = options.map((option, index) => {
     const publicCopy = SERVER_PUBLIC_COPY[normalizeServerFilter(option.serverLabel)] || {};
-    const isProcessing = S.buy.busy && index === selectedIndex;
+    const isProcessing = S.buy.ordering && index === selectedIndex;
     return `
       <div class="server-option-card ${index === selectedIndex ? 'selected' : ''} ${isProcessing ? 'loading' : ''}">
         <div class="server-option-top">
@@ -1044,11 +1045,18 @@ function renderServerOptions() {
         </div>
         <div class="server-option-price">${FMT(option.sellPrice)}</div>
         <div class="server-option-note">Server ini siap dipakai untuk negara ${esc(S.buy.country?.n || 'terpilih')}.</div>
-        <button class="btn btn-primary btn-sm server-option-cta ${isProcessing ? 'loading' : ''}" type="button" onclick="selectServerOption(${index})" ${S.buy.busy ? 'disabled' : ''}>
-          <span class="server-option-cta-idle">Checkout</span>
-          <span class="server-option-cta-progress">Memproses Order</span>
-          <span class="server-option-cta-road" aria-hidden="true"></span>
-          <span class="server-option-cta-truck" aria-hidden="true">🚚</span>
+        <button class="btn btn-primary btn-sm server-option-cta ${isProcessing ? 'loading' : ''}" type="button" onclick="selectServerOption(${index})" ${S.buy.ordering ? 'disabled' : ''}>
+          <span class="server-option-label server-option-label-idle">Checkout</span>
+          <span class="server-option-label server-option-label-progress">Memproses Order</span>
+          <span class="server-option-cargo" aria-hidden="true"></span>
+          <span class="server-option-vehicle" aria-hidden="true">
+            <span class="server-option-vehicle-back"></span>
+            <span class="server-option-vehicle-cab"></span>
+            <span class="server-option-vehicle-light"></span>
+            <span class="server-option-wheel server-option-wheel-front"></span>
+            <span class="server-option-wheel server-option-wheel-back"></span>
+          </span>
+          <span class="server-option-road" aria-hidden="true"></span>
         </button>
       </div>
     `;
@@ -1057,10 +1065,10 @@ function renderServerOptions() {
 
 async function selectServerOption(index) {
   const option = Array.isArray(S.buy.priceOptions) ? S.buy.priceOptions[index] : null;
-  if (!option || S.buy.busy) return;
+  if (!option || S.buy.busy || S.buy.ordering) return;
 
   S.buy.pendingPriceOptionIndex = index;
-  S.buy.busy = true;
+  S.buy.ordering = true;
   renderServerOptions();
   try {
     await chooseServerOption(option);
@@ -1068,7 +1076,7 @@ async function selectServerOption(index) {
     console.error(err);
     showToast(`Gagal order: ${err.message}`, 'error');
   } finally {
-    S.buy.busy = false;
+    S.buy.ordering = false;
     renderServerOptions();
   }
 }
@@ -2115,7 +2123,7 @@ function closeSidebar() {
 
 function openModal(id) { document.getElementById(id)?.classList.add('open'); }
 function closeModal(id) {
-  if (id === 'modalServerOptions' && S.buy?.busy) {
+  if (id === 'modalServerOptions' && S.buy?.ordering) {
     showToast('Tunggu sebentar, order sedang diproses.', 'info');
     return;
   }
