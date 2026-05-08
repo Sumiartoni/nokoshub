@@ -20,6 +20,7 @@ export interface SmsBowerPriceIdParts {
 }
 
 const PRICE_ID_PREFIX = 'server1';
+const RETRYABLE_NETWORK_CODES = new Set(['EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'ECONNABORTED', 'ENOTFOUND']);
 
 export function buildSmsBowerPriceId(serviceCode: string, countryCode: string, providerId: string) {
     return [
@@ -340,13 +341,13 @@ class SmsBowerProvider {
     }
 
     private request(action: string, params: AnyRecord = {}) {
-        return this.client.get('', {
+        return withRetry(() => this.client.get('', {
             params: {
                 api_key: config.SMSBOWER_API_KEY,
                 action,
                 ...params,
             },
-        });
+        }), `smsbower:${action}`);
     }
 
     private toIdrPrice(price: number, usdIdrRate: number): number {
@@ -392,6 +393,39 @@ class SmsBowerProvider {
             message: err.message,
         };
     }
+}
+
+async function withRetry<T>(fn: () => Promise<T>, label: string, maxAttempts = 3): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            lastError = err;
+            if (!isRetryableNetworkError(err) || attempt === maxAttempts) {
+                throw err;
+            }
+
+            const retryMs = attempt * 1500;
+            logger.warn({ label, attempt, retryMs, code: err?.code, message: err?.message }, 'Retrying SmsBower request after transient network error');
+            await sleep(retryMs);
+        }
+    }
+
+    throw lastError;
+}
+
+function isRetryableNetworkError(err: any): boolean {
+    const code = String(err?.code || err?.cause?.code || err?.errno || '').toUpperCase();
+    if (RETRYABLE_NETWORK_CODES.has(code)) return true;
+
+    const message = String(err?.message || '').toUpperCase();
+    return message.includes('EAI_AGAIN') || message.includes('ETIMEDOUT') || message.includes('ECONNRESET');
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeServicesResponse(body: unknown): ProviderService[] {

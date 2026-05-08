@@ -17,6 +17,9 @@ let providerSyncInterval: NodeJS.Timeout | null = null;
 let providerSyncStartupTimer: NodeJS.Timeout | null = null;
 let invoiceExpiryInterval: NodeJS.Timeout | null = null;
 let paymentReconcileInterval: NodeJS.Timeout | null = null;
+let invoiceExpiryStartupTimer: NodeJS.Timeout | null = null;
+let paymentReconcileStartupTimer: NodeJS.Timeout | null = null;
+const NON_CRITICAL_STARTUP_DELAY_MS = 30000;
 
 export async function buildServer() {
     const app = Fastify({
@@ -180,8 +183,10 @@ if (require.main === module) {
 function startInvoiceExpiryScheduler() {
     if (invoiceExpiryInterval) return;
 
-    paymentService.expireOverdueInvoices()
-        .catch(err => logger.warn({ err }, 'Initial invoice expiry sweep failed'));
+    invoiceExpiryStartupTimer = setTimeout(() => {
+        paymentService.expireOverdueInvoices()
+            .catch(err => logger.warn({ err }, 'Initial invoice expiry sweep failed'));
+    }, NON_CRITICAL_STARTUP_DELAY_MS);
 
     invoiceExpiryInterval = setInterval(() => {
         paymentService.expireOverdueInvoices()
@@ -192,6 +197,11 @@ function startInvoiceExpiryScheduler() {
 }
 
 function stopInvoiceExpiryScheduler() {
+    if (invoiceExpiryStartupTimer) {
+        clearTimeout(invoiceExpiryStartupTimer);
+        invoiceExpiryStartupTimer = null;
+    }
+
     if (invoiceExpiryInterval) {
         clearInterval(invoiceExpiryInterval);
         invoiceExpiryInterval = null;
@@ -201,8 +211,10 @@ function stopInvoiceExpiryScheduler() {
 function startPaymentReconcileScheduler() {
     if (paymentReconcileInterval) return;
 
-    paymentService.reconcilePendingInvoices(10)
-        .catch(err => logger.warn({ err }, 'Initial payment reconcile sweep failed'));
+    paymentReconcileStartupTimer = setTimeout(() => {
+        paymentService.reconcilePendingInvoices(10)
+            .catch(err => logger.warn({ err }, 'Initial payment reconcile sweep failed'));
+    }, NON_CRITICAL_STARTUP_DELAY_MS + 15000);
 
     paymentReconcileInterval = setInterval(() => {
         paymentService.reconcilePendingInvoices(10)
@@ -213,6 +225,11 @@ function startPaymentReconcileScheduler() {
 }
 
 function stopPaymentReconcileScheduler() {
+    if (paymentReconcileStartupTimer) {
+        clearTimeout(paymentReconcileStartupTimer);
+        paymentReconcileStartupTimer = null;
+    }
+
     if (paymentReconcileInterval) {
         clearInterval(paymentReconcileInterval);
         paymentReconcileInterval = null;

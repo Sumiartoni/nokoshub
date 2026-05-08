@@ -18,12 +18,16 @@ export interface UsdIdrRateInfo {
 }
 
 let rateCache: { expiresAt: number; info: UsdIdrRateInfo } | null = null;
+const RETRYABLE_NETWORK_CODES = new Set(['EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'ECONNABORTED', 'ENOTFOUND']);
 
 export const pricingService = {
     async getSellPriceMultiplier(): Promise<number> {
-        const setting = await prisma.appSetting.findUnique({
-            where: { key: SELL_PRICE_MULTIPLIER_KEY },
-        });
+        const setting = await withRetry(
+            () => prisma.appSetting.findUnique({
+                where: { key: SELL_PRICE_MULTIPLIER_KEY },
+            }),
+            'pricingService.getSellPriceMultiplier'
+        );
 
         const value = Number(setting?.value ?? config.SELL_PRICE_MULTIPLIER);
         return Number.isFinite(value) && value > 0 ? value : config.SELL_PRICE_MULTIPLIER;
@@ -45,9 +49,12 @@ export const pricingService = {
     },
 
     async getPricingProtectionPercent(): Promise<number> {
-        const setting = await prisma.appSetting.findUnique({
-            where: { key: PRICING_PROTECTION_PERCENT_KEY },
-        });
+        const setting = await withRetry(
+            () => prisma.appSetting.findUnique({
+                where: { key: PRICING_PROTECTION_PERCENT_KEY },
+            }),
+            'pricingService.getPricingProtectionPercent'
+        );
 
         const value = Number(setting?.value ?? 0);
         return Number.isFinite(value) && value >= 0 ? value : 0;
@@ -82,10 +89,13 @@ export const pricingService = {
             info = buildRateInfo(fallbackRate, bufferPercent, false, 'env:HERO_SMS_PRICE_TO_IDR_RATE', fallbackRate);
         } else {
             try {
-                const response = await axios.get(config.USD_IDR_RATE_API_URL, {
-                    timeout: 10000,
-                    headers: { Accept: 'application/json' },
-                });
+                const response = await withRetry(
+                    () => axios.get(config.USD_IDR_RATE_API_URL, {
+                        timeout: 10000,
+                        headers: { Accept: 'application/json' },
+                    }),
+                    'pricingService.getUsdIdrRate'
+                );
                 const rate = extractUsdIdrRate(response.data);
                 if (!rate) throw new Error('USD/IDR rate not found in response');
 
@@ -153,4 +163,37 @@ function extractUsdIdrRate(data: any): number | null {
 
     const parsed = Number(raw);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function withRetry<T>(fn: () => Promise<T>, label: string, maxAttempts = 3): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            return await fn();
+        } catch (err: any) {
+            lastError = err;
+            if (!isRetryableNetworkError(err) || attempt === maxAttempts) {
+                throw err;
+            }
+
+            const retryMs = attempt * 1500;
+            logger.warn({ label, attempt, retryMs, code: err?.code, message: err?.message }, 'Retrying after transient network error');
+            await sleep(retryMs);
+        }
+    }
+
+    throw lastError;
+}
+
+function isRetryableNetworkError(err: any): boolean {
+    const code = String(err?.code || err?.cause?.code || err?.errno || '').toUpperCase();
+    if (RETRYABLE_NETWORK_CODES.has(code)) return true;
+
+    const message = String(err?.message || '').toUpperCase();
+    return message.includes('EAI_AGAIN') || message.includes('ETIMEDOUT') || message.includes('ECONNRESET');
+}
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
