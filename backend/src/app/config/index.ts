@@ -16,6 +16,10 @@ const envSchema = z.object({
     INTERNAL_API_SECRET: z.string().min(24, 'INTERNAL_API_SECRET must be at least 24 characters'),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    DATABASE_SSL_REJECT_UNAUTHORIZED: z.string().default('false').transform((value) => {
+        return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+    }),
+    DATABASE_SSL_CA_B64: z.string().default(''),
     REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
 
     TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
