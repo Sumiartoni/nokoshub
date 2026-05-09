@@ -184,7 +184,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await authService.register(parsed.data);
             return { success: true, data: result };
         } catch (err) {
-            return reply.status(400).send({ success: false, error: (err as Error).message });
+            return sendPublicAuthError(reply, err, { fallbackStatus: 400 });
         }
     });
 
@@ -199,7 +199,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await authService.verifyRegisterOtp(parsed.data);
             return { success: true, data: result };
         } catch (err) {
-            return reply.status(400).send({ success: false, error: (err as Error).message });
+            return sendPublicAuthError(reply, err, { fallbackStatus: 400 });
         }
     });
 
@@ -214,7 +214,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await authService.resendRegisterOtp(parsed.data);
             return { success: true, data: result };
         } catch (err) {
-            return reply.status(400).send({ success: false, error: (err as Error).message });
+            return sendPublicAuthError(reply, err, { fallbackStatus: 400 });
         }
     });
 
@@ -229,7 +229,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             const result = await authService.login(parsed.data);
             return { success: true, data: result };
         } catch (err) {
-            return reply.status(401).send({ success: false, error: (err as Error).message });
+            return sendPublicAuthError(reply, err, {
+                fallbackStatus: 401,
+                unauthorizedMessages: new Set(['Email atau password tidak valid']),
+            });
         }
     });
 
@@ -256,7 +259,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return { success: true, data: result };
         } catch (err) {
             logger.warn({ err, route: '/api/auth/google' }, 'Google login failed');
-            return reply.status(401).send({ success: false, error: (err as Error).message });
+            return sendPublicAuthError(reply, err, {
+                fallbackStatus: 401,
+                unauthorizedMessages: new Set(['Akun Google belum terdaftar. Silakan daftar terlebih dahulu.']),
+            });
         }
     });
 
@@ -274,7 +280,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
             return { success: true, data: result };
         } catch (err) {
             logger.warn({ err, route: '/api/auth/google/register' }, 'Google register failed');
-            return reply.status(400).send({ success: false, error: (err as Error).message });
+            return sendPublicAuthError(reply, err, { fallbackStatus: 400 });
         }
     });
 
@@ -1040,6 +1046,37 @@ function normalizeTelegramHandle(value?: string | null) {
 
 function buildTelegramUrl(handle: string) {
     return `https://t.me/${handle.replace(/^@/, '')}`;
+}
+
+function sendPublicAuthError(
+    reply: { status: (code: number) => { send: (payload: unknown) => unknown } },
+    err: unknown,
+    options: {
+        fallbackStatus: number;
+        unauthorizedMessages?: Set<string>;
+    }
+) {
+    const message = String((err as Error)?.message || 'Request failed');
+    const upper = message.toUpperCase();
+    const isInfraError =
+        upper.includes('EAI_AGAIN') ||
+        upper.includes('ECONNREFUSED') ||
+        upper.includes('ETIMEDOUT') ||
+        upper.includes('SELF-SIGNED CERTIFICATE') ||
+        upper.includes('CERTIFICATE') ||
+        upper.includes('PRISMA.') ||
+        upper.includes('OPENING A TLS CONNECTION');
+
+    if (isInfraError) {
+        return reply.status(503).send({
+            success: false,
+            error: 'Koneksi database sedang gangguan. Silakan coba lagi beberapa saat.',
+        });
+    }
+
+    const unauthorized = options.unauthorizedMessages?.has(message);
+    const status = unauthorized ? 401 : options.fallbackStatus;
+    return reply.status(status).send({ success: false, error: message });
 }
 
 function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], siteUrl: string) {

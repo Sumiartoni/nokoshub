@@ -3,6 +3,8 @@
     'use strict';
 
     const SESSION_KEY = 'nokoshub_backoffice_active';
+    const API_TIMEOUT_MS = 45000;
+    const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 
     const isLoginPage = window.location.pathname.endsWith('index.html')
         || window.location.pathname === '/'
@@ -62,14 +64,15 @@
     }
 
     async function rawApi(path, options = {}) {
-        const res = await fetch(path, {
+        const { timeoutMs = API_TIMEOUT_MS, ...restOptions } = options;
+        const res = await fetchWithRetry(path, {
             credentials: 'same-origin',
-            ...options,
+            ...restOptions,
             headers: {
                 'Content-Type': 'application/json',
-                ...(options.headers || {}),
+                ...(restOptions.headers || {}),
             },
-        });
+        }, timeoutMs);
         const text = await res.text();
         let data;
         try {
@@ -87,11 +90,44 @@
             };
         }
         if (!res.ok || data.success === false) {
-            const error = new Error(data.error || 'Request failed');
+            const error = new Error(humanizeAuthError(data.error || 'Request failed'));
             error.status = res.status;
             throw error;
         }
         return data;
+    }
+
+    async function fetchWithRetry(path, options, timeoutMs) {
+        let lastError;
+
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+            const controller = new AbortController();
+            const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                const response = await fetch(path, {
+                    ...options,
+                    signal: controller.signal,
+                });
+                window.clearTimeout(timer);
+
+                if (RETRYABLE_STATUS.has(response.status) && attempt < 3) {
+                    await sleep(attempt * 1200);
+                    continue;
+                }
+
+                return response;
+            } catch (err) {
+                window.clearTimeout(timer);
+                lastError = err;
+                if (!isRetryableError(err) || attempt >= 3) {
+                    throw new Error(humanizeAuthError(err?.message || 'Gagal terhubung ke server'));
+                }
+                await sleep(attempt * 1200);
+            }
+        }
+
+        throw new Error(humanizeAuthError(lastError?.message || 'Gagal terhubung ke server'));
     }
 
     function showError(msg) {
@@ -104,6 +140,33 @@
             void box.offsetHeight;
             box.style.animation = 'shake 0.4s ease';
         }
+    }
+
+    function humanizeAuthError(message) {
+        const text = String(message || '');
+        const upper = text.toUpperCase();
+        if (
+            upper.includes('EAI_AGAIN') ||
+            upper.includes('ECONNREFUSED') ||
+            upper.includes('ETIMEDOUT') ||
+            upper.includes('NETWORKERROR') ||
+            upper.includes('ABORTERROR') ||
+            upper.includes('SELF-SIGNED CERTIFICATE') ||
+            upper.includes('KONEKSI DATABASE SEDANG GANGGUAN')
+        ) {
+            return 'Koneksi server sedang sibuk atau lambat. Coba lagi beberapa saat.';
+        }
+        return text;
+    }
+
+    function isRetryableError(err) {
+        const name = String(err?.name || '');
+        const message = String(err?.message || '').toUpperCase();
+        return name === 'AbortError' || message.includes('NETWORK') || message.includes('FAILED TO FETCH') || message.includes('LOAD FAILED');
+    }
+
+    function sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     function setLoading(loading) {

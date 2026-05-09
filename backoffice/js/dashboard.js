@@ -252,10 +252,11 @@
     async function loadOverview() {
         renderStatSkeleton();
 
-        const [overviewRes, ordersRes, invoicesRes] = await Promise.allSettled([
+        const [overviewRes, ordersRes, invoicesRes, pingRes] = await Promise.allSettled([
             api('/api/admin/overview'),
             api('/api/admin/orders?limit=12'),
             api('/api/admin/invoices?limit=12'),
+            measureApiPing(),
         ]);
 
         let ordersData = [], invoicesData = [];
@@ -333,9 +334,21 @@
         const apiStatus = [overviewRes, ordersRes, invoicesRes].some(
             (result) => result.status === 'fulfilled' && result.value?.success
         );
+        const pingData = pingRes.status === 'fulfilled' ? pingRes.value : null;
+        const pingLabel = pingData?.latencyMs != null ? `${pingData.latencyMs} ms` : '—';
+        const pingTone = pingData?.latencyMs == null
+            ? 'offline'
+            : pingData.latencyMs >= 1200
+                ? 'offline'
+                : pingData.latencyMs >= 600
+                    ? 'warning'
+                    : 'online';
         sysRow.innerHTML = `
             <div class="status-pill ${apiStatus ? 'online' : 'offline'}">
                 <div class="status-pill-dot"></div> API ${apiStatus ? 'Online' : 'Offline'}
+            </div>
+            <div class="status-pill ${pingTone}">
+                <div class="status-pill-dot"></div> Ping VPS ${pingLabel}
             </div>
             <div class="status-pill ${providerStatus}">
                 <div class="status-pill-dot"></div> Provider ${providerStatus === 'online' ? 'Balance OK' : providerStatus === 'warning' ? 'Balance Rendah' : 'Error'}
@@ -348,6 +361,12 @@
                 Diperbarui: ${new Date().toLocaleTimeString('id-ID')}
             </span>
         `;
+    }
+
+    async function measureApiPing() {
+        const start = performance.now();
+        await api('/api/health', { timeoutMs: 45000, retries: 1 });
+        return { latencyMs: Math.max(1, Math.round(performance.now() - start)) };
     }
 
     const svgIcons = {

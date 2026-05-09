@@ -1,5 +1,7 @@
 const REGISTER_PENDING_KEY = 'nokoshub.register.pending';
 const REGISTER_VERIFY_PATH = '/register/verify/';
+const AUTH_TIMEOUT_MS = 45000;
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 document.addEventListener('DOMContentLoaded', async () => {
   if (typeof lucide !== 'undefined') {
@@ -351,20 +353,53 @@ function persistAuth(result) {
 }
 
 async function apiFetch(path, body) {
-  const response = await fetch(apiUrl(path), {
+  const response = await fetchWithRetry(apiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, AUTH_TIMEOUT_MS);
   return unwrapApiResponse(response);
 }
 
 async function apiGet(path) {
-  const response = await fetch(apiUrl(path), {
+  const response = await fetchWithRetry(apiUrl(path), {
     method: 'GET',
     headers: { Accept: 'application/json' },
-  });
+  }, AUTH_TIMEOUT_MS);
   return unwrapApiResponse(response);
+}
+
+async function fetchWithRetry(url, options, timeoutMs) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      window.clearTimeout(timer);
+
+      if (RETRYABLE_STATUS.has(response.status) && attempt < 3) {
+        await sleep(attempt * 1200);
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      window.clearTimeout(timer);
+      lastError = err;
+      if (!isRetryableError(err) || attempt >= 3) {
+        throw new Error(humanizeAuthError(err?.message || 'Gagal terhubung ke server'));
+      }
+      await sleep(attempt * 1200);
+    }
+  }
+
+  throw new Error(humanizeAuthError(lastError?.message || 'Gagal terhubung ke server'));
 }
 
 async function unwrapApiResponse(response) {
@@ -386,7 +421,7 @@ async function unwrapApiResponse(response) {
   }
   if (!response.ok || payload.success === false) {
     const err = payload.error || payload.message || `HTTP ${response.status}`;
-    throw new Error(typeof err === 'string' ? err : JSON.stringify(err));
+    throw new Error(humanizeAuthError(typeof err === 'string' ? err : JSON.stringify(err)));
   }
   return payload.data ?? payload;
 }
@@ -590,6 +625,33 @@ function normalizeReferralCode(value) {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
+}
+
+function humanizeAuthError(message) {
+  const text = String(message || '');
+  const upper = text.toUpperCase();
+  if (
+    upper.includes('EAI_AGAIN') ||
+    upper.includes('ECONNREFUSED') ||
+    upper.includes('ETIMEDOUT') ||
+    upper.includes('NETWORKERROR') ||
+    upper.includes('ABORTERROR') ||
+    upper.includes('SELF-SIGNED CERTIFICATE') ||
+    upper.includes('KONEKSI DATABASE SEDANG GANGGUAN')
+  ) {
+    return 'Koneksi server sedang gangguan. Silakan coba lagi beberapa saat.';
+  }
+  return text;
+}
+
+function isRetryableError(err) {
+  const name = String(err?.name || '');
+  const message = String(err?.message || '').toUpperCase();
+  return name === 'AbortError' || message.includes('NETWORK') || message.includes('FAILED TO FETCH') || message.includes('LOAD FAILED');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function maskEmail(email) {

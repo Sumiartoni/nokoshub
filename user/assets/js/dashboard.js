@@ -14,8 +14,9 @@ const API_BASE = detectApiBase();
 const OTP_WAIT_SECONDS = 1200;
 const ORDER_CANCEL_DELAY_MS = 2 * 60 * 1000;
 const POLL_MS = 5000;
-const API_REQUEST_TIMEOUT_MS = 12000;
-const API_HEALTH_TIMEOUT_MS = 3500;
+const API_REQUEST_TIMEOUT_MS = 45000;
+const API_HEALTH_TIMEOUT_MS = 10000;
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const SUPPORT_CONTACT = {
   label: 'Customer Service',
   telegramHandle: '@nokoshubsupport',
@@ -205,31 +206,46 @@ function apiUrl(path, params = {}) {
 }
 
 async function apiFetch(path, options = {}) {
-  const { params, body, timeoutMs = API_REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
+  const { params, body, timeoutMs = API_REQUEST_TIMEOUT_MS, retries = 2, ...fetchOptions } = options;
   const token = localStorage.getItem(STORE_KEYS.token);
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   let response;
-  try {
-    response = await fetch(apiUrl(path, params), {
-      method: body ? 'POST' : 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(fetchOptions.headers || {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-      ...fetchOptions,
-    });
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      throw new Error(`Request timeout setelah ${Math.round(timeoutMs / 1000)} detik`);
+  let lastError;
+
+  for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      response = await fetch(apiUrl(path, params), {
+        method: body ? 'POST' : 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(fetchOptions.headers || {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+        ...fetchOptions,
+      });
+      if (RETRYABLE_STATUS.has(response.status) && attempt <= retries) {
+        await sleep(attempt * 1200);
+        continue;
+      }
+      break;
+    } catch (err) {
+      lastError = err;
+      if (!isRetryableFetchError(err) || attempt > retries) {
+        if (err?.name === 'AbortError') {
+          throw new Error(`Request timeout setelah ${Math.round(timeoutMs / 1000)} detik`);
+        }
+        throw err;
+      }
+      await sleep(attempt * 1200);
+    } finally {
+      window.clearTimeout(timer);
     }
-    throw err;
-  } finally {
-    window.clearTimeout(timer);
   }
+
+  if (!response) throw lastError || new Error('Request gagal');
   const text = await response.text();
   let payload;
   try {
@@ -278,6 +294,16 @@ async function pingBackendHealth() {
   } finally {
     window.clearTimeout(timer);
   }
+}
+
+function isRetryableFetchError(err) {
+  const name = String(err?.name || '');
+  const message = String(err?.message || '').toUpperCase();
+  return name === 'AbortError' || message.includes('FAILED TO FETCH') || message.includes('NETWORK') || message.includes('LOAD FAILED');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 async function loadSupportContact() {
