@@ -56,6 +56,8 @@ export interface HeroSMSPriceIdParts {
 }
 
 const PRICE_ID_PREFIX = 'herosms';
+const SERVER_EMPTY_WAIT_MESSAGE = 'Nomor dari server habis tunggu beberapa saat lagi';
+const SERVER_EMPTY_RESTOCK_MESSAGE = 'Nomor dari server habis silahkan tunggu beberapa saat lagi hingga server re stock';
 
 export function buildHeroSMSPriceId(serviceCode: string, countryCode: string, providerId: string): string {
     return [
@@ -159,7 +161,7 @@ function humanizeProviderRequestError(err: any): string {
         || normalized.includes('low balance')
         || normalized.includes('not enough balance')
     ) {
-        return 'Saldo akun HeroSMS tidak mencukupi. Isi saldo provider HeroSMS lalu coba lagi.';
+        return SERVER_EMPTY_WAIT_MESSAGE;
     }
 
     if (status === 402 || normalized.includes('payment required')) {
@@ -178,7 +180,7 @@ function humanizeProviderRequestError(err: any): string {
         return 'API key HeroSMS tidak valid atau akses ditolak. Periksa konfigurasi provider di VPS.';
     }
 
-    return rawMessage;
+    return humanizeProviderOrderMessage(rawMessage);
 }
 
 function normalizeStatus(data: unknown): ProviderStatusResult {
@@ -345,11 +347,16 @@ class HeroSMSProvider {
                     success: Boolean(orderId && phoneNumber),
                     order_id: orderId,
                     phone_number: phoneNumber,
-                    message: toStringValue(res.data.message) ?? 'Order response received',
+                    message: humanizeProviderOrderMessage(toStringValue(res.data.message) ?? 'Order response received'),
                 };
             }
 
-            return { success: false, order_id: null, phone_number: null, message: text || 'Order failed' };
+            return {
+                success: false,
+                order_id: null,
+                phone_number: null,
+                message: humanizeProviderOrderMessage(text || 'Order failed'),
+            };
         } catch (err: any) {
             logger.error({ err: this.errorSummary(err) }, 'HeroSMS orderNumber failed');
             return {
@@ -685,4 +692,27 @@ function isLikelyServiceCode(value: string): boolean {
 
 function formatFallbackServiceName(serviceCode: string): string {
     return serviceCode.toUpperCase();
+}
+
+function humanizeProviderOrderMessage(message: string) {
+    const normalized = String(message || '').toUpperCase();
+    if (
+        normalized.includes('NO_NUMBERS')
+        || normalized.includes('NO NUMBER')
+        || normalized.includes('NO_NUMBER')
+        || normalized.includes('NO STOCK')
+        || normalized.includes('NOT ENOUGH STOCK')
+        || normalized.includes('OUT OF STOCK')
+    ) {
+        return SERVER_EMPTY_RESTOCK_MESSAGE;
+    }
+    if (
+        normalized.includes('INSUFFICIENT')
+        || normalized.includes('LOW BALANCE')
+        || normalized.includes('NOT ENOUGH BALANCE')
+        || normalized.includes('BALANCE')
+    ) {
+        return SERVER_EMPTY_WAIT_MESSAGE;
+    }
+    return message;
 }

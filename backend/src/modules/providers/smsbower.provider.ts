@@ -22,6 +22,8 @@ export interface SmsBowerPriceIdParts {
 
 const PRICE_ID_PREFIX = 'server1';
 const RETRYABLE_NETWORK_CODES = new Set(['EAI_AGAIN', 'ETIMEDOUT', 'ECONNRESET', 'ECONNABORTED', 'ENOTFOUND']);
+const SERVER_EMPTY_WAIT_MESSAGE = 'Nomor dari server habis tunggu beberapa saat lagi';
+const SERVER_EMPTY_RESTOCK_MESSAGE = 'Nomor dari server habis silahkan tunggu beberapa saat lagi hingga server re stock';
 
 export function buildSmsBowerPriceId(serviceCode: string, countryCode: string, providerId: string) {
     return [
@@ -211,11 +213,16 @@ class SmsBowerProvider {
                     success: Boolean(orderId && phoneNumber),
                     order_id: orderId,
                     phone_number: phoneNumber,
-                    message: toStringValue(res.data.message) ?? 'Order response received',
+                    message: humanizeProviderOrderMessage(toStringValue(res.data.message) ?? 'Order response received'),
                 };
             }
 
-            return { success: false, order_id: null, phone_number: null, message: text || 'Order failed' };
+            return {
+                success: false,
+                order_id: null,
+                phone_number: null,
+                message: humanizeProviderOrderMessage(text || 'Order failed'),
+            };
         } catch (err: any) {
             logger.error({ err: this.errorSummary(err) }, 'SmsBower orderNumber failed');
             return {
@@ -380,12 +387,12 @@ class SmsBowerProvider {
         const normalized = raw.toLowerCase();
 
         if (normalized.includes('insufficient') || normalized.includes('balance')) {
-            return 'Saldo akun SMSBower tidak mencukupi. Isi saldo provider lalu coba lagi.';
+            return SERVER_EMPTY_WAIT_MESSAGE;
         }
         if (status === 401 || status === 403 || normalized.includes('invalid api key')) {
             return 'API key SMSBower tidak valid atau akses ditolak.';
         }
-        return raw;
+        return humanizeProviderOrderMessage(raw);
     }
 
     private errorSummary(err: any) {
@@ -428,6 +435,29 @@ function isRetryableNetworkError(err: any): boolean {
 
 function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function humanizeProviderOrderMessage(message: string) {
+    const normalized = String(message || '').toUpperCase();
+    if (
+        normalized.includes('NO_NUMBERS')
+        || normalized.includes('NO NUMBER')
+        || normalized.includes('NO_NUMBER')
+        || normalized.includes('NO STOCK')
+        || normalized.includes('NOT ENOUGH STOCK')
+        || normalized.includes('OUT OF STOCK')
+    ) {
+        return SERVER_EMPTY_RESTOCK_MESSAGE;
+    }
+    if (
+        normalized.includes('INSUFFICIENT')
+        || normalized.includes('LOW BALANCE')
+        || normalized.includes('NOT ENOUGH BALANCE')
+        || normalized.includes('BALANCE')
+    ) {
+        return SERVER_EMPTY_WAIT_MESSAGE;
+    }
+    return message;
 }
 
 function normalizeServicesResponse(body: unknown): ProviderService[] {

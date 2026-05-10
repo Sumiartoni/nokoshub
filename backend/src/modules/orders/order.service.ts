@@ -1,6 +1,6 @@
 import { prisma } from '../../database/prisma.client';
 import { getOtpProvider, resolveProviderRuntimeFromPriceId } from '../providers/provider-runtime';
-import { serviceService } from '../services/service.service';
+import { isProviderSyncRunning, serviceService } from '../services/service.service';
 import { otpQueue } from '../../queue/queue';
 import logger from '../../utils/logger';
 import { formatRupiah } from '../../utils/helpers';
@@ -376,11 +376,16 @@ export const orderService = {
 };
 
 async function deactivateUnavailablePrice(priceId: string) {
+    if (isProviderSyncRunning()) {
+        logger.info({ priceId }, 'Skipping unavailable price deactivation while provider sync is running');
+        return;
+    }
+
     try {
-        await prisma.price.update({
+        await withDeadlockRetry(() => prisma.price.update({
             where: { id: priceId },
             data: { isActive: false },
-        });
+        }), 'deactivate_unavailable_price', { priceId });
         logger.warn({ priceId }, 'Price deactivated after provider reported no stock');
     } catch (err) {
         logger.warn({ err, priceId }, 'Failed to deactivate unavailable price');
@@ -394,7 +399,9 @@ function isProviderUnavailableMessage(message: string | null | undefined) {
         || text.includes('NO_NUMBER')
         || text.includes('NO STOCK')
         || text.includes('NOT ENOUGH STOCK')
-        || text.includes('OUT OF STOCK');
+        || text.includes('OUT OF STOCK')
+        || text.includes('SERVER HABIS')
+        || text.includes('RE STOCK');
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
@@ -595,4 +602,30 @@ async function failReservedOrder(
 async function cancelProviderActivation(providerKey: OtpProviderKey, providerOrderId: string) {
     const provider = getOtpProvider(providerKey);
     await provider.cancelActivation(providerOrderId);
+}
+
+async function withDeadlockRetry<T>(task: () => Promise<T>, label: string, meta?: Record<string, unknown>): Promise<T> {
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt < 3) {
+        attempt += 1;
+        try {
+            return await task();
+        } catch (err: any) {
+            lastError = err;
+            const code = String(err?.code || err?.meta?.code || '');
+            const message = String(err?.message || '');
+            const isDeadlock = code === '40P01' || message.toLowerCase().includes('deadlock detected');
+            if (!isDeadlock || attempt >= 3) {
+                throw err;
+            }
+
+            const retryMs = attempt * 250;
+            logger.warn({ label, attempt, retryMs, code, ...meta }, 'Deadlock detected, retrying order database operation');
+            await new Promise((resolve) => setTimeout(resolve, retryMs));
+        }
+    }
+
+    throw lastError;
 }
