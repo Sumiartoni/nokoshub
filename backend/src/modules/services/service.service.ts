@@ -16,6 +16,10 @@ type ProviderSyncBreakdown = {
 
 let providerSyncRunning = false;
 
+export function isProviderSyncRunning() {
+    return providerSyncRunning;
+}
+
 export const serviceService = {
     /**
      * Sync services, countries, and prices from every configured OTP provider.
@@ -301,6 +305,32 @@ export const serviceService = {
     },
 };
 
+async function withDeadlockRetry<T>(task: () => Promise<T>, label: string, meta?: Record<string, unknown>): Promise<T> {
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt < 3) {
+        attempt += 1;
+        try {
+            return await task();
+        } catch (err: any) {
+            lastError = err;
+            const code = String(err?.code || err?.meta?.code || '');
+            const message = String(err?.message || '');
+            const isDeadlock = code === '40P01' || message.toLowerCase().includes('deadlock detected');
+            if (!isDeadlock || attempt >= 3) {
+                throw err;
+            }
+
+            const retryMs = attempt * 250;
+            logger.warn({ label, attempt, retryMs, code, ...meta }, 'Deadlock detected, retrying database operation');
+            await new Promise((resolve) => setTimeout(resolve, retryMs));
+        }
+    }
+
+    throw lastError;
+}
+
 interface NormalizedPriceForSync {
     priceId: string;
     providerPrice: number;
@@ -429,7 +459,16 @@ async function bulkUpsertPrices(
         `;
 
         try {
-            await prisma.$executeRawUnsafe(query);
+            await withDeadlockRetry(
+                () => prisma.$executeRawUnsafe(query),
+                'price_bulk_upsert',
+                {
+                    providerKey: meta.providerKey,
+                    provider: meta.providerLabel,
+                    country: meta.countryName,
+                    service: meta.serviceName,
+                }
+            );
             inserted += chunk.length;
         } catch (err: any) {
             logger.error(
@@ -457,25 +496,33 @@ async function deactivateStalePricesForService(
     const activeIds = [...activePriceIds];
 
     if (!activeIds.length) {
-        await prisma.price.updateMany({
-            where: {
-                serviceId,
-                isActive: true,
-                priceId: { startsWith: providerPrefix },
-            },
-            data: { isActive: false },
-        });
+        await withDeadlockRetry(
+            () => prisma.price.updateMany({
+                where: {
+                    serviceId,
+                    isActive: true,
+                    priceId: { startsWith: providerPrefix },
+                },
+                data: { isActive: false },
+            }),
+            'deactivate_stale_prices',
+            { serviceId, providerKey, mode: 'all' }
+        );
         return;
     }
 
-    await prisma.price.updateMany({
-        where: {
-            serviceId,
-            isActive: true,
-            priceId: { startsWith: providerPrefix, notIn: activeIds },
-        },
-        data: { isActive: false },
-    });
+    await withDeadlockRetry(
+        () => prisma.price.updateMany({
+            where: {
+                serviceId,
+                isActive: true,
+                priceId: { startsWith: providerPrefix, notIn: activeIds },
+            },
+            data: { isActive: false },
+        }),
+        'deactivate_stale_prices',
+        { serviceId, providerKey, mode: 'diff', activeCount: activeIds.length }
+    );
 }
 
 function buildStoredServiceCode(providerKey: 'server1' | 'herosms', serviceCode: string) {

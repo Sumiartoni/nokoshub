@@ -5,6 +5,7 @@ import logger from '../../utils/logger';
 import { referralService } from '../referrals/referral.service';
 import { bayarGgService, type BayarGgWebhookPayload } from './bayargg.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
+import { isProviderSyncRunning } from '../services/service.service';
 
 type LegacyWebhookBody = {
     invoiceId?: string;
@@ -245,6 +246,18 @@ export const paymentService = {
     },
 
     async reconcilePendingInvoices(limit = 25) {
+        if (isProviderSyncRunning()) {
+            logger.info({ limit }, 'Skipping payment reconcile while provider sync is running');
+            return {
+                inspected: 0,
+                completed: 0,
+                expired: 0,
+                cancelled: 0,
+                failed: 0,
+                skipped: true,
+            };
+        }
+
         await paymentService.expireOverdueInvoices();
 
         const pendingInvoices = await prisma.invoice.findMany({
@@ -300,6 +313,11 @@ export const paymentService = {
     },
 
     async expireOverdueInvoices(now = new Date()) {
+        if (isProviderSyncRunning()) {
+            logger.info('Skipping invoice expiry while provider sync is running');
+            return 0;
+        }
+
         const result = await prisma.invoice.updateMany({
             where: {
                 status: 'PENDING',
