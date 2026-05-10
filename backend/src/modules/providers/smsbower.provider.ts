@@ -182,8 +182,7 @@ class SmsBowerProvider {
                 country: params.countryCode,
             };
             if (params.providerId && params.providerId !== 'default') {
-                requestParams.provider = params.providerId;
-                requestParams.provider_id = params.providerId;
+                requestParams.providerIds = params.providerId;
             }
 
             const maxPrice = await this.resolveMaxPrice(params);
