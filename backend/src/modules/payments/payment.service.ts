@@ -218,12 +218,26 @@ export const paymentService = {
         }
     },
 
-    async getAllInvoices(limit = 50) {
+    async getAllInvoices(limit = 50, dateRange?: { start?: Date; end?: Date }) {
         await paymentService.reconcilePendingInvoices(Math.min(Math.max(limit, 1), 20))
             .catch(err => logger.warn({ err }, 'Failed to reconcile pending invoices before admin invoice fetch'));
         await paymentService.expireOverdueInvoices();
 
+        const where: {
+            createdAt?: {
+                gte?: Date;
+                lte?: Date;
+            };
+        } = {};
+
+        if (dateRange?.start || dateRange?.end) {
+            where.createdAt = {};
+            if (dateRange.start) where.createdAt.gte = dateRange.start;
+            if (dateRange.end) where.createdAt.lte = dateRange.end;
+        }
+
         return prisma.invoice.findMany({
+            where,
             include: { user: { select: { telegramId: true, username: true } } },
             orderBy: { createdAt: 'desc' },
             take: limit,

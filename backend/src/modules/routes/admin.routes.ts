@@ -18,6 +18,7 @@ import { seoPagesService } from '../settings/seo-pages.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { userService } from '../users/user.service';
 import { newsletterService } from '../newsletter/newsletter.service';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const pricingSettingsSchema = z.object({
@@ -198,6 +199,51 @@ const maintenanceActionSchema = z.object({
     limit: z.number().int().min(1).max(100).optional(),
 });
 
+function parseAdminDateRange(input: { dateFrom?: string; dateTo?: string }) {
+    const range: { start?: Date; end?: Date } = {};
+
+    if (input.dateFrom) {
+        const start = new Date(input.dateFrom);
+        if (!Number.isFinite(start.getTime())) {
+            throw new Error('dateFrom tidak valid');
+        }
+        range.start = start;
+    }
+
+    if (input.dateTo) {
+        const end = new Date(input.dateTo);
+        if (!Number.isFinite(end.getTime())) {
+            throw new Error('dateTo tidak valid');
+        }
+        range.end = end;
+    }
+
+    if (range.start && range.end && range.start > range.end) {
+        throw new Error('dateFrom tidak boleh lebih besar dari dateTo');
+    }
+
+    return range;
+}
+
+function buildSqlDateRange(columnName: string, range: { start?: Date; end?: Date }) {
+    const column = Prisma.raw(columnName);
+    const clauses: Prisma.Sql[] = [];
+
+    if (range.start) {
+        clauses.push(Prisma.sql`${column} >= ${range.start}`);
+    }
+
+    if (range.end) {
+        clauses.push(Prisma.sql`${column} <= ${range.end}`);
+    }
+
+    if (!clauses.length) {
+        return Prisma.empty;
+    }
+
+    return Prisma.sql` AND ${Prisma.join(clauses, ' AND ')}`;
+}
+
 function requireAdmin(req: any, reply: any): boolean {
     const key = req.headers['x-admin-key'];
     if (key !== config.ADMIN_API_KEY && !hasBackofficeSession(req)) {
@@ -218,17 +264,50 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.get('/overview', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
 
+        const query = req.query as { dateFrom?: string; dateTo?: string };
+        let dateRange: { start?: Date; end?: Date };
+        try {
+            dateRange = parseAdminDateRange(query);
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: err instanceof Error ? err.message : 'Rentang tanggal tidak valid' });
+        }
+
+        const orderWhere = {
+            ...(dateRange.start || dateRange.end
+                ? {
+                    createdAt: {
+                        ...(dateRange.start ? { gte: dateRange.start } : {}),
+                        ...(dateRange.end ? { lte: dateRange.end } : {}),
+                    },
+                }
+                : {}),
+        };
+        const paidInvoiceWhere = {
+            status: 'PAID' as const,
+            ...(dateRange.start || dateRange.end
+                ? {
+                    paidAt: {
+                        ...(dateRange.start ? { gte: dateRange.start } : {}),
+                        ...(dateRange.end ? { lte: dateRange.end } : {}),
+                    },
+                }
+                : {}),
+        };
+        const orderDateSql = buildSqlDateRange('o."createdAt"', dateRange);
+
         const [
             totalOrders,
             activeOrders,
+            successOrders,
             totalServices,
             userBalanceAgg,
             providerSummary,
             paidInvoiceAgg,
             orderTotals,
         ] = await Promise.all([
-            prisma.order.count(),
-            prisma.order.count({ where: { status: 'ACTIVE' } }),
+            prisma.order.count({ where: orderWhere }),
+            prisma.order.count({ where: { ...orderWhere, status: 'ACTIVE' } }),
+            prisma.order.count({ where: { ...orderWhere, status: 'SUCCESS' } }),
             prisma.service.count({ where: { isActive: true } }),
             prisma.user.aggregate({ _sum: { balance: true } }),
             (async () => {
@@ -245,17 +324,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 }
             })(),
             prisma.invoice.aggregate({
-                where: { status: 'PAID' },
+                where: paidInvoiceWhere,
                 _sum: { baseAmount: true, gatewayFee: true, amount: true },
             }),
-            prisma.$queryRaw<Array<{ totalOrderRevenue: bigint | number | null; netProfit: bigint | number | null }>>`
+            prisma.$queryRaw<Array<{ totalOrderRevenue: bigint | number | null; netProfit: bigint | number | null }>>(Prisma.sql`
                 SELECT
                     COALESCE(SUM(p."sellPrice"), 0) AS "totalOrderRevenue",
                     COALESCE(SUM(p."sellPrice" - p."providerPrice"), 0) AS "netProfit"
                 FROM "Order" o
                 INNER JOIN "Price" p ON p.id = o."priceId"
-                WHERE o.status IN ('ACTIVE', 'SUCCESS')
-            `,
+                WHERE o.status = 'SUCCESS'
+                ${orderDateSql}
+            `),
         ]);
 
         const totalUserBalance = userBalanceAgg._sum.balance ?? 0;
@@ -272,6 +352,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             data: {
                 totalOrders,
                 activeOrders,
+                successOrders,
                 totalServices,
                 totalOrderRevenue,
                 totalUserBalance,
@@ -285,6 +366,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 providerRate: providerRate?.effectiveRate ?? 0,
                 providerRateBase: providerRate?.baseRate ?? 0,
                 providerRateBufferPercent: providerRate?.bufferPercent ?? 0,
+                reportDateFrom: dateRange.start?.toISOString() ?? null,
+                reportDateTo: dateRange.end?.toISOString() ?? null,
             },
         };
     });
@@ -536,10 +619,17 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/admin/orders
     fastify.get('/orders', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
-        const query = req.query as { status?: string; limit?: string };
+        const query = req.query as { status?: string; limit?: string; dateFrom?: string; dateTo?: string };
+        let dateRange: { start?: Date; end?: Date };
+        try {
+            dateRange = parseAdminDateRange(query);
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: err instanceof Error ? err.message : 'Rentang tanggal tidak valid' });
+        }
         const orders = await orderService.getAllOrders(
             query.limit ? parseInt(query.limit) : 50,
-            query.status
+            query.status,
+            dateRange
         );
         return { success: true, data: orders };
     });
@@ -609,10 +699,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/admin/invoices
     fastify.get('/invoices', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
-        const query = req.query as { limit?: string };
+        const query = req.query as { limit?: string; dateFrom?: string; dateTo?: string };
+        let dateRange: { start?: Date; end?: Date };
+        try {
+            dateRange = parseAdminDateRange(query);
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: err instanceof Error ? err.message : 'Rentang tanggal tidak valid' });
+        }
         const rawLimit = Number.parseInt(query.limit ?? '50', 10);
         const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
-        const invoices = await paymentService.getAllInvoices(limit);
+        const invoices = await paymentService.getAllInvoices(limit, dateRange);
         return { success: true, data: invoices };
     });
 

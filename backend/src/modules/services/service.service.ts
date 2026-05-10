@@ -82,6 +82,7 @@ export const serviceService = {
                     providerServicesCount++;
 
                     const countries = await provider.getCountries(svc.service_code);
+                    const activePriceIdsForService = new Set<string>();
 
                     for (const ctr of countries) {
                         if (!ctr.name || !ctr.number_id || !Array.isArray(ctr.pricelist)) continue;
@@ -102,6 +103,8 @@ export const serviceService = {
 
                         if (validPrices.length === 0) continue;
 
+                        validPrices.forEach((price) => activePriceIdsForService.add(price.priceId));
+
                         const inserted = await bulkUpsertPrices(service.id, country.id, validPrices, {
                             providerKey,
                             countryName: ctr.name,
@@ -111,6 +114,8 @@ export const serviceService = {
                         pricesCount += inserted;
                         providerPricesCount += inserted;
                     }
+
+                    await deactivateStalePricesForService(service.id, providerKey, activePriceIdsForService);
                 }
 
                 providerBreakdown.push({
@@ -441,6 +446,36 @@ async function bulkUpsertPrices(
     }
 
     return inserted;
+}
+
+async function deactivateStalePricesForService(
+    serviceId: string,
+    providerKey: string,
+    activePriceIds: Set<string>
+) {
+    const providerPrefix = `${providerKey}:`;
+    const activeIds = [...activePriceIds];
+
+    if (!activeIds.length) {
+        await prisma.price.updateMany({
+            where: {
+                serviceId,
+                isActive: true,
+                priceId: { startsWith: providerPrefix },
+            },
+            data: { isActive: false },
+        });
+        return;
+    }
+
+    await prisma.price.updateMany({
+        where: {
+            serviceId,
+            isActive: true,
+            priceId: { startsWith: providerPrefix, notIn: activeIds },
+        },
+        data: { isActive: false },
+    });
 }
 
 function buildStoredServiceCode(providerKey: 'server1' | 'herosms', serviceCode: string) {

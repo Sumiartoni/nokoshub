@@ -103,6 +103,90 @@
         users:        { title: 'Users',       sub: 'Manajemen pengguna & penyesuaian saldo' },
     };
 
+    const overviewRangeState = {
+        preset: '7d',
+        customStart: '',
+        customEnd: '',
+    };
+
+    window.setOverviewRangePreset = function (preset) {
+        overviewRangeState.preset = preset;
+        syncOverviewRangeUi();
+        if (preset !== 'custom') {
+            loadOverview();
+        }
+    };
+
+    window.applyOverviewCustomRange = function () {
+        const startInput = document.getElementById('overviewDateFrom');
+        const endInput = document.getElementById('overviewDateTo');
+        const startValue = startInput?.value || '';
+        const endValue = endInput?.value || '';
+
+        if (!startValue || !endValue) {
+            showToast('Tanggal awal dan akhir wajib diisi untuk custom laporan', 'warning');
+            return;
+        }
+
+        if (new Date(`${startValue}T00:00:00`).getTime() > new Date(`${endValue}T23:59:59.999`).getTime()) {
+            showToast('Tanggal awal tidak boleh lebih besar dari tanggal akhir', 'warning');
+            return;
+        }
+
+        overviewRangeState.preset = 'custom';
+        overviewRangeState.customStart = startValue;
+        overviewRangeState.customEnd = endValue;
+        syncOverviewRangeUi();
+        loadOverview();
+    };
+
+    function syncOverviewRangeUi() {
+        document.querySelectorAll('[data-range-preset]').forEach((button) => {
+            button.classList.toggle('active', button.dataset.rangePreset === overviewRangeState.preset);
+        });
+
+        const customGroup = document.getElementById('overviewCustomRangeGroup');
+        if (customGroup) {
+            customGroup.classList.toggle('active', overviewRangeState.preset === 'custom');
+        }
+
+        const startInput = document.getElementById('overviewDateFrom');
+        const endInput = document.getElementById('overviewDateTo');
+        if (startInput) startInput.value = overviewRangeState.customStart;
+        if (endInput) endInput.value = overviewRangeState.customEnd;
+    }
+
+    function getOverviewQueryString() {
+        const params = new URLSearchParams();
+        const now = new Date();
+        let start = null;
+        let end = null;
+
+        if (overviewRangeState.preset === '1d') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (overviewRangeState.preset === '7d') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (overviewRangeState.preset === '30d') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (overviewRangeState.preset === 'custom' && overviewRangeState.customStart && overviewRangeState.customEnd) {
+            start = new Date(`${overviewRangeState.customStart}T00:00:00`);
+            end = new Date(`${overviewRangeState.customEnd}T23:59:59.999`);
+        }
+
+        if (start && Number.isFinite(start.getTime())) {
+            params.set('dateFrom', start.toISOString());
+        }
+        if (end && Number.isFinite(end.getTime())) {
+            params.set('dateTo', end.toISOString());
+        }
+
+        const query = params.toString();
+        return query ? `?${query}` : '';
+    }
+
     window.navigateTo = function (page) {
         document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.remove('active'));
         document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
@@ -251,11 +335,13 @@
     // ═══════════════════════════════════════════════════════════════════════════
     async function loadOverview() {
         renderStatSkeleton();
+        syncOverviewRangeUi();
+        const query = getOverviewQueryString();
 
         const [overviewRes, ordersRes, invoicesRes, pingRes] = await Promise.allSettled([
-            api('/api/admin/overview'),
-            api('/api/admin/orders?limit=12'),
-            api('/api/admin/invoices?limit=12'),
+            api(`/api/admin/overview${query}`),
+            api(`/api/admin/orders${query ? `${query}&limit=12` : '?limit=12'}`),
+            api(`/api/admin/invoices${query ? `${query}&limit=12` : '?limit=12'}`),
             measureApiPing(),
         ]);
 
@@ -265,22 +351,14 @@
         let totalOrders = '—', activeOrders = '—';
         if (ordersRes.status === 'fulfilled' && ordersRes.value.success) {
             ordersData = ordersRes.value.data;
-            totalOrders = ordersData.length;
-            activeOrders = ordersData.filter(o => o.status === 'ACTIVE').length;
-            document.getElementById('ordersBadge').textContent = activeOrders || '0';
             renderRecentOrders(ordersData.slice(0, 7));
         } else {
             document.getElementById('recentOrdersBody').innerHTML = emptyHTML('Gagal memuat order');
         }
 
         // Invoices
-        let invoiceRevenue = '—';
         if (invoicesRes.status === 'fulfilled' && invoicesRes.value.success) {
             invoicesData = invoicesRes.value.data;
-            const totalPaid = invoicesData
-                .filter(i => i.status === 'PAID')
-                .reduce((s, i) => s + (i.baseAmount || i.amount), 0);
-            invoiceRevenue = formatRupiah(totalPaid);
             renderRecentInvoices(invoicesData.slice(0, 7));
         } else {
             document.getElementById('recentInvoicesBody').innerHTML = emptyHTML('Gagal memuat invoice');
@@ -295,6 +373,7 @@
         let totalOrderRevenue = '—';
         let totalUserBalance = '—';
         let netProfit = '—';
+        let successfulOrders = '—';
 
         if (overviewRes.status === 'fulfilled' && overviewRes.value.success) {
             const summary = overviewRes.value.data || {};
@@ -302,6 +381,10 @@
             totalUserBalance = formatRupiahFull(summary.totalUserBalance ?? 0);
             netProfit = formatRupiahFull(summary.netProfit ?? 0);
             totalServices = Number(summary.totalServices ?? 0);
+            successfulOrders = String(summary.successOrders ?? 0);
+            totalOrders = successfulOrders;
+            activeOrders = String(summary.activeOrders ?? 0);
+            document.getElementById('ordersBadge').textContent = activeOrders || '0';
 
             const providerUsd = Number(summary.providerBalanceUsd ?? 0);
             const exchangeRate = Number(summary.providerRate || 0);
@@ -324,7 +407,7 @@
         grid.innerHTML = `
             ${statCard('sky', 'revenue', 'Saldo Deposit User', totalUserBalance)}
             ${statCard('emerald', 'revenue', 'Net Profit', netProfit)}
-            ${statCard('indigo', 'orders', 'Omzet Order', totalOrderRevenue, totalOrders !== '—' ? `${totalOrders} transaksi` : '')}
+            ${statCard('indigo', 'orders', 'Omzet Order', totalOrderRevenue, successfulOrders !== '—' ? `${successfulOrders} order sukses` : '')}
             ${statCard('amber', 'provider', 'Saldo Provider', providerBal, providerMeta)}
             ${statCard('rose', 'services', 'Layanan Aktif', totalServices)}
         `;

@@ -67,6 +67,9 @@ export const orderService = {
                     failReason: result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`,
                     refundDescription: 'Refund order failed before activation',
                 });
+                if (isProviderUnavailableMessage(result.message)) {
+                    await deactivateUnavailablePrice(price.id);
+                }
                 throw new Error(result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`);
             }
 
@@ -344,9 +347,24 @@ export const orderService = {
     },
 
     /** Get all orders (admin) */
-    async getAllOrders(limit = 50, status?: string) {
+    async getAllOrders(limit = 50, status?: string, dateRange?: { start?: Date; end?: Date }) {
+        const where: {
+            status?: string;
+            createdAt?: {
+                gte?: Date;
+                lte?: Date;
+            };
+        } = {};
+
+        if (status) where.status = status;
+        if (dateRange?.start || dateRange?.end) {
+            where.createdAt = {};
+            if (dateRange.start) where.createdAt.gte = dateRange.start;
+            if (dateRange.end) where.createdAt.lte = dateRange.end;
+        }
+
         return prisma.order.findMany({
-            where: status ? { status } : {},
+            where,
             include: {
                 user: { select: { telegramId: true, username: true } },
                 price: { include: { service: true, country: true } },
@@ -356,6 +374,28 @@ export const orderService = {
         });
     },
 };
+
+async function deactivateUnavailablePrice(priceId: string) {
+    try {
+        await prisma.price.update({
+            where: { id: priceId },
+            data: { isActive: false },
+        });
+        logger.warn({ priceId }, 'Price deactivated after provider reported no stock');
+    } catch (err) {
+        logger.warn({ err, priceId }, 'Failed to deactivate unavailable price');
+    }
+}
+
+function isProviderUnavailableMessage(message: string | null | undefined) {
+    const text = String(message || '').toUpperCase();
+    return text.includes('NO_NUMBERS')
+        || text.includes('NO NUMBER')
+        || text.includes('NO_NUMBER')
+        || text.includes('NO STOCK')
+        || text.includes('NOT ENOUGH STOCK')
+        || text.includes('OUT OF STOCK');
+}
 
 function toOptionalNumber(value: unknown): number | undefined {
     if (value === null || value === undefined) return undefined;

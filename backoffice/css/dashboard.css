@@ -875,6 +875,27 @@ html, body {
     gap: 8px;
     flex-wrap: wrap;
 }
+.overview-toolbar {
+    justify-content: space-between;
+    align-items: center;
+}
+.overview-date-range {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.overview-date-range.active {
+    display: flex;
+}
+.overview-date-range .form-input {
+    width: auto;
+    min-width: 170px;
+}
+.overview-date-separator {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
 .filter-bar .form-select {
     width: auto;
     min-width: 140px;
@@ -1102,6 +1123,10 @@ html, body {
     .stats-grid { grid-template-columns: 1fr; }
     .filter-bar { flex-direction: column; align-items: stretch; }
     .search-wrapper { min-width: unset; }
+    .overview-toolbar { align-items: stretch; }
+    .overview-date-range,
+    .overview-date-range.active { width: 100%; }
+    .overview-date-range .form-input { min-width: unset; width: 100%; }
     .header-time { display: none; }
     .pricing-input-row { grid-template-columns: 1fr; }
 }

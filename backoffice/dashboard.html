@@ -8,7 +8,7 @@
     <title>NokosHUB — Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/dashboard.css?v=20260509-1">
+    <link rel="stylesheet" href="css/dashboard.css?v=20260510-1">
 </head>
 <body>
 <div class="app-layout">
@@ -213,6 +213,20 @@
 
             <!-- ════════ OVERVIEW PAGE ════════ -->
             <div class="page-section active" id="page-overview">
+                <div class="filter-bar overview-toolbar">
+                    <div class="filter-chip-group" id="overviewRangePresetGroup">
+                        <button class="btn btn-sm btn-outline active" type="button" data-range-preset="7d" onclick="setOverviewRangePreset('7d')">1 Minggu</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-range-preset="1d" onclick="setOverviewRangePreset('1d')">1 Hari</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-range-preset="30d" onclick="setOverviewRangePreset('30d')">1 Bulan</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-range-preset="custom" onclick="setOverviewRangePreset('custom')">Custom</button>
+                    </div>
+                    <div class="overview-date-range" id="overviewCustomRangeGroup">
+                        <input type="date" class="form-input" id="overviewDateFrom">
+                        <span class="overview-date-separator">s/d</span>
+                        <input type="date" class="form-input" id="overviewDateTo">
+                        <button class="btn btn-sm btn-outline" type="button" onclick="applyOverviewCustomRange()">Terapkan</button>
+                    </div>
+                </div>
                 <!-- Stats Grid -->
                 <div class="stats-grid" id="statsGrid">
                     <!-- filled dynamically -->
@@ -1431,8 +1445,8 @@
     </div>
 </div>
 
-<script src="js/auth.js?v=20260509-1"></script>
-<script src="js/dashboard.js?v=20260509-1"></script>
+<script src="js/auth.js?v=20260510-1"></script>
+<script src="js/dashboard.js?v=20260510-1"></script>
 </body>
 </html>
 
