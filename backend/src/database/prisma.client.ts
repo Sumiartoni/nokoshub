@@ -28,6 +28,10 @@ function buildDatabaseConnectionConfig() {
     return {
         connectionString: url.toString(),
         ssl,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10_000,
+        connectionTimeoutMillis: 15_000,
+        idleTimeoutMillis: 30_000,
     };
 }
 

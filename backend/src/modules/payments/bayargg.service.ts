@@ -1,16 +1,19 @@
 import crypto from 'crypto';
 import axios from 'axios';
 import { config } from '../../app/config';
+import { buildOutboundAxiosConfig } from '../../utils/outbound-http';
 
-const bayarGgClient = axios.create({
-    baseURL: 'https://www.bayar.gg/api',
-    timeout: 15000,
-    headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/plain, */*',
-        'User-Agent': 'NokosHUB/1.0 (+https://nokoshub.store)',
-    },
-});
+const bayarGgClient = axios.create(
+    buildOutboundAxiosConfig({
+        baseURL: 'https://www.bayar.gg/api',
+        timeout: 15000,
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/plain, */*',
+            'User-Agent': 'NokosHUB/1.0 (+https://nokoshub.store)',
+        },
+    })
+);
 
 export interface BayarGgPayment {
     invoiceId: string;
@@ -382,14 +385,19 @@ async function enrichHostedPaymentQr(payment: BayarGgPayment): Promise<BayarGgPa
     }
 
     try {
-        const response = await axios.get(payment.paymentUrl, {
-            timeout: 15000,
-            responseType: 'text',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36',
-                Accept: 'text/html,application/xhtml+xml',
-            },
-        });
+        const response = await axios.get(
+            payment.paymentUrl,
+            {
+                ...buildOutboundAxiosConfig({
+                    timeout: 15000,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36',
+                        Accept: 'text/html,application/xhtml+xml',
+                    },
+                }),
+                responseType: 'text',
+            }
+        );
 
         const html = String(response.data || '');
         const hostedQrImageUrl = extractHostedQrImageUrl(html, payment.paymentUrl);

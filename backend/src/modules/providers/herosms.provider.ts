@@ -3,6 +3,7 @@ import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { pricingService } from '../pricing/pricing.service';
 import { PROVIDER_BROWSER_HEADERS } from './provider-http';
+import { buildOutboundAxiosConfig } from '../../utils/outbound-http';
 
 type AnyRecord = Record<string, any>;
 
@@ -233,11 +234,13 @@ class HeroSMSProvider {
     private countriesCache: Map<string, string> | null = null;
 
     constructor() {
-        this.client = axios.create({
-            baseURL: normalizeHeroSMSBaseUrl(config.HERO_SMS_BASE_URL),
-            timeout: 15000,
-            headers: PROVIDER_BROWSER_HEADERS,
-        });
+        this.client = axios.create(
+            buildOutboundAxiosConfig({
+                baseURL: normalizeHeroSMSBaseUrl(config.HERO_SMS_BASE_URL),
+                timeout: 15000,
+                headers: PROVIDER_BROWSER_HEADERS,
+            })
+        );
     }
 
     isConfigured() {

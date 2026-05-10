@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '../../app/config';
 import { prisma } from '../../database/prisma.client';
 import logger from '../../utils/logger';
+import { buildOutboundAxiosConfig } from '../../utils/outbound-http';
 
 const SELL_PRICE_MULTIPLIER_KEY = 'sell_price_multiplier';
 const PRICING_PROTECTION_PERCENT_KEY = 'pricing_protection_percent';
@@ -90,10 +91,13 @@ export const pricingService = {
         } else {
             try {
                 const response = await withRetry(
-                    () => axios.get(config.USD_IDR_RATE_API_URL, {
-                        timeout: 10000,
-                        headers: { Accept: 'application/json' },
-                    }),
+                    () => axios.get(
+                        config.USD_IDR_RATE_API_URL,
+                        buildOutboundAxiosConfig({
+                            timeout: 10000,
+                            headers: { Accept: 'application/json' },
+                        })
+                    ),
                     'pricingService.getUsdIdrRate'
                 );
                 const rate = extractUsdIdrRate(response.data);

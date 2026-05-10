@@ -3,6 +3,7 @@ import { config } from '../../app/config';
 import logger from '../../utils/logger';
 import { pricingService } from '../pricing/pricing.service';
 import { PROVIDER_BROWSER_HEADERS } from './provider-http';
+import { buildOutboundAxiosConfig } from '../../utils/outbound-http';
 import type {
     ProviderCountry,
     ProviderOrderParams,
@@ -132,11 +133,13 @@ class SmsBowerProvider {
     private countriesCache: Map<string, string> | null = null;
 
     constructor() {
-        this.client = axios.create({
-            baseURL: normalizeBaseUrl(config.SMSBOWER_BASE_URL),
-            timeout: 15000,
-            headers: PROVIDER_BROWSER_HEADERS,
-        });
+        this.client = axios.create(
+            buildOutboundAxiosConfig({
+                baseURL: normalizeBaseUrl(config.SMSBOWER_BASE_URL),
+                timeout: 15000,
+                headers: PROVIDER_BROWSER_HEADERS,
+            })
+        );
     }
 
     isConfigured() {
