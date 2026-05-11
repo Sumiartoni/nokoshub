@@ -150,14 +150,18 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         const siteUrl = `${String(req.headers['x-forwarded-proto'] || 'https')}://${String(req.headers.host || 'nokoshub.store')}`;
         const pages = (await seoPagesService.list()).filter((page) => page.isPublished);
         const urls = [
-            `${siteUrl}/`,
-            `${siteUrl}/blog/`,
-            `${siteUrl}/kebijakan-privasi/`,
-            `${siteUrl}/syarat-ketentuan/`,
-            `${siteUrl}/refund/`,
-            ...pages.map((page) => `${siteUrl}/${page.slug}/`),
+            { loc: `${siteUrl}/`, lastmod: '2026-05-07', priority: '1.0' },
+            { loc: `${siteUrl}/blog/`, lastmod: '2026-05-11', priority: '0.9' },
+            { loc: `${siteUrl}/kebijakan-privasi/`, lastmod: '2026-05-07', priority: '0.6' },
+            { loc: `${siteUrl}/syarat-ketentuan/`, lastmod: '2026-05-07', priority: '0.6' },
+            { loc: `${siteUrl}/refund/`, lastmod: '2026-05-11', priority: '0.7' },
+            ...pages.map((page) => ({
+                loc: `${siteUrl}/${page.slug}/`,
+                lastmod: String(page.updatedAt || page.createdAt || new Date().toISOString()).slice(0, 10),
+                priority: '0.8',
+            })),
         ];
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((url) => `  <url>\n    <loc>${escapeXml(url)}</loc>\n    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${url === `${siteUrl}/` ? '1.0' : '0.8'}</priority>\n  </url>`).join('\n')}\n</urlset>`;
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((item) => `  <url>\n    <loc>${escapeXml(item.loc)}</loc>\n    <lastmod>${escapeXml(item.lastmod)}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${escapeXml(item.priority)}</priority>\n  </url>`).join('\n')}\n</urlset>`;
         reply.type('application/xml; charset=utf-8').send(xml);
     });
 
@@ -1085,6 +1089,68 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
     const related = relatedPages.length
         ? relatedPages.map((item) => `<a href="/${escapeHtml(item.slug)}/">${escapeHtml(item.heroBadge || item.title)}</a>`).join('')
         : `<a href="/kebijakan-privasi/">Kebijakan Privasi</a><a href="/syarat-ketentuan/">Syarat & Ketentuan</a>`;
+    const relatedCards = relatedPages.length
+        ? relatedPages.map((item) => `
+          <a class="seo-cluster-card cartoon-card" href="/${escapeHtml(item.slug)}/">
+            <div class="seo-cluster-icon">📝</div>
+            <h3>${escapeHtml(item.heroBadge || item.title)}</h3>
+            <p>${escapeHtml(item.metaDescription)}</p>
+            <span>Baca artikel →</span>
+          </a>
+        `).join('')
+        : '';
+    const faqItems = getSeoFaqItems(page.slug);
+    const faqHtml = faqItems.length
+        ? `<section class="seo-page-card">
+          <h2>Pertanyaan yang Sering Dicari</h2>
+          ${faqItems.map((item) => `<div class="legal-page-section"><h3>${escapeHtml(item.question)}</h3><p>${escapeHtml(item.answer)}</p></div>`).join('')}
+        </section>`
+        : '';
+    const articleJsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: page.heroTitle,
+        description: page.metaDescription,
+        author: {
+            '@type': 'Organization',
+            name: 'NokosHUB',
+        },
+        publisher: {
+            '@type': 'Organization',
+            name: 'NokosHUB',
+            logo: {
+                '@type': 'ImageObject',
+                url: `${siteUrl}/assets/images/favicon.png`,
+            },
+        },
+        mainEntityOfPage: canonical,
+        datePublished: page.createdAt,
+        dateModified: page.updatedAt,
+        image: [`${siteUrl}/assets/images/hero-bg.png`],
+    });
+    const breadcrumbJsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Beranda', item: `${siteUrl}/` },
+            { '@type': 'ListItem', position: 2, name: 'Blog', item: `${siteUrl}/blog/` },
+            { '@type': 'ListItem', position: 3, name: page.heroBadge || page.title, item: canonical },
+        ],
+    });
+    const faqJsonLd = faqItems.length
+        ? `<script type="application/ld+json">${safeJsonLd(JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: faqItems.map((item) => ({
+                '@type': 'Question',
+                name: item.question,
+                acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: item.answer,
+                },
+            })),
+        }))}</script>`
+        : '';
 
     return `<!DOCTYPE html>
 <html lang="id">
@@ -1103,6 +1169,9 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
   <meta name="theme-color" content="#4F9CF9" />
   <link rel="stylesheet" href="/assets/css/style.css?v=20260507-1" />
   <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+  <script type="application/ld+json">${safeJsonLd(articleJsonLd)}</script>
+  <script type="application/ld+json">${safeJsonLd(breadcrumbJsonLd)}</script>
+  ${faqJsonLd}
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body class="seo-page-body">
@@ -1110,6 +1179,10 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
     <div class="seo-page-topbar">
       <a href="/" class="seo-page-back"><i data-lucide="arrow-left"></i> Kembali ke Beranda</a>
       <div class="section-badge"><i data-lucide="file-text"></i> Blog NokosHUB</div>
+    </div>
+    <div class="seo-page-card" style="margin-bottom:18px">
+      <p style="margin:0;font-weight:700;color:#5f6f92">Beranda / <a href="/blog/">Blog</a> / ${escapeHtml(page.heroBadge || page.title)}</p>
+      <p style="margin:10px 0 0;color:#5f6f92">Artikel ini diperbarui pada ${escapeHtml(formatSeoDate(page.updatedAt))} dan ditujukan untuk pencarian seputar ${escapeHtml(page.heroBadge || page.title)}.</p>
     </div>
     <section class="seo-page-hero">
       <div>
@@ -1127,11 +1200,28 @@ function renderSeoPageHtml(page: SeoPageRecord, relatedPages: SeoPageRecord[], s
         <article class="seo-page-card">
           ${body}
         </article>
+        ${faqHtml}
+        <section class="seo-page-card">
+          <h2>Butuh Halaman Lain?</h2>
+          <p>Jika keyword yang Anda cari belum cocok, buka halaman lain yang masih satu topik agar Google dan pengguna sama-sama melihat struktur konten NokosHUB dengan lebih jelas.</p>
+          <div class="seo-cluster-grid">
+            ${relatedCards || `<a class="seo-cluster-card cartoon-card" href="/blog/"><div class="seo-cluster-icon">📰</div><h3>Blog NokosHUB</h3><p>Kumpulan artikel nokos, nomor virtual, dan OTP dari NokosHUB.</p><span>Buka blog →</span></a>`}
+          </div>
+        </section>
       </div>
       <aside class="seo-page-side">
         <div class="seo-page-card">
           <h2>Halaman Terkait</h2>
           <div class="seo-page-mini-links">${related}</div>
+        </div>
+        <div class="seo-page-card">
+          <h2>Tautan Penting</h2>
+          <div class="seo-page-mini-links">
+            <a href="/blog/">Blog NokosHUB</a>
+            <a href="/refund/">Kebijakan Refund</a>
+            <a href="/syarat-ketentuan/">Syarat & Ketentuan</a>
+            <a href="/kebijakan-privasi/">Kebijakan Privasi</a>
+          </div>
         </div>
       </aside>
     </section>
@@ -1150,6 +1240,30 @@ function renderBlogIndexHtml(pages: SeoPageRecord[], siteUrl: string) {
           <span>Baca artikel →</span>
         </a>
     `).join('');
+    const blogJsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'CollectionPage',
+        name: 'Blog NokosHUB',
+        url: `${siteUrl}/blog/`,
+        description: 'Kumpulan artikel NokosHUB seputar nokos, nomor virtual, SMS OTP, verifikasi akun, dan panduan penggunaan layanan.',
+        mainEntity: {
+            '@type': 'ItemList',
+            itemListElement: pages.map((page, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                url: `${siteUrl}/${page.slug}/`,
+                name: page.heroTitle || page.title,
+            })),
+        },
+    });
+    const breadcrumbJsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Beranda', item: `${siteUrl}/` },
+            { '@type': 'ListItem', position: 2, name: 'Blog', item: `${siteUrl}/blog/` },
+        ],
+    });
 
     return `<!DOCTYPE html>
 <html lang="id">
@@ -1168,6 +1282,8 @@ function renderBlogIndexHtml(pages: SeoPageRecord[], siteUrl: string) {
   <meta name="theme-color" content="#4F9CF9" />
   <link rel="stylesheet" href="/assets/css/style.css?v=20260507-1" />
   <link rel="icon" type="image/png" href="/assets/images/favicon.png" />
+  <script type="application/ld+json">${safeJsonLd(blogJsonLd)}</script>
+  <script type="application/ld+json">${safeJsonLd(breadcrumbJsonLd)}</script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body class="seo-page-body">
@@ -1182,6 +1298,10 @@ function renderBlogIndexHtml(pages: SeoPageRecord[], siteUrl: string) {
         <h1>Blog NokosHUB untuk Nokos, Nomor Virtual, dan OTP</h1>
         <p>Temukan seluruh artikel NokosHUB tentang nokos WhatsApp, nokos Telegram, OTP Google, OTP Shopee, nomor virtual, dan panduan terkait verifikasi akun.</p>
       </div>
+    </section>
+    <section class="seo-page-card" style="margin-bottom:18px">
+      <h2>Artikel Utama NokosHUB</h2>
+      <p>Halaman blog ini mengelompokkan artikel utama NokosHUB agar mesin pencari lebih mudah memahami topik besar seputar nokos, nomor virtual, dan OTP. Setiap artikel mengarah ke intent yang spesifik dan saling terhubung.</p>
     </section>
     <section class="section seo-cluster-section" style="padding-top:0">
       <div class="seo-cluster-grid">
@@ -1231,6 +1351,79 @@ function renderSeoMarkdown(input: string) {
 
     flushList();
     return chunks.join('');
+}
+
+function getSeoFaqItems(slug: string) {
+    const items: Record<string, Array<{ question: string; answer: string }>> = {
+        'nokos-whatsapp': [
+            {
+                question: 'Apa itu nokos WhatsApp?',
+                answer: 'Nokos WhatsApp adalah nomor virtual yang dipakai untuk menerima OTP WhatsApp tanpa memakai nomor pribadi sebagai jalur verifikasi utama.',
+            },
+            {
+                question: 'Apakah harga nokos WhatsApp selalu tetap?',
+                answer: 'Tidak selalu. Harga mengikuti stok dan provider yang sedang tersedia di dashboard NokosHUB.',
+            },
+            {
+                question: 'Apa yang terjadi jika OTP WhatsApp tidak masuk?',
+                answer: 'Status order akan mengikuti mekanisme sistem. Jika order gagal sesuai kriteria sistem, saldo mengikuti kebijakan refund yang berlaku.',
+            },
+        ],
+        'nokos-telegram': [
+            {
+                question: 'Apa bedanya nokos Telegram dan nomor pribadi?',
+                answer: 'Nokos Telegram memakai nomor virtual untuk menerima OTP Telegram, sedangkan nomor pribadi tetap tidak perlu dipakai untuk proses verifikasi tersebut.',
+            },
+            {
+                question: 'Apakah stok negara untuk Telegram selalu sama?',
+                answer: 'Tidak. Ketersediaan negara dan provider mengikuti stok provider eksternal dan bisa berubah sewaktu-waktu.',
+            },
+            {
+                question: 'Bagaimana jika nomor Telegram gagal didapatkan?',
+                answer: 'Jika provider tidak dapat memenuhi order sesuai mekanisme sistem, order akan masuk status gagal dan saldo mengikuti aturan refund yang berlaku.',
+            },
+        ],
+        'otp-google': [
+            {
+                question: 'Untuk apa OTP Google dipakai?',
+                answer: 'OTP Google umumnya dipakai untuk verifikasi akun, pendaftaran baru, atau proses autentikasi yang memerlukan SMS ke nomor tertentu.',
+            },
+            {
+                question: 'Apakah semua negara selalu tersedia untuk OTP Google?',
+                answer: 'Tidak selalu. Negara dan provider tergantung stok dari provider dan bisa berubah berdasarkan ketersediaan real-time.',
+            },
+            {
+                question: 'Bagaimana cara melihat status order OTP Google?',
+                answer: 'Status order, nomor, dan OTP yang berhasil masuk akan tampil di dashboard pengguna NokosHUB.',
+            },
+        ],
+        'otp-shopee': [
+            {
+                question: 'Apakah OTP Shopee sama dengan virtual account Shopee?',
+                answer: 'Bukan. OTP Shopee di sini mengacu pada kode verifikasi akun, bukan nomor virtual account pembayaran Shopee.',
+            },
+            {
+                question: 'Kenapa user mencari nokos Shopee?',
+                answer: 'Biasanya untuk kebutuhan verifikasi akun Shopee dengan nomor virtual tanpa memakai nomor utama.',
+            },
+            {
+                question: 'Apa yang terjadi jika stok Shopee kosong?',
+                answer: 'Saat stok server kosong, pengguna akan melihat notifikasi stok habis dan bisa mencoba lagi setelah server atau provider melakukan restock.',
+            },
+        ],
+    };
+
+    return items[slug] ?? [];
+}
+
+function formatSeoDate(value?: string | null) {
+    const date = new Date(String(value || ''));
+    if (!Number.isFinite(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }).format(date);
+}
+
+function safeJsonLd(value: string) {
+    return String(value || '').replace(/<\//g, '<\\/');
 }
 
 function escapeHtml(value: string) {
