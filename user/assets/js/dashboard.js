@@ -165,6 +165,9 @@ const SERVER_PUBLIC_COPY = {
   },
 };
 
+const SERVER_EMPTY_WAIT_MESSAGE = 'Nomor dari server habis tunggu beberapa saat lagi';
+const SERVER_EMPTY_RESTOCK_MESSAGE = 'Nomor dari server habis silahkan tunggu beberapa saat lagi hingga server re stock';
+
 const POPULAR_SERVICE_ORDER = [
   'whatsapp',
   'telegram',
@@ -273,6 +276,41 @@ function getErrorMessage(err) {
   if (!err) return 'Terjadi kesalahan';
   if (typeof err === 'string') return err;
   return String(err.message || err);
+}
+
+function normalizeOrderFailReason(reason, fallback = '') {
+  const text = String(reason || fallback || '').trim();
+  if (!text) return text;
+
+  const upper = text.toUpperCase();
+  if (
+    upper.includes('NO_NUMBERS') ||
+    upper.includes('NO NUMBER') ||
+    upper.includes('NO_NUMBER') ||
+    upper.includes('NO STOCK') ||
+    upper.includes('NOT ENOUGH STOCK') ||
+    upper.includes('OUT OF STOCK') ||
+    upper.includes('SERVER HABIS') ||
+    upper.includes('RE STOCK') ||
+    upper.includes('RESTOCK') ||
+    upper.includes('THIS PRICE IS NO LONGER AVAILABLE')
+  ) {
+    return SERVER_EMPTY_RESTOCK_MESSAGE;
+  }
+
+  if (
+    upper.includes('INSUFFICIENT BALANCE') ||
+    upper.includes('LOW BALANCE') ||
+    upper.includes('NOT ENOUGH BALANCE') ||
+    upper.includes('SALDO AKUN SMSBOWER') ||
+    upper.includes('SALDO AKUN HEROSMS') ||
+    upper.includes('PROVIDER BALANCE') ||
+    upper.includes('SERVER BALANCE')
+  ) {
+    return SERVER_EMPTY_WAIT_MESSAGE;
+  }
+
+  return text;
 }
 
 function isUnauthorizedError(err) {
@@ -615,11 +653,11 @@ function getNotificationItems() {
       icon = '✅';
     } else if (status === 'CANCELLED') {
       title = `Pesanan ${meta.service} dibatalkan`;
-      text = order.failReason || 'Saldo direfund otomatis ke akun Anda.';
+      text = normalizeOrderFailReason(order.failReason, 'Saldo direfund otomatis ke akun Anda.');
       icon = '↩️';
     } else if (status === 'FAILED') {
       title = `Pesanan ${meta.service} gagal`;
-      text = order.failReason || 'Pesanan tidak dapat diproses. Coba ulang beberapa saat lagi.';
+      text = normalizeOrderFailReason(order.failReason, 'Pesanan tidak dapat diproses. Coba ulang beberapa saat lagi.');
       icon = '⚠️';
     }
 
@@ -1281,7 +1319,7 @@ async function refreshOrderStatus(orderId) {
       await loadDashboardData({ silent: true });
     } else if (['FAILED', 'CANCELLED'].includes(order.status)) {
       stopOtpWatch(false);
-      showOtpExpired(order.failReason || 'OTP tidak diterima. Saldo dikembalikan otomatis.');
+      showOtpExpired(normalizeOrderFailReason(order.failReason, 'OTP tidak diterima. Saldo dikembalikan otomatis.'));
       await loadDashboardData({ silent: true });
     }
   } catch (err) {
@@ -1730,7 +1768,7 @@ function renderOrders() {
         <div class="oc-mid">
           ${order.otpCode
             ? `<div class="oc-otp">${esc(order.otpCode)}</div><button class="btn btn-primary btn-xs" onclick="event.stopPropagation();copyText(${jsArg(order.otpCode)})">📋 Salin</button>`
-            : `<div class="oc-status-note">${esc(order.failReason || getOrderCancelHint(order) || 'Menunggu SMS masuk...')}</div>${canCancel ? `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})">❌ Batalkan</button>` : ''}`}
+            : `<div class="oc-status-note">${esc(normalizeOrderFailReason(order.failReason, getOrderCancelHint(order) || 'Menunggu SMS masuk...'))}</div>${canCancel ? `<button class="btn btn-danger btn-xs" onclick="event.stopPropagation();cancelExistingOrder(${jsArg(order.id)})">❌ Batalkan</button>` : ''}`}
         </div>
         <div class="oc-foot">
           <div class="oc-time">📅 ${esc(formatDate(order.createdAt))}</div>

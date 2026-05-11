@@ -10,6 +10,8 @@ import { runOtpPollingJob, type OtpJobData } from '../../workers/otp-poll-runner
 export type OrderStatus = 'PENDING' | 'ACTIVE' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
 
 const ORDER_CANCEL_DELAY_MS = 2 * 60 * 1000;
+const SERVER_EMPTY_WAIT_MESSAGE = 'Nomor dari server habis tunggu beberapa saat lagi';
+const SERVER_EMPTY_RESTOCK_MESSAGE = 'Nomor dari server habis silahkan tunggu beberapa saat lagi hingga server re stock';
 
 interface CancelAndRefundOptions {
     userId?: string;
@@ -62,15 +64,18 @@ export const orderService = {
                 providerPriceUsd: toOptionalNumber(price.providerPriceUsd),
             });
             if (!result.success || !result.phone_number || !result.order_id) {
+                const normalizedFailReason = normalizeProviderFacingMessage(
+                    result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`
+                );
                 await failReservedOrder(reservedOrder.id, {
                     providerKey: providerRuntime.providerKey,
-                    failReason: result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`,
+                    failReason: normalizedFailReason,
                     refundDescription: 'Refund order failed before activation',
                 });
                 if (isProviderUnavailableMessage(result.message)) {
                     await deactivateUnavailablePrice(price.id);
                 }
-                throw new Error(result.message || `Harga/provider ${providerRuntime.providerLabel} berubah. Sync provider lalu coba lagi.`);
+                throw new Error(normalizedFailReason);
             }
 
             providerOrderId = result.order_id;
@@ -138,7 +143,7 @@ export const orderService = {
                     providerKey: providerRuntime.providerKey,
                     cancelProvider: true,
                     providerOrderId,
-                    failReason: (err as Error).message || 'Order creation failed after provider success',
+                    failReason: normalizeProviderFacingMessage((err as Error).message || 'Order creation failed after provider success'),
                     refundDescription: 'Refund order processing failure',
                 }).catch((refundErr) => {
                     logger.error(
@@ -404,6 +409,41 @@ function isProviderUnavailableMessage(message: string | null | undefined) {
         || text.includes('RE STOCK');
 }
 
+function normalizeProviderFacingMessage(message: string | null | undefined) {
+    const text = String(message || '').trim();
+    if (!text) return text;
+
+    const upper = text.toUpperCase();
+    if (
+        upper.includes('NO_NUMBERS')
+        || upper.includes('NO NUMBER')
+        || upper.includes('NO_NUMBER')
+        || upper.includes('NO STOCK')
+        || upper.includes('NOT ENOUGH STOCK')
+        || upper.includes('OUT OF STOCK')
+        || upper.includes('SERVER HABIS')
+        || upper.includes('RE STOCK')
+        || upper.includes('RESTOCK')
+        || upper.includes('THIS PRICE IS NO LONGER AVAILABLE')
+    ) {
+        return SERVER_EMPTY_RESTOCK_MESSAGE;
+    }
+
+    if (
+        upper.includes('INSUFFICIENT BALANCE')
+        || upper.includes('LOW BALANCE')
+        || upper.includes('NOT ENOUGH BALANCE')
+        || upper.includes('SALDO AKUN SMSBOWER')
+        || upper.includes('SALDO AKUN HEROSMS')
+        || upper.includes('PROVIDER BALANCE')
+        || upper.includes('SERVER BALANCE')
+    ) {
+        return SERVER_EMPTY_WAIT_MESSAGE;
+    }
+
+    return text;
+}
+
 function toOptionalNumber(value: unknown): number | undefined {
     if (value === null || value === undefined) return undefined;
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -510,6 +550,8 @@ async function failReservedOrder(
         refundDescription: string;
     }
 ) {
+    const normalizedFailReason = normalizeProviderFacingMessage(options.failReason);
+
     if (options.cancelProvider && options.providerOrderId) {
         await cancelProviderActivation(options.providerKey, options.providerOrderId);
     }
@@ -539,7 +581,7 @@ async function failReservedOrder(
             },
             data: {
                 status: 'FAILED',
-                failReason: options.failReason,
+                failReason: normalizedFailReason,
             },
         });
 
@@ -586,7 +628,7 @@ async function failReservedOrder(
                 orderId,
                 providerOrderId: options.providerOrderId,
                 refunded: !existingRefund,
-                failReason: options.failReason,
+                failReason: normalizedFailReason,
             },
             'Reserved order failed and refund processed'
         );
