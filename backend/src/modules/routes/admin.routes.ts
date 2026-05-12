@@ -246,6 +246,16 @@ function buildSqlDateRange(columnName: string, range: { start?: Date; end?: Date
     return Prisma.sql` AND ${Prisma.join(clauses, ' AND ')}`;
 }
 
+function buildWibTimestampSql(columnName: string) {
+    const column = Prisma.raw(columnName);
+    return Prisma.sql`timezone('Asia/Jakarta', timezone('UTC', ${column}))`;
+}
+
+function getReportBucketLabelFormatSql(bucket: 'day' | 'week' | 'month') {
+    if (bucket === 'month') return Prisma.raw("'YYYY-MM'");
+    return Prisma.raw("'YYYY-MM-DD'");
+}
+
 function requireAdmin(req: any, reply: any): boolean {
     const key = req.headers['x-admin-key'];
     if (key !== config.ADMIN_API_KEY && !hasBackofficeSession(req)) {
@@ -400,6 +410,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         const reportBucket = getReportBucket(query.bucket);
         const reportBucketSql = getReportBucketSql(reportBucket);
         const orderDateSql = buildSqlDateRange('o."createdAt"', dateRange);
+        const orderCreatedAtWibSql = buildWibTimestampSql('o."createdAt"');
+        const reportBucketStartSql = Prisma.sql`date_trunc(${reportBucketSql}, ${orderCreatedAtWibSql})`;
+        const reportBucketLabelFormatSql = getReportBucketLabelFormatSql(reportBucket);
         const paidInvoiceWhere = {
             status: 'PAID' as const,
             ...(dateRange.start || dateRange.end
@@ -457,13 +470,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             `),
             prisma.$queryRaw<Array<{
                 bucketStart: Date | string;
+                bucketKey: string;
                 successfulOrders: bigint | number | null;
                 totalOrderRevenue: bigint | number | null;
                 totalProviderHpp: bigint | number | null;
                 grossMargin: bigint | number | null;
             }>>(Prisma.sql`
                 SELECT
-                    date_trunc(${reportBucketSql}, timezone('Asia/Jakarta', o."createdAt")) AS "bucketStart",
+                    ${reportBucketStartSql} AS "bucketStart",
+                    to_char(${reportBucketStartSql}, ${reportBucketLabelFormatSql}) AS "bucketKey",
                     COUNT(*) AS "successfulOrders",
                     COALESCE(SUM(p."sellPrice"), 0) AS "totalOrderRevenue",
                     COALESCE(SUM(p."providerPrice"), 0) AS "totalProviderHpp",
@@ -529,7 +544,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         const periodBreakdown = periodBreakdownRows.map((row) => ({
-            bucketStart: row.bucketStart instanceof Date ? row.bucketStart.toISOString() : new Date(row.bucketStart).toISOString(),
+            bucketStart: row.bucketKey,
             successfulOrders: Number(row.successfulOrders ?? 0),
             totalOrderRevenue: Number(row.totalOrderRevenue ?? 0),
             totalProviderHpp: Number(row.totalProviderHpp ?? 0),
