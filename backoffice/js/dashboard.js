@@ -1357,10 +1357,11 @@
         const usernameInput = document.getElementById('smtpUsernameInput');
         const passwordInput = document.getElementById('smtpPasswordInput');
         const apiKeyInput = document.getElementById('brevoApiKeyInput');
+        const resendApiKeyInput = document.getElementById('resendApiKeyInput');
         const fromNameInput = document.getElementById('smtpFromNameInput');
         const fromEmailInput = document.getElementById('smtpFromEmailInput');
 
-        if (!transportInput || !hostInput || !portInput || !secureInput || !usernameInput || !passwordInput || !apiKeyInput || !fromNameInput || !fromEmailInput) return;
+        if (!transportInput || !hostInput || !portInput || !secureInput || !usernameInput || !passwordInput || !apiKeyInput || !resendApiKeyInput || !fromNameInput || !fromEmailInput) return;
 
         try {
             const res = await api('/api/admin/settings/smtp');
@@ -1374,6 +1375,7 @@
             usernameInput.value = settings.username || '';
             passwordInput.value = settings.password || '';
             apiKeyInput.value = settings.apiKey || '';
+            resendApiKeyInput.value = settings.resendApiKey || '';
             fromNameInput.value = settings.fromName || 'NokosHUB';
             fromEmailInput.value = settings.fromEmail || '';
             syncEmailTransportFields();
@@ -1387,11 +1389,21 @@
         const smtpConnectionRow = document.getElementById('smtpConnectionRow');
         const smtpCredentialsRow = document.getElementById('smtpCredentialsRow');
         const brevoApiRow = document.getElementById('brevoApiRow');
+        const resendApiRow = document.getElementById('resendApiRow');
+        const resendApiLabel = document.querySelector('label[for="resendApiKeyInput"]');
 
         const useSmtp = transport === 'smtp';
+        const useBrevoApi = transport === 'brevo_api';
+        const useResendApi = transport === 'resend_api';
         if (smtpConnectionRow) smtpConnectionRow.hidden = !useSmtp;
         if (smtpCredentialsRow) smtpCredentialsRow.hidden = !useSmtp;
-        if (brevoApiRow) brevoApiRow.hidden = useSmtp;
+        if (brevoApiRow) brevoApiRow.hidden = !useBrevoApi;
+        if (resendApiRow) resendApiRow.hidden = false;
+        if (resendApiLabel) {
+            resendApiLabel.textContent = useResendApi
+                ? 'Resend API Key'
+                : 'Resend API Key (Backup Opsional)';
+        }
     };
 
     window.saveSmtpSettings = async function () {
@@ -1404,6 +1416,7 @@
             username: document.getElementById('smtpUsernameInput')?.value.trim() || '',
             password: document.getElementById('smtpPasswordInput')?.value || '',
             apiKey: document.getElementById('brevoApiKeyInput')?.value.trim() || '',
+            resendApiKey: document.getElementById('resendApiKeyInput')?.value.trim() || '',
             fromName: document.getElementById('smtpFromNameInput')?.value.trim() || 'NokosHUB',
             fromEmail: document.getElementById('smtpFromEmailInput')?.value.trim() || '',
         };
@@ -1416,6 +1429,11 @@
         if (payload.transport === 'brevo_api') {
             if (!payload.apiKey) {
                 showToast('Isi Brevo API key terlebih dahulu', 'warning');
+                return;
+            }
+        } else if (payload.transport === 'resend_api') {
+            if (!payload.resendApiKey) {
+                showToast('Isi Resend API key terlebih dahulu', 'warning');
                 return;
             }
         } else if (!payload.host || !payload.username || !payload.password) {

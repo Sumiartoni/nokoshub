@@ -64,13 +64,14 @@ const seoPageSchema = z.object({
 });
 
 const smtpSettingsSchema = z.object({
-    transport: z.enum(['smtp', 'brevo_api']).default('smtp'),
+    transport: z.enum(['smtp', 'brevo_api', 'resend_api']).default('smtp'),
     host: z.string().optional().default(''),
     port: z.number().int().min(1).max(65535).default(587),
     secure: z.boolean().default(false),
     username: z.string().optional().default(''),
     password: z.string().optional().default(''),
     apiKey: z.string().optional().default(''),
+    resendApiKey: z.string().optional().default(''),
     fromName: z.string().min(1, 'Nama pengirim wajib diisi').max(100),
     fromEmail: z.string().email('Email pengirim tidak valid'),
 }).superRefine((value, ctx) => {
@@ -80,6 +81,17 @@ const smtpSettingsSchema = z.object({
                 code: z.ZodIssueCode.custom,
                 path: ['apiKey'],
                 message: 'Brevo API key wajib diisi',
+            });
+        }
+        return;
+    }
+
+    if (value.transport === 'resend_api') {
+        if (!value.resendApiKey?.trim()) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['resendApiKey'],
+                message: 'Resend API key wajib diisi',
             });
         }
         return;
@@ -1114,14 +1126,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         };
     });
 
-    // GET /api/admin/settings/smtp - current SMTP settings for OTP email
+    // GET /api/admin/settings/smtp - current email transport settings for OTP email
     fastify.get('/settings/smtp', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         const settings = await smtpSettingsService.getSettings();
         return { success: true, data: settings };
     });
 
-    // PATCH /api/admin/settings/smtp - save SMTP settings
+    // PATCH /api/admin/settings/smtp - save email transport settings
     fastify.patch('/settings/smtp', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
 

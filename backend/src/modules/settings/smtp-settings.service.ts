@@ -3,7 +3,7 @@ import { config } from '../../app/config';
 
 const SMTP_SETTINGS_KEY = 'smtp_settings';
 
-export type EmailTransport = 'smtp' | 'brevo_api';
+export type EmailTransport = 'smtp' | 'brevo_api' | 'resend_api';
 
 export interface SmtpSettings {
     transport: EmailTransport;
@@ -13,6 +13,7 @@ export interface SmtpSettings {
     username: string;
     password: string;
     apiKey: string;
+    resendApiKey: string;
     fromName: string;
     fromEmail: string;
 }
@@ -25,6 +26,7 @@ const DEFAULT_SMTP_SETTINGS: SmtpSettings = {
     username: '',
     password: '',
     apiKey: '',
+    resendApiKey: '',
     fromName: 'NokosHUB',
     fromEmail: '',
 };
@@ -33,7 +35,7 @@ export const smtpSettingsService = {
     async getSettings(): Promise<SmtpSettings> {
         const envOverride = getEnvEmailSettings();
         if (envOverride) {
-            return envOverride;
+            return applyResendFallbackOverride(envOverride);
         }
 
         const row = await prisma.appSetting.findUnique({
@@ -41,14 +43,14 @@ export const smtpSettingsService = {
         });
 
         if (!row?.value) {
-            return { ...DEFAULT_SMTP_SETTINGS };
+            return applyResendFallbackOverride({ ...DEFAULT_SMTP_SETTINGS });
         }
 
         try {
             const parsed = JSON.parse(row.value) as Partial<SmtpSettings>;
-            return normalizeSmtpSettings(parsed);
+            return applyResendFallbackOverride(normalizeSmtpSettings(parsed));
         } catch {
-            return { ...DEFAULT_SMTP_SETTINGS };
+            return applyResendFallbackOverride({ ...DEFAULT_SMTP_SETTINGS });
         }
     },
 
@@ -80,6 +82,13 @@ export const smtpSettingsService = {
             return settings;
         }
 
+        if (settings.transport === 'resend_api') {
+            if (!settings.resendApiKey) {
+                throw new Error('Resend API key belum dikonfigurasi di panel super admin');
+            }
+            return settings;
+        }
+
         if (!settings.host || !settings.port || !settings.username || !settings.password) {
             throw new Error('SMTP belum dikonfigurasi di panel super admin');
         }
@@ -98,6 +107,7 @@ function getEnvEmailSettings(): SmtpSettings | null {
         username: config.SMTP_USERNAME,
         password: config.SMTP_PASSWORD,
         apiKey: config.BREVO_API_KEY,
+        resendApiKey: config.RESEND_API_KEY,
         fromName: config.EMAIL_FROM_NAME,
         fromEmail: config.EMAIL_FROM_EMAIL,
     });
@@ -109,13 +119,18 @@ function normalizeSmtpSettings(input: Partial<SmtpSettings>): SmtpSettings {
     const port = Number(input.port ?? DEFAULT_SMTP_SETTINGS.port);
 
     return {
-        transport: input.transport === 'brevo_api' ? 'brevo_api' : DEFAULT_SMTP_SETTINGS.transport,
+        transport: input.transport === 'brevo_api'
+            ? 'brevo_api'
+            : input.transport === 'resend_api'
+                ? 'resend_api'
+                : DEFAULT_SMTP_SETTINGS.transport,
         host: String(input.host ?? DEFAULT_SMTP_SETTINGS.host).trim(),
         port: Number.isFinite(port) && port > 0 ? Math.trunc(port) : DEFAULT_SMTP_SETTINGS.port,
         secure: Boolean(input.secure),
         username: String(input.username ?? DEFAULT_SMTP_SETTINGS.username).trim(),
         password: String(input.password ?? DEFAULT_SMTP_SETTINGS.password),
         apiKey: String(input.apiKey ?? DEFAULT_SMTP_SETTINGS.apiKey).trim(),
+        resendApiKey: String(input.resendApiKey ?? DEFAULT_SMTP_SETTINGS.resendApiKey).trim(),
         fromName: String(input.fromName ?? DEFAULT_SMTP_SETTINGS.fromName).trim() || DEFAULT_SMTP_SETTINGS.fromName,
         fromEmail: String(input.fromEmail ?? DEFAULT_SMTP_SETTINGS.fromEmail).trim().toLowerCase(),
     };
@@ -126,6 +141,20 @@ function isConfiguredSmtpSettings(settings: SmtpSettings) {
     if (settings.transport === 'brevo_api') {
         return Boolean(settings.apiKey);
     }
+    if (settings.transport === 'resend_api') {
+        return Boolean(settings.resendApiKey);
+    }
 
     return Boolean(settings.host && settings.username && settings.password);
+}
+
+function applyResendFallbackOverride(settings: SmtpSettings): SmtpSettings {
+    if (!config.RESEND_API_KEY) {
+        return settings;
+    }
+
+    return {
+        ...settings,
+        resendApiKey: config.RESEND_API_KEY.trim(),
+    };
 }

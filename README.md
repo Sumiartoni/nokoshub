@@ -123,13 +123,30 @@ Setelah berhasil, saldo, order, deposit, dan riwayat Telegram akan terbaca di da
 
 ## Email OTP
 
-Untuk kasus VPS yang gagal konek ke SMTP port `587`, disarankan memakai Brevo API langsung dari `.env` agar tidak bergantung pada panel admin.
+Untuk kasus VPS yang gagal konek ke SMTP port `587`, disarankan memakai transport API langsung dari `.env` agar tidak bergantung pada panel admin. Anda bisa memakai `Brevo API` atau `Resend API`, dan Resend juga bisa diisi sebagai backup otomatis jika transport utama gagal.
+
+```env
+BREVO_API_KEY=isi_dengan_api_key_brevo_xkeysib
+RESEND_API_KEY=re_xxxxxxxxx
+```
+
+Contoh jika ingin Brevo sebagai utama dan Resend sebagai backup:
 
 ```env
 EMAIL_TRANSPORT=brevo_api
 EMAIL_FROM_NAME=NokosHUB
 EMAIL_FROM_EMAIL=no-reply@nokoshub.store
 BREVO_API_KEY=isi_dengan_api_key_brevo_xkeysib
+RESEND_API_KEY=re_xxxxxxxxx
+```
+
+Contoh jika ingin Resend sebagai utama:
+
+```env
+EMAIL_TRANSPORT=resend_api
+EMAIL_FROM_NAME=NokosHUB
+EMAIL_FROM_EMAIL=no-reply@nokoshub.store
+RESEND_API_KEY=re_xxxxxxxxx
 ```
 
 Jika `EMAIL_TRANSPORT` diisi, backend akan memprioritaskan konfigurasi email dari `.env` di atas pengaturan panel super admin.

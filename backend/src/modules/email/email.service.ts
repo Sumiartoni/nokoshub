@@ -16,6 +16,9 @@ const SMTP_CONNECT_TIMEOUT_MS = 10000;
 const SMTP_RESPONSE_TIMEOUT_MS = 15000;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_API_TIMEOUT_MS = 15000;
+const RESEND_API_URL = 'https://api.resend.com/emails';
+const RESEND_API_TIMEOUT_MS = 15000;
+const RESEND_API_USER_AGENT = 'NokosHUB/1.0';
 const WEBSITE_URL = 'https://nokoshub.store';
 const WEBSITE_LABEL = 'nokoshub.store';
 const EMAIL_LOGO_URL = `${WEBSITE_URL}/user/assets/images/logo-email.png`;
@@ -126,6 +129,7 @@ export const emailService = {
         logger.info(
             {
                 transport: settings.transport,
+                resendFallbackConfigured: canUseResendFallback(settings),
                 smtpHost: settings.host,
                 smtpPort: settings.port,
                 secure: settings.secure,
@@ -137,11 +141,7 @@ export const emailService = {
         );
 
         try {
-            if (settings.transport === 'brevo_api') {
-                await sendBrevoApiMail(settings, payload);
-            } else {
-                await sendSmtpMail(settings, payload);
-            }
+            await sendWithConfiguredTransport(settings, payload);
             logger.info(
                 {
                     transport: settings.transport,
@@ -153,6 +153,54 @@ export const emailService = {
                 'SMTP accepted email'
             );
         } catch (err) {
+            if (canUseResendFallback(settings)) {
+                logger.warn(
+                    {
+                        err,
+                        transport: settings.transport,
+                        fallbackTransport: 'resend_api',
+                        fromEmail: settings.fromEmail,
+                        to: payload.to,
+                        subject: payload.subject,
+                    },
+                    'Primary email transport failed, retrying with Resend fallback'
+                );
+
+                try {
+                    await sendResendApiMail(settings, payload);
+                    logger.info(
+                        {
+                            transport: settings.transport,
+                            fallbackTransport: 'resend_api',
+                            fromEmail: settings.fromEmail,
+                            to: payload.to,
+                            subject: payload.subject,
+                        },
+                        'Email accepted via Resend fallback'
+                    );
+                    return;
+                } catch (fallbackErr) {
+                    logger.error(
+                        {
+                            err: fallbackErr,
+                            primaryErr: err,
+                            transport: settings.transport,
+                            fallbackTransport: 'resend_api',
+                            smtpHost: settings.host,
+                            smtpPort: settings.port,
+                            secure: settings.secure,
+                            fromEmail: settings.fromEmail,
+                            to: payload.to,
+                            subject: payload.subject,
+                        },
+                        'Primary email transport and Resend fallback both failed'
+                    );
+                    throw new Error(
+                        `Primary email transport failed: ${getErrorMessage(err)}. Resend fallback failed: ${getErrorMessage(fallbackErr)}`
+                    );
+                }
+            }
+
             logger.error(
                 {
                     err,
@@ -170,6 +218,23 @@ export const emailService = {
         }
     },
 };
+
+async function sendWithConfiguredTransport(
+    settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>,
+    payload: EmailPayload
+) {
+    if (settings.transport === 'brevo_api') {
+        await sendBrevoApiMail(settings, payload);
+        return;
+    }
+
+    if (settings.transport === 'resend_api') {
+        await sendResendApiMail(settings, payload);
+        return;
+    }
+
+    await sendSmtpMail(settings, payload);
+}
 
 export function renderBrandedEmail(input: {
     eyebrow: string;
@@ -268,6 +333,48 @@ async function sendBrevoApiMail(
     } catch (err) {
         if ((err as Error).name === 'AbortError') {
             throw new Error('Timeout koneksi ke Brevo API. Periksa firewall server atau coba lagi.');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function sendResendApiMail(
+    settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>,
+    payload: EmailPayload
+) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RESEND_API_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(RESEND_API_URL, {
+            method: 'POST',
+            headers: {
+                authorization: `Bearer ${settings.resendApiKey}`,
+                accept: 'application/json',
+                'content-type': 'application/json',
+                'user-agent': RESEND_API_USER_AGENT,
+            },
+            body: JSON.stringify({
+                from: formatMailbox(settings.fromName, settings.fromEmail),
+                to: [payload.to],
+                subject: payload.subject,
+                html: payload.html,
+                text: payload.text || stripHtml(payload.html),
+            }),
+            signal: controller.signal,
+        });
+
+        const rawBody = await response.text();
+        const body = parseJsonSafely(rawBody);
+
+        if (!response.ok) {
+            throw new Error(extractResendError(body, response.status));
+        }
+    } catch (err) {
+        if ((err as Error).name === 'AbortError') {
+            throw new Error('Timeout koneksi ke Resend API. Periksa firewall server atau coba lagi.');
         }
         throw err;
     } finally {
@@ -571,8 +678,24 @@ function extractBrevoError(body: Record<string, unknown> | null, status: number)
     return `Brevo API error ${status}`;
 }
 
+function extractResendError(body: Record<string, unknown> | null, status: number) {
+    const message = typeof body?.message === 'string' ? body.message : null;
+    const name = typeof body?.name === 'string' ? body.name : null;
+    if (message && name) return `Resend API error ${status} (${name}): ${message}`;
+    if (message) return `Resend API error ${status}: ${message}`;
+    return `Resend API error ${status}`;
+}
+
 function sanitizeHostname(value: string) {
     return value.replace(/[^\w.-]+/g, '') || 'localhost';
+}
+
+function canUseResendFallback(settings: Awaited<ReturnType<typeof smtpSettingsService.requireSettings>>) {
+    return settings.transport !== 'resend_api' && Boolean(settings.resendApiKey);
+}
+
+function getErrorMessage(err: unknown) {
+    return (err as Error)?.message || 'Unknown error';
 }
 
 function escapeHtml(value: string) {

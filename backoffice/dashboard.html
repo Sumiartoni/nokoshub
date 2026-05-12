@@ -700,6 +700,7 @@
                                 <select class="form-select" id="emailTransportInput" onchange="syncEmailTransportFields()">
                                     <option value="smtp">SMTP</option>
                                     <option value="brevo_api">Brevo API</option>
+                                    <option value="resend_api">Resend API</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -715,6 +716,12 @@
                             <div class="form-group">
                                 <label class="form-label" for="brevoApiKeyInput">Brevo API Key</label>
                                 <input class="form-input" id="brevoApiKeyInput" type="password" placeholder="xkeysib-...">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:14px" id="resendApiRow">
+                            <div class="form-group">
+                                <label class="form-label" for="resendApiKeyInput">Resend API Key</label>
+                                <input class="form-input" id="resendApiKeyInput" type="password" placeholder="re_...">
                             </div>
                         </div>
                         <div class="form-row" style="margin-top:14px" id="smtpConnectionRow">
@@ -760,7 +767,7 @@
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                             </svg>
-                            Jika port SMTP VPS diblokir, pilih <strong>Brevo API</strong>. Untuk SMTP Brevo biasanya gunakan host <strong>smtp-relay.brevo.com</strong> dan port <strong>587</strong> dengan STARTTLS.
+                            Jika port SMTP VPS diblokir, pilih <strong>Brevo API</strong> atau <strong>Resend API</strong>. Kolom Resend juga bisa diisi sebagai backup otomatis saat transport utama gagal. Untuk SMTP Brevo biasanya gunakan host <strong>smtp-relay.brevo.com</strong> dan port <strong>587</strong> dengan STARTTLS.
                         </div>
                     </div>
                 </div>

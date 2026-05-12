@@ -194,6 +194,8 @@ export const maintenanceService = {
                     configured: Boolean(smtpSettings?.fromEmail) && (
                         smtpSettings?.transport === 'brevo_api'
                             ? Boolean(smtpSettings.apiKey)
+                            : smtpSettings?.transport === 'resend_api'
+                                ? Boolean(smtpSettings.resendApiKey)
                             : Boolean(smtpSettings?.host && smtpSettings?.username && smtpSettings?.password)
                     ),
                     envOverride: smtpSettingsService.hasEnvOverride(),
