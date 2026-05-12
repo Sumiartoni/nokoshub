@@ -11,11 +11,13 @@ import { smtpSettingsService } from '../settings/smtp-settings.service';
 import { emailService } from '../email/email.service';
 import { referralService } from '../referrals/referral.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
+import { bayarGgService } from '../payments/bayargg.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { csBotSettingsService } from '../settings/cs-bot-settings.service';
 import { promoSettingsService } from '../settings/promo-settings.service';
 import { seoPagesService } from '../settings/seo-pages.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
+import { getProviderDescriptor } from '../providers/provider-registry';
 import { userService } from '../users/user.service';
 import { newsletterService } from '../newsletter/newsletter.service';
 import { Prisma } from '@prisma/client';
@@ -259,6 +261,17 @@ function maxDate(left?: Date | string | null, right?: Date | string | null) {
     return new Date(left).getTime() >= new Date(right).getTime() ? left : right;
 }
 
+function getReportBucket(bucket?: string) {
+    if (bucket === 'week' || bucket === 'month') return bucket;
+    return 'day';
+}
+
+function getReportBucketSql(bucket: 'day' | 'week' | 'month') {
+    if (bucket === 'week') return Prisma.raw("'week'");
+    if (bucket === 'month') return Prisma.raw("'month'");
+    return Prisma.raw("'day'");
+}
+
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/admin/overview - aggregate dashboard stats
     fastify.get('/overview', async (req, reply) => {
@@ -368,6 +381,190 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 providerRateBufferPercent: providerRate?.bufferPercent ?? 0,
                 reportDateFrom: dateRange.start?.toISOString() ?? null,
                 reportDateTo: dateRange.end?.toISOString() ?? null,
+            },
+        };
+    });
+
+    // GET /api/admin/reports - dedicated reporting summary and breakdowns
+    fastify.get('/reports', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const query = req.query as { dateFrom?: string; dateTo?: string; bucket?: string };
+        let dateRange: { start?: Date; end?: Date };
+        try {
+            dateRange = parseAdminDateRange(query);
+        } catch (err) {
+            return reply.status(400).send({ success: false, error: err instanceof Error ? err.message : 'Rentang tanggal tidak valid' });
+        }
+
+        const reportBucket = getReportBucket(query.bucket);
+        const reportBucketSql = getReportBucketSql(reportBucket);
+        const orderDateSql = buildSqlDateRange('o."createdAt"', dateRange);
+        const paidInvoiceWhere = {
+            status: 'PAID' as const,
+            ...(dateRange.start || dateRange.end
+                ? {
+                    paidAt: {
+                        ...(dateRange.start ? { gte: dateRange.start } : {}),
+                        ...(dateRange.end ? { lte: dateRange.end } : {}),
+                    },
+                }
+                : {}),
+        };
+
+        const [
+            orderSummaryRows,
+            providerBreakdownRows,
+            periodBreakdownRows,
+            paidInvoiceAgg,
+            providerSummary,
+        ] = await Promise.all([
+            prisma.$queryRaw<Array<{
+                successfulOrders: bigint | number | null;
+                totalOrderRevenue: bigint | number | null;
+                totalProviderHpp: bigint | number | null;
+                grossMargin: bigint | number | null;
+            }>>(Prisma.sql`
+                SELECT
+                    COUNT(*) AS "successfulOrders",
+                    COALESCE(SUM(p."sellPrice"), 0) AS "totalOrderRevenue",
+                    COALESCE(SUM(p."providerPrice"), 0) AS "totalProviderHpp",
+                    COALESCE(SUM(p."sellPrice" - p."providerPrice"), 0) AS "grossMargin"
+                FROM "Order" o
+                INNER JOIN "Price" p ON p.id = o."priceId"
+                WHERE o.status = 'SUCCESS'
+                ${orderDateSql}
+            `),
+            prisma.$queryRaw<Array<{
+                providerKey: string;
+                successfulOrders: bigint | number | null;
+                totalOrderRevenue: bigint | number | null;
+                totalProviderHpp: bigint | number | null;
+                grossMargin: bigint | number | null;
+            }>>(Prisma.sql`
+                SELECT
+                    split_part(p."priceId", ':', 1) AS "providerKey",
+                    COUNT(*) AS "successfulOrders",
+                    COALESCE(SUM(p."sellPrice"), 0) AS "totalOrderRevenue",
+                    COALESCE(SUM(p."providerPrice"), 0) AS "totalProviderHpp",
+                    COALESCE(SUM(p."sellPrice" - p."providerPrice"), 0) AS "grossMargin"
+                FROM "Order" o
+                INNER JOIN "Price" p ON p.id = o."priceId"
+                WHERE o.status = 'SUCCESS'
+                ${orderDateSql}
+                GROUP BY 1
+                ORDER BY 1
+            `),
+            prisma.$queryRaw<Array<{
+                bucketStart: Date | string;
+                successfulOrders: bigint | number | null;
+                totalOrderRevenue: bigint | number | null;
+                totalProviderHpp: bigint | number | null;
+                grossMargin: bigint | number | null;
+            }>>(Prisma.sql`
+                SELECT
+                    date_trunc(${reportBucketSql}, timezone('Asia/Jakarta', o."createdAt")) AS "bucketStart",
+                    COUNT(*) AS "successfulOrders",
+                    COALESCE(SUM(p."sellPrice"), 0) AS "totalOrderRevenue",
+                    COALESCE(SUM(p."providerPrice"), 0) AS "totalProviderHpp",
+                    COALESCE(SUM(p."sellPrice" - p."providerPrice"), 0) AS "grossMargin"
+                FROM "Order" o
+                INNER JOIN "Price" p ON p.id = o."priceId"
+                WHERE o.status = 'SUCCESS'
+                ${orderDateSql}
+                GROUP BY 1
+                ORDER BY 1 DESC
+            `),
+            prisma.invoice.aggregate({
+                where: paidInvoiceWhere,
+                _sum: { baseAmount: true, gatewayFee: true, amount: true },
+                _count: { _all: true },
+            }),
+            (async () => {
+                try {
+                    const [balances, rate] = await Promise.all([
+                        getConfiguredProviderBalances(),
+                        pricingService.getUsdIdrRate(),
+                    ]);
+                    const balanceUsd = balances.reduce((sum, item) => sum + item.balanceUsd, 0);
+                    return { balanceUsd, balances, rate, ok: true };
+                } catch (err) {
+                    logger.warn({ err }, 'Failed to load provider balance for reports page');
+                    return { balanceUsd: 0, balances: [], rate: null, ok: false };
+                }
+            })(),
+        ]);
+
+        const orderSummary = orderSummaryRows[0] ?? {
+            successfulOrders: 0,
+            totalOrderRevenue: 0,
+            totalProviderHpp: 0,
+            grossMargin: 0,
+        };
+
+        const totalOrderRevenue = Number(orderSummary.totalOrderRevenue ?? 0);
+        const totalProviderHpp = Number(orderSummary.totalProviderHpp ?? 0);
+        const grossMargin = Number(orderSummary.grossMargin ?? 0);
+        const successfulOrders = Number(orderSummary.successfulOrders ?? 0);
+        const grossMarginPercent = totalOrderRevenue > 0
+            ? Number(((grossMargin / totalOrderRevenue) * 100).toFixed(2))
+            : 0;
+
+        const providerRate = providerSummary.rate;
+        const providerBalanceIdr = providerSummary.ok && providerRate
+            ? Math.round(providerSummary.balanceUsd * providerRate.effectiveRate)
+            : 0;
+
+        const providerBreakdown = providerBreakdownRows.map((row) => {
+            const descriptor = getProviderDescriptor(row.providerKey);
+            return {
+                providerKey: row.providerKey,
+                providerLabel: descriptor.displayName,
+                serverLabel: descriptor.serverLabel,
+                successfulOrders: Number(row.successfulOrders ?? 0),
+                totalOrderRevenue: Number(row.totalOrderRevenue ?? 0),
+                totalProviderHpp: Number(row.totalProviderHpp ?? 0),
+                grossMargin: Number(row.grossMargin ?? 0),
+            };
+        });
+
+        const periodBreakdown = periodBreakdownRows.map((row) => ({
+            bucketStart: row.bucketStart instanceof Date ? row.bucketStart.toISOString() : new Date(row.bucketStart).toISOString(),
+            successfulOrders: Number(row.successfulOrders ?? 0),
+            totalOrderRevenue: Number(row.totalOrderRevenue ?? 0),
+            totalProviderHpp: Number(row.totalProviderHpp ?? 0),
+            grossMargin: Number(row.grossMargin ?? 0),
+        }));
+
+        return {
+            success: true,
+            data: {
+                summary: {
+                    successfulOrders,
+                    totalOrderRevenue,
+                    totalProviderHpp,
+                    grossMargin,
+                    grossMarginPercent,
+                    totalPaidDeposits: paidInvoiceAgg._sum.baseAmount ?? 0,
+                    totalGatewayFees: paidInvoiceAgg._sum.gatewayFee ?? 0,
+                    totalGatewayPaid: paidInvoiceAgg._sum.amount ?? 0,
+                    paidInvoiceCount: paidInvoiceAgg._count._all ?? 0,
+                    providerBalanceUsd: providerSummary.balanceUsd,
+                    providerBalanceIdr,
+                    providerBalances: providerSummary.balances,
+                    providerRate: providerRate?.effectiveRate ?? 0,
+                    providerRateBase: providerRate?.baseRate ?? 0,
+                    providerRateBufferPercent: providerRate?.bufferPercent ?? 0,
+                    gatewayConfig: bayarGgService.getConfigStatus(),
+                    paymentGatewayBalanceAvailable: false,
+                    paymentGatewayBalance: null,
+                    paymentGatewayBalanceNote: 'Saldo payment gateway belum tersedia dari API yang terintegrasi saat ini.',
+                    reportDateFrom: dateRange.start?.toISOString() ?? null,
+                    reportDateTo: dateRange.end?.toISOString() ?? null,
+                    bucket: reportBucket,
+                },
+                providerBreakdown,
+                periodBreakdown,
             },
         };
     });

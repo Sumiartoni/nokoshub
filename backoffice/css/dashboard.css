@@ -879,6 +879,10 @@ html, body {
     justify-content: space-between;
     align-items: center;
 }
+.report-subtoolbar {
+    justify-content: space-between;
+    align-items: center;
+}
 .overview-date-range {
     display: none;
     align-items: center;
@@ -894,6 +898,49 @@ html, body {
 }
 .overview-date-separator {
     font-size: 0.78rem;
+    color: var(--text-muted);
+}
+.report-caption {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+.report-kpi-list {
+    display: grid;
+    gap: 12px;
+}
+.report-kpi-item {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+    background: rgba(15, 23, 42, 0.38);
+}
+.report-kpi-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+}
+.report-kpi-value {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.report-kpi-meta {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+.report-note {
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+.report-table-note {
+    margin-top: 10px;
+    font-size: 0.76rem;
     color: var(--text-muted);
 }
 .filter-bar .form-select {
@@ -1124,9 +1171,11 @@ html, body {
     .filter-bar { flex-direction: column; align-items: stretch; }
     .search-wrapper { min-width: unset; }
     .overview-toolbar { align-items: stretch; }
+    .report-subtoolbar { align-items: stretch; }
     .overview-date-range,
     .overview-date-range.active { width: 100%; }
     .overview-date-range .form-input { min-width: unset; width: 100%; }
+    .report-caption { width: 100%; }
     .header-time { display: none; }
     .pricing-input-row { grid-template-columns: 1fr; }
 }

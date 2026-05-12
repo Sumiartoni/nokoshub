@@ -44,6 +44,14 @@
                 <span>Overview</span>
             </div>
 
+            <div class="nav-item" data-page="reports" id="nav-reports">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 3v18h18"/>
+                    <path d="M7 15l4-4 3 3 5-7"/>
+                </svg>
+                <span>Laporan</span>
+            </div>
+
             <div class="nav-item" data-page="orders" id="nav-orders">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
@@ -282,6 +290,100 @@
                         </div>
                         <div class="system-status-row" id="systemStatusRow">
                             <div class="loading-spinner" style="width:18px;height:18px;border-width:2px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════ REPORTS PAGE ════════ -->
+            <div class="page-section" id="page-reports">
+                <div class="filter-bar overview-toolbar">
+                    <div class="filter-chip-group" id="reportRangePresetGroup">
+                        <button class="btn btn-sm btn-outline active" type="button" data-report-range-preset="1d" onclick="setReportRangePreset('1d')">1 Hari</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-report-range-preset="7d" onclick="setReportRangePreset('7d')">1 Minggu</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-report-range-preset="30d" onclick="setReportRangePreset('30d')">1 Bulan</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-report-range-preset="custom" onclick="setReportRangePreset('custom')">Custom</button>
+                    </div>
+                    <div class="overview-date-range" id="reportCustomRangeGroup">
+                        <input type="date" class="form-input" id="reportDateFrom">
+                        <span class="overview-date-separator">s/d</span>
+                        <input type="date" class="form-input" id="reportDateTo">
+                        <button class="btn btn-sm btn-outline" type="button" onclick="applyReportCustomRange()">Terapkan</button>
+                    </div>
+                </div>
+
+                <div class="filter-bar report-subtoolbar">
+                    <div class="filter-chip-group" id="reportBucketGroup">
+                        <button class="btn btn-sm btn-outline active" type="button" data-report-bucket="day" onclick="setReportBucket('day')">Harian</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-report-bucket="week" onclick="setReportBucket('week')">Mingguan</button>
+                        <button class="btn btn-sm btn-outline" type="button" data-report-bucket="month" onclick="setReportBucket('month')">Bulanan</button>
+                    </div>
+                    <div class="report-caption" id="reportCaption">
+                        Laporan dimulai dari jam 00.00 WIB untuk preset harian.
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="reportStatsGrid"></div>
+
+                <div class="content-grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 3v18h18"/>
+                                    <path d="M7 15l4-4 3 3 5-7"/>
+                                </svg>
+                                Rekap per Periode
+                            </div>
+                        </div>
+                        <div class="panel-body scrollable" id="reportPeriodBreakdownBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21"/>
+                                </svg>
+                                Rekap per Server
+                            </div>
+                        </div>
+                        <div class="panel-body scrollable" id="reportProviderBreakdownBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="content-grid" style="margin-top:20px">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="5" width="20" height="14" rx="2"/>
+                                    <line x1="2" y1="10" x2="22" y2="10"/>
+                                </svg>
+                                Payment Gateway
+                            </div>
+                        </div>
+                        <div class="panel-body" id="reportGatewaySummaryBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 1v22"/>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                                HPP & Pengisian Saldo Provider
+                            </div>
+                        </div>
+                        <div class="panel-body" id="reportProviderFundingBody">
+                            <div class="loading-overlay"><div class="loading-spinner"></div></div>
                         </div>
                     </div>
                 </div>

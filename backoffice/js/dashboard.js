@@ -67,6 +67,7 @@
         const activePage = document.querySelector('.page-section.active');
         const pageId = activePage?.id?.replace('page-', '');
         if (pageId === 'overview') loadOverview();
+        else if (pageId === 'reports') loadReports();
         else if (pageId === 'orders') loadOrders();
         else if (pageId === 'invoices') loadInvoices();
         else if (pageId === 'transactions') loadTransactions();
@@ -90,6 +91,7 @@
         overview:     { title: 'Overview',    sub: 'Ringkasan sistem NokosHUB' },
         orders:       { title: 'Orders',      sub: 'Riwayat pembelian nomor virtual' },
         invoices:     { title: 'Invoices',    sub: 'Riwayat deposit & pembayaran payment gateway' },
+        reports:      { title: 'Laporan',     sub: 'Ringkasan HPP, omzet, margin kotor, dan arus payment gateway' },
         transactions: { title: 'Transaksi',   sub: 'Semua aliran transaksi keuangan' },
         services:     { title: 'Layanan',     sub: 'Sync & kelola layanan dari seluruh provider OTP' },
         referral:     { title: 'Referral',    sub: 'Atur program referral dan nominal bonus pengguna' },
@@ -107,6 +109,13 @@
         preset: '7d',
         customStart: '',
         customEnd: '',
+    };
+
+    const reportRangeState = {
+        preset: '1d',
+        customStart: '',
+        customEnd: '',
+        bucket: 'day',
     };
 
     window.setOverviewRangePreset = function (preset) {
@@ -187,6 +196,94 @@
         return query ? `?${query}` : '';
     }
 
+    window.setReportRangePreset = function (preset) {
+        reportRangeState.preset = preset;
+        syncReportRangeUi();
+        if (preset !== 'custom') {
+            loadReports();
+        }
+    };
+
+    window.setReportBucket = function (bucket) {
+        reportRangeState.bucket = bucket;
+        syncReportRangeUi();
+        loadReports();
+    };
+
+    window.applyReportCustomRange = function () {
+        const startInput = document.getElementById('reportDateFrom');
+        const endInput = document.getElementById('reportDateTo');
+        const startValue = startInput?.value || '';
+        const endValue = endInput?.value || '';
+
+        if (!startValue || !endValue) {
+            showToast('Tanggal awal dan akhir wajib diisi untuk custom laporan', 'warning');
+            return;
+        }
+
+        if (new Date(`${startValue}T00:00:00`).getTime() > new Date(`${endValue}T23:59:59.999`).getTime()) {
+            showToast('Tanggal awal tidak boleh lebih besar dari tanggal akhir', 'warning');
+            return;
+        }
+
+        reportRangeState.preset = 'custom';
+        reportRangeState.customStart = startValue;
+        reportRangeState.customEnd = endValue;
+        syncReportRangeUi();
+        loadReports();
+    };
+
+    function syncReportRangeUi() {
+        document.querySelectorAll('[data-report-range-preset]').forEach((button) => {
+            button.classList.toggle('active', button.dataset.reportRangePreset === reportRangeState.preset);
+        });
+        document.querySelectorAll('[data-report-bucket]').forEach((button) => {
+            button.classList.toggle('active', button.dataset.reportBucket === reportRangeState.bucket);
+        });
+
+        const customGroup = document.getElementById('reportCustomRangeGroup');
+        if (customGroup) {
+            customGroup.classList.toggle('active', reportRangeState.preset === 'custom');
+        }
+
+        const startInput = document.getElementById('reportDateFrom');
+        const endInput = document.getElementById('reportDateTo');
+        if (startInput) startInput.value = reportRangeState.customStart;
+        if (endInput) endInput.value = reportRangeState.customEnd;
+    }
+
+    function getReportQueryString() {
+        const params = new URLSearchParams();
+        const now = new Date();
+        let start = null;
+        let end = null;
+
+        if (reportRangeState.preset === '1d') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (reportRangeState.preset === '7d') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (reportRangeState.preset === '30d') {
+            start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+            end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (reportRangeState.preset === 'custom' && reportRangeState.customStart && reportRangeState.customEnd) {
+            start = new Date(`${reportRangeState.customStart}T00:00:00`);
+            end = new Date(`${reportRangeState.customEnd}T23:59:59.999`);
+        }
+
+        if (start && Number.isFinite(start.getTime())) {
+            params.set('dateFrom', start.toISOString());
+        }
+        if (end && Number.isFinite(end.getTime())) {
+            params.set('dateTo', end.toISOString());
+        }
+        params.set('bucket', reportRangeState.bucket);
+
+        const query = params.toString();
+        return query ? `?${query}` : '';
+    }
+
     window.navigateTo = function (page) {
         document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.remove('active'));
         document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
@@ -204,6 +301,7 @@
         overlay.classList.remove('show');
 
         if (page === 'orders') loadOrders();
+        else if (page === 'reports') loadReports();
         else if (page === 'invoices') loadInvoices();
         else if (page === 'transactions') loadTransactions();
         else if (page === 'services') {
@@ -527,6 +625,237 @@
                     </tr>`).join('')}
                 </tbody>
             </table>`;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  REPORTS PAGE
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function loadReports() {
+        syncReportRangeUi();
+
+        const statsGrid = document.getElementById('reportStatsGrid');
+        const providerBody = document.getElementById('reportProviderBreakdownBody');
+        const periodBody = document.getElementById('reportPeriodBreakdownBody');
+        const gatewayBody = document.getElementById('reportGatewaySummaryBody');
+        const fundingBody = document.getElementById('reportProviderFundingBody');
+        const caption = document.getElementById('reportCaption');
+
+        if (statsGrid) statsGrid.innerHTML = Array.from({ length: 6 }).map((_, index) => {
+            const labels = ['Order Sukses', 'Omzet Total', 'HPP Provider', 'Margin Kotor', 'Saldo Provider', 'Gateway Masuk'];
+            const icons = ['orders', 'revenue', 'provider', 'revenue', 'provider', 'revenue'];
+            const colors = ['sky', 'indigo', 'amber', 'emerald', 'rose', 'sky'];
+            return statCard(colors[index], icons[index], labels[index], '…');
+        }).join('');
+        if (providerBody) providerBody.innerHTML = loadingHTML();
+        if (periodBody) periodBody.innerHTML = loadingHTML();
+        if (gatewayBody) gatewayBody.innerHTML = loadingHTML();
+        if (fundingBody) fundingBody.innerHTML = loadingHTML();
+
+        try {
+            const res = await api(`/api/admin/reports${getReportQueryString()}`);
+            if (!res.success) throw new Error(res.error || 'Gagal memuat laporan');
+
+            const data = res.data || {};
+            const summary = data.summary || {};
+            const providerBreakdown = Array.isArray(data.providerBreakdown) ? data.providerBreakdown : [];
+            const periodBreakdown = Array.isArray(data.periodBreakdown) ? data.periodBreakdown : [];
+
+            if (caption) {
+                caption.textContent = buildReportCaption(summary);
+            }
+
+            if (statsGrid) {
+                statsGrid.innerHTML = `
+                    ${statCard('sky', 'orders', 'Order Sukses', String(summary.successfulOrders ?? 0))}
+                    ${statCard('indigo', 'revenue', 'Omzet Total', formatRupiahFull(summary.totalOrderRevenue ?? 0))}
+                    ${statCard('amber', 'provider', 'HPP Provider', formatRupiahFull(summary.totalProviderHpp ?? 0), 'Akumulasi harga real provider')}
+                    ${statCard('emerald', 'revenue', 'Margin Kotor', formatRupiahFull(summary.grossMargin ?? 0), `${formatPercent(summary.grossMarginPercent ?? 0)} dari omzet`)}
+                    ${statCard('rose', 'provider', 'Saldo Provider', formatRupiahFull(summary.providerBalanceIdr ?? 0), Array.isArray(summary.providerBalances) ? summary.providerBalances.map((item) => `${item.serverLabel}: $${Number(item.balanceUsd || 0).toFixed(2)}`).join(' • ') : '')}
+                    ${statCard('sky', 'revenue', 'Gateway Masuk', formatRupiahFull(summary.totalGatewayPaid ?? 0), `${Number(summary.paidInvoiceCount ?? 0)} invoice PAID`)}
+                `;
+            }
+
+            if (periodBody) {
+                periodBody.innerHTML = renderReportPeriodTable(periodBreakdown, reportRangeState.bucket);
+            }
+
+            if (providerBody) {
+                providerBody.innerHTML = renderReportProviderTable(providerBreakdown);
+            }
+
+            if (gatewayBody) {
+                gatewayBody.innerHTML = renderGatewaySummary(summary);
+            }
+
+            if (fundingBody) {
+                fundingBody.innerHTML = renderProviderFundingSummary(summary, providerBreakdown);
+            }
+        } catch (err) {
+            const message = err?.message || 'Gagal memuat laporan';
+            if (statsGrid) statsGrid.innerHTML = statCard('rose', 'provider', 'Laporan', 'Error', message);
+            if (providerBody) providerBody.innerHTML = errorHTML(message);
+            if (periodBody) periodBody.innerHTML = errorHTML(message);
+            if (gatewayBody) gatewayBody.innerHTML = errorHTML(message);
+            if (fundingBody) fundingBody.innerHTML = errorHTML(message);
+        }
+    }
+
+    function buildReportCaption(summary) {
+        const parts = [];
+        if (summary.reportDateFrom) {
+            parts.push(`Mulai ${formatReportDate(summary.reportDateFrom)}`);
+        }
+        if (summary.reportDateTo) {
+            parts.push(`sampai ${formatReportDate(summary.reportDateTo)}`);
+        }
+        parts.push(`kelompok ${formatReportBucketLabel(summary.bucket || reportRangeState.bucket)}`);
+        parts.push('preset harian dihitung dari jam 00.00 WIB');
+        return parts.join(' • ');
+    }
+
+    function renderReportPeriodTable(rows, bucket) {
+        if (!rows.length) {
+            return emptyHTML('Belum ada order sukses pada rentang laporan ini');
+        }
+
+        return `
+            <table class="data-table">
+                <thead><tr>
+                    <th>Periode</th><th>Order Sukses</th><th>Omzet</th><th>HPP</th><th>Margin Kotor</th>
+                </tr></thead>
+                <tbody>
+                    ${rows.map((row) => `
+                        <tr>
+                            <td class="fw-600">${escText(formatReportBucketValue(row.bucketStart, bucket))}</td>
+                            <td class="mono">${Number(row.successfulOrders ?? 0)}</td>
+                            <td class="mono text-indigo fw-600">${formatRupiahFull(row.totalOrderRevenue ?? 0)}</td>
+                            <td class="mono text-amber fw-600">${formatRupiahFull(row.totalProviderHpp ?? 0)}</td>
+                            <td class="mono text-emerald fw-600">${formatRupiahFull(row.grossMargin ?? 0)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <div class="report-table-note">Rekap periode mengikuti zona waktu WIB untuk pelaporan harian dari jam 00.00.</div>
+        `;
+    }
+
+    function renderReportProviderTable(rows) {
+        if (!rows.length) {
+            return emptyHTML('Belum ada order sukses pada rentang laporan ini');
+        }
+
+        return `
+            <table class="data-table">
+                <thead><tr>
+                    <th>Server</th><th>Provider</th><th>Order Sukses</th><th>Omzet</th><th>HPP</th><th>Margin Kotor</th>
+                </tr></thead>
+                <tbody>
+                    ${rows.map((row) => `
+                        <tr>
+                            <td><span class="badge info">${escText(row.serverLabel || row.providerKey || 'Server')}</span></td>
+                            <td class="fw-600">${escText(row.providerLabel || row.providerKey || 'Provider')}</td>
+                            <td class="mono">${Number(row.successfulOrders ?? 0)}</td>
+                            <td class="mono text-indigo fw-600">${formatRupiahFull(row.totalOrderRevenue ?? 0)}</td>
+                            <td class="mono text-amber fw-600">${formatRupiahFull(row.totalProviderHpp ?? 0)}</td>
+                            <td class="mono text-emerald fw-600">${formatRupiahFull(row.grossMargin ?? 0)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <div class="report-table-note">HPP per server ini bisa dipakai sebagai patokan pengisian saldo provider.</div>
+        `;
+    }
+
+    function renderGatewaySummary(summary) {
+        return `
+            <div class="report-kpi-list">
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">Gateway Terkonfigurasi</div>
+                    <div class="report-kpi-value">${summary.gatewayConfig?.configured ? 'Aktif' : 'Belum Aktif'}</div>
+                    <div class="report-kpi-meta">Metode: ${escText((summary.gatewayConfig?.paymentMethod || '-').toUpperCase())}</div>
+                </div>
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">Total Deposit Berhasil</div>
+                    <div class="report-kpi-value">${formatRupiahFull(summary.totalPaidDeposits ?? 0)}</div>
+                    <div class="report-kpi-meta">Dana bersih yang masuk ke saldo user pada periode ini.</div>
+                </div>
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">Total Fee Gateway</div>
+                    <div class="report-kpi-value">${formatRupiahFull(summary.totalGatewayFees ?? 0)}</div>
+                    <div class="report-kpi-meta">Akumulasi biaya payment gateway yang tercatat dari invoice PAID.</div>
+                </div>
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">Total Nominal Dibayar</div>
+                    <div class="report-kpi-value">${formatRupiahFull(summary.totalGatewayPaid ?? 0)}</div>
+                    <div class="report-kpi-meta">Termasuk base amount dan gateway fee.</div>
+                </div>
+            </div>
+            <div class="report-note">${escText(summary.paymentGatewayBalanceNote || 'Saldo payment gateway belum tersedia via API saat ini.')}</div>
+        `;
+    }
+
+    function renderProviderFundingSummary(summary, rows) {
+        const rowsHtml = rows.length
+            ? rows.map((row) => `
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">${escText(row.serverLabel || row.providerLabel || row.providerKey)}</div>
+                    <div class="report-kpi-value">${formatRupiahFull(row.totalProviderHpp ?? 0)}</div>
+                    <div class="report-kpi-meta">HPP sukses ${Number(row.successfulOrders ?? 0)} order • Omzet ${formatRupiahFull(row.totalOrderRevenue ?? 0)}</div>
+                </div>
+            `).join('')
+            : `
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">Belum ada data HPP</div>
+                    <div class="report-kpi-value">Rp 0</div>
+                    <div class="report-kpi-meta">Belum ada order sukses pada rentang ini.</div>
+                </div>
+            `;
+
+        return `
+            <div class="report-kpi-list">
+                <div class="report-kpi-item">
+                    <div class="report-kpi-label">Total HPP Provider</div>
+                    <div class="report-kpi-value">${formatRupiahFull(summary.totalProviderHpp ?? 0)}</div>
+                    <div class="report-kpi-meta">Gunakan angka ini sebagai acuan total biaya real provider pada periode laporan.</div>
+                </div>
+                ${rowsHtml}
+            </div>
+        `;
+    }
+
+    function formatPercent(value) {
+        const number = Number(value || 0);
+        if (!Number.isFinite(number)) return '0%';
+        return `${number.toLocaleString('id-ID', { minimumFractionDigits: number % 1 ? 2 : 0, maximumFractionDigits: 2 })}%`;
+    }
+
+    function formatReportBucketLabel(bucket) {
+        if (bucket === 'week') return 'mingguan';
+        if (bucket === 'month') return 'bulanan';
+        return 'harian';
+    }
+
+    function formatReportDate(value) {
+        return new Date(value).toLocaleString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+
+    function formatReportBucketValue(value, bucket) {
+        const date = new Date(value);
+        if (bucket === 'month') {
+            return date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+        }
+        if (bucket === 'week') {
+            const end = new Date(date);
+            end.setDate(end.getDate() + 6);
+            return `${date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} - ${end.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+        }
+        return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
