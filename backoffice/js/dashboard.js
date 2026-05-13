@@ -79,6 +79,7 @@
         else if (pageId === 'smtp') loadSmtpSettings();
         else if (pageId === 'cs-bot') loadCsBotSettings();
         else if (pageId === 'promo') loadPromoSettings();
+        else if (pageId === 'announcement') loadAnnouncementSettings();
         else if (pageId === 'newsletter') loadNewsletterPage();
         else if (pageId === 'seo-pages') loadSeoPagesPage();
         else if (pageId === 'deposit-settings') loadPaymentSettings();
@@ -98,6 +99,7 @@
         smtp:         { title: 'SMTP / Email', sub: 'Kelola pengiriman OTP dan koneksi email outbound' },
         'cs-bot':     { title: 'CS BOT',      sub: 'Atur OpenRouter, API key, dan prompt knowledge untuk bot Customer Service' },
         promo:        { title: 'Promo',       sub: 'Kelola promo aktif, bonus deposit, dan alur klaim di bot CS' },
+        announcement: { title: 'Pengumuman', sub: 'Kelola popup pengumuman yang tampil ke user saat dashboard direload' },
         newsletter:   { title: 'Newsletter',  sub: 'Broadcast email dan Telegram ke pengguna terpilih' },
         'seo-pages':  { title: 'SEO Pages',   sub: 'Kelola slug, meta, dan artikel SEO yang dipublish ke landing page' },
         'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
@@ -312,6 +314,7 @@
         else if (page === 'smtp') loadSmtpSettings();
         else if (page === 'cs-bot') loadCsBotSettings();
         else if (page === 'promo') loadPromoSettings();
+        else if (page === 'announcement') loadAnnouncementSettings();
         else if (page === 'newsletter') loadNewsletterPage();
         else if (page === 'seo-pages') loadSeoPagesPage();
         else if (page === 'deposit-settings') loadPaymentSettings();
@@ -1614,6 +1617,60 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Simpan Promo';
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  ANNOUNCEMENT PAGE
+    // ═══════════════════════════════════════════════════════════════════════════
+    window.loadAnnouncementSettings = async function () {
+        const enabledInput = document.getElementById('announcementEnabledInput');
+        const titleInput = document.getElementById('announcementTitleInput');
+        const messageInput = document.getElementById('announcementMessageInput');
+        if (!enabledInput || !titleInput || !messageInput) return;
+
+        try {
+            const res = await api('/api/admin/settings/announcement');
+            if (!res.success) throw new Error(res.error || 'Gagal memuat pengaturan pengumuman');
+
+            const settings = res.data || {};
+            enabledInput.value = String(Boolean(settings.enabled));
+            titleInput.value = settings.title || 'Pengumuman NokosHUB';
+            messageInput.value = settings.message || '';
+        } catch (err) {
+            showToast(err.message || 'Gagal memuat pengaturan pengumuman', 'error');
+        }
+    };
+
+    window.saveAnnouncementSettings = async function () {
+        const btn = document.getElementById('saveAnnouncementBtn');
+        const payload = {
+            enabled: document.getElementById('announcementEnabledInput')?.value === 'true',
+            title: document.getElementById('announcementTitleInput')?.value.trim() || '',
+            message: document.getElementById('announcementMessageInput')?.value.trim() || '',
+        };
+
+        if (!payload.title || !payload.message) {
+            showToast('Judul dan isi pengumuman wajib diisi', 'warning');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+
+        try {
+            const res = await api('/api/admin/settings/announcement', {
+                method: 'PATCH',
+                body: JSON.stringify(payload),
+            });
+            if (!res.success) throw new Error(res.error || 'Gagal menyimpan pengumuman');
+            showToast(res.message || 'Pengaturan pengumuman berhasil disimpan');
+            await loadAnnouncementSettings();
+        } catch (err) {
+            showToast(err.message || 'Gagal menyimpan pengumuman', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Pengumuman';
         }
     };
 

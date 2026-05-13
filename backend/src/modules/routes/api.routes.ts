@@ -15,6 +15,7 @@ import { turnstileService } from '../security/turnstile.service';
 import { maintenanceService } from '../maintenance/maintenance.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { promoSettingsService } from '../settings/promo-settings.service';
+import { announcementSettingsService } from '../settings/announcement-settings.service';
 import { seoPagesService, normalizeSlug, type SeoPageRecord } from '../settings/seo-pages.service';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -773,6 +774,15 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/settings/promo
     fastify.get('/settings/promo', async () => {
         const settings = await promoSettingsService.getRuntimeSettings();
+        return {
+            success: true,
+            data: settings,
+        };
+    });
+
+    // GET /api/settings/announcement
+    fastify.get('/settings/announcement', async () => {
+        const settings = await announcementSettingsService.getRuntimeSettings();
         return {
             success: true,
             data: settings,

@@ -2142,6 +2142,18 @@ input, textarea, select { user-select: text; }
   gap: 10px;
   margin-top: 18px;
 }
+.announcement-prompt-box {
+  border-color: #ffd9a8;
+  box-shadow: 0 18px 40px rgba(28, 28, 28, 0.18);
+}
+.announcement-prompt-badge {
+  background: #FFF3D4;
+}
+.announcement-prompt-desc {
+  white-space: pre-line;
+  color: var(--text);
+  font-weight: 800;
+}
 
 /* =============================================
    SIDEBAR OVERLAY

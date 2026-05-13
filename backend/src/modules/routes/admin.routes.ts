@@ -15,6 +15,7 @@ import { bayarGgService } from '../payments/bayargg.service';
 import { paymentSettingsService } from '../settings/payment-settings.service';
 import { csBotSettingsService } from '../settings/cs-bot-settings.service';
 import { promoSettingsService } from '../settings/promo-settings.service';
+import { announcementSettingsService } from '../settings/announcement-settings.service';
 import { seoPagesService } from '../settings/seo-pages.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { getProviderDescriptor } from '../providers/provider-registry';
@@ -45,6 +46,12 @@ const promoSettingsSchema = z.object({
     bonusAmount: z.number().int().min(0).max(10000000),
     topupUrl: z.string().min(1, 'URL top up wajib diisi').url('URL top up harus valid'),
     claimInstructions: z.string().min(8, 'Instruksi klaim minimal 8 karakter').max(500),
+});
+
+const announcementSettingsSchema = z.object({
+    enabled: z.boolean(),
+    title: z.string().min(3, 'Judul pengumuman minimal 3 karakter').max(120),
+    message: z.string().min(8, 'Isi pengumuman minimal 8 karakter').max(2000),
 });
 
 const seoPageSchema = z.object({
@@ -1226,6 +1233,33 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         return {
             success: true,
             message: 'Pengaturan promo berhasil disimpan',
+            data: settings,
+        };
+    });
+
+    // GET /api/admin/settings/announcement
+    fastify.get('/settings/announcement', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+        const settings = await announcementSettingsService.getSettings();
+        return {
+            success: true,
+            data: settings,
+        };
+    });
+
+    // PATCH /api/admin/settings/announcement
+    fastify.patch('/settings/announcement', async (req, reply) => {
+        if (!requireAdmin(req, reply)) return;
+
+        const parsed = announcementSettingsSchema.safeParse(req.body);
+        if (!parsed.success) {
+            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
+        }
+
+        const settings = await announcementSettingsService.saveSettings(parsed.data);
+        return {
+            success: true,
+            message: 'Pengaturan pengumuman berhasil disimpan',
             data: settings,
         };
     });

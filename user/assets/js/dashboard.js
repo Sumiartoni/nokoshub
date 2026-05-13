@@ -22,6 +22,7 @@ const SUPPORT_CONTACT = {
   telegramHandle: '@nokoshubsupport',
   telegramUrl: 'https://t.me/nokoshubsupport',
 };
+const ANNOUNCEMENT_DEFAULT_TITLE = 'Pengumuman NokosHUB';
 
 const S = {
   user: {
@@ -83,6 +84,11 @@ const S = {
   backendOnline: false,
   notificationsOpen: false,
   notificationsSeenAt: 0,
+  announcement: {
+    enabled: false,
+    title: '',
+    message: '',
+  },
 };
 
 const TTLS = {
@@ -124,6 +130,7 @@ let topupCountdownTimer = null;
 let topupStatusPoller = null;
 let invoiceHistoryPoller = null;
 let deferredInstallPrompt = null;
+let pendingInstallPromptAfterAnnouncement = false;
 
 let SVC = [
   { id: 'wa', e: '📱', n: 'WhatsApp', cat: 'social', bg: '#FFF3D4', p: 1200, priceCount: 1 },
@@ -2557,6 +2564,10 @@ function buildInstallPromptSteps() {
 }
 
 function openInstallPrompt() {
+  if (document.getElementById('announcementPromptModal')?.classList.contains('open')) {
+    pendingInstallPromptAfterAnnouncement = true;
+    return;
+  }
   if (!canShowInstallPrompt()) return;
   const modal = document.getElementById('installPromptModal');
   const desc = document.getElementById('installPromptDesc');
@@ -2589,6 +2600,26 @@ function closeInstallPrompt() {
   document.getElementById('installPromptModal')?.classList.remove('open');
 }
 
+function openAnnouncementPrompt() {
+  if (!S.announcement?.enabled || !String(S.announcement?.message || '').trim()) return;
+  const modal = document.getElementById('announcementPromptModal');
+  const title = document.getElementById('announcementPromptTitle');
+  const desc = document.getElementById('announcementPromptDesc');
+  if (!modal || !title || !desc) return;
+
+  title.textContent = S.announcement.title || ANNOUNCEMENT_DEFAULT_TITLE;
+  desc.textContent = S.announcement.message || '';
+  modal.classList.add('open');
+}
+
+function closeAnnouncementPrompt() {
+  document.getElementById('announcementPromptModal')?.classList.remove('open');
+  if (pendingInstallPromptAfterAnnouncement) {
+    pendingInstallPromptAfterAnnouncement = false;
+    window.setTimeout(() => openInstallPrompt(), 220);
+  }
+}
+
 function dismissInstallPromptFor24h() {
   localStorage.setItem(STORE_KEYS.installPromptDismissUntil, String(Date.now() + (24 * 60 * 60 * 1000)));
   closeInstallPrompt();
@@ -2609,6 +2640,28 @@ async function triggerInstallPrompt() {
   } finally {
     deferredInstallPrompt = null;
     closeInstallPrompt();
+  }
+}
+
+async function loadActiveAnnouncement() {
+  try {
+    const result = await apiFetch('/settings/announcement');
+    S.announcement = {
+      enabled: Boolean(result?.enabled),
+      title: String(result?.title || ANNOUNCEMENT_DEFAULT_TITLE),
+      message: String(result?.message || ''),
+    };
+
+    if (S.announcement.enabled && S.announcement.message.trim()) {
+      openAnnouncementPrompt();
+    }
+  } catch (err) {
+    console.error('Failed to load announcement:', err);
+    S.announcement = {
+      enabled: false,
+      title: '',
+      message: '',
+    };
   }
 }
 
@@ -2667,6 +2720,7 @@ document.addEventListener('keydown', e => {
     closeSidebar();
     closeNotifications();
     closeInstallPrompt();
+    closeAnnouncementPrompt();
   }
 });
 
@@ -2678,7 +2732,7 @@ document.addEventListener('click', (event) => {
   closeNotifications();
 });
 
-(function init() {
+(async function init() {
   if (!localStorage.getItem(STORE_KEYS.token)) {
     window.location.href = '/login/';
     return;
@@ -2692,6 +2746,7 @@ document.addEventListener('click', (event) => {
   renderSvcs();
   renderNotifications();
   loadSupportContact();
+  await loadActiveAnnouncement();
   registerPwaSupport();
   initRouter();
   loadPaymentSettings();

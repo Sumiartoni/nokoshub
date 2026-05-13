@@ -122,6 +122,15 @@
                 <span>Promo</span>
             </div>
 
+            <div class="nav-item" data-page="announcement" id="nav-announcement">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 11l18-8v18l-18-8z"/>
+                    <path d="M11 14v6"/>
+                    <path d="M7 13l2 7"/>
+                </svg>
+                <span>Pengumuman</span>
+            </div>
+
             <div class="nav-item" data-page="newsletter" id="nav-newsletter">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 4h16v16H4z"/>
@@ -915,6 +924,63 @@
                         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
                             <button class="btn btn-primary" id="savePromoBtn" onclick="savePromoSettings()">Simpan Promo</button>
                             <button class="btn btn-outline" onclick="loadPromoSettings()">Reset Form</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ════════ ANNOUNCEMENT PAGE ════════ -->
+            <div class="page-section" id="page-announcement">
+                <div class="filter-bar">
+                    <div class="search-wrapper" style="pointer-events:none;opacity:.85">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 11l18-8v18l-18-8z"/><path d="M11 14v6"/><path d="M7 13l2 7"/>
+                        </svg>
+                        <input type="text" class="search-input" value="Popup pengumuman yang muncul ke user saat dashboard direload" readonly>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="loadAnnouncementSettings()">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 11l18-8v18l-18-8z"/><path d="M11 14v6"/><path d="M7 13l2 7"/>
+                            </svg>
+                            Popup Pengumuman User
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="announcementEnabledInput">Status Pengumuman</label>
+                                <select class="form-select" id="announcementEnabledInput">
+                                    <option value="true">Aktif</option>
+                                    <option value="false">Nonaktif</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="announcementTitleInput">Judul Popup</label>
+                                <input class="form-input" id="announcementTitleInput" type="text" placeholder="Pengumuman Penting NokosHUB">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:14px">
+                            <label class="form-label" for="announcementMessageInput">Isi Pengumuman</label>
+                            <textarea class="form-input" id="announcementMessageInput" rows="8" placeholder="Tulis informasi penting untuk user. Popup ini akan muncul setiap kali dashboard direload sampai user menutupnya dengan tombol Sudah membaca."></textarea>
+                        </div>
+                        <div class="form-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                            Popup ini tidak memakai email broadcast. Jika popup install PWA juga aktif, user akan melihat keduanya secara bergantian.
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+                            <button class="btn btn-primary" id="saveAnnouncementBtn" onclick="saveAnnouncementSettings()">Simpan Pengumuman</button>
+                            <button class="btn btn-outline" onclick="loadAnnouncementSettings()">Reset Form</button>
                         </div>
                     </div>
                 </div>
