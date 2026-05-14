@@ -75,10 +75,12 @@ const authRegisterResendSchema = z.object({
 const authLoginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1),
+    turnstileToken: z.string().max(2048).optional(),
 });
 
 const authGoogleSchema = z.object({
     credential: z.string().min(100),
+    turnstileToken: z.string().max(2048).optional(),
 });
 
 const authGoogleRegisterSchema = z.object({
@@ -176,6 +178,16 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         };
     });
 
+    // GET /api/auth/login/config
+    fastify.get('/auth/login/config', async () => {
+        return {
+            success: true,
+            data: {
+                turnstile: turnstileService.getClientConfig(),
+            },
+        };
+    });
+
     // POST /api/auth/register
     fastify.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
         const parsed = authRegisterSchema.safeParse(req.body);
@@ -231,6 +243,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
             const result = await authService.login(parsed.data);
             return { success: true, data: result };
         } catch (err) {
@@ -260,6 +273,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
             const result = await authService.loginWithGoogle(parsed.data.credential);
             return { success: true, data: result };
         } catch (err) {

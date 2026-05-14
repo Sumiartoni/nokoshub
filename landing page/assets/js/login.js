@@ -17,6 +17,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const googleRegisterBtn = document.getElementById('googleRegisterBtn');
   const googleRegisterHint = document.getElementById('googleRegisterHint');
 
+  const loginSecurity = {
+    turnstileEnabled: false,
+    turnstileSiteKey: '',
+    turnstileWidgetId: null,
+    turnstileToken: '',
+  };
+
   const registerSecurity = {
     turnstileEnabled: false,
     turnstileSiteKey: '',
@@ -28,9 +35,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindPasswordToggle(document.getElementById('registerPasswordToggle'), document.getElementById('registerPassword'));
   bindPasswordToggle(document.getElementById('confirmPasswordToggle'), document.getElementById('confirmPassword'));
 
+  if (loginForm) {
+    await initTurnstileSecurity(loginSecurity, {
+      configPath: '/auth/login/config',
+      wrapId: 'loginTurnstileWrap',
+      boxId: 'loginTurnstileBox',
+      errorId: 'loginTurnstileError',
+    });
+  }
+
   if (registerForm) {
     hydrateRegisterFormFromUrl();
-    await initRegisterSecurity(registerSecurity);
+    await initTurnstileSecurity(registerSecurity, {
+      configPath: '/auth/register/config',
+      wrapId: 'registerTurnstileWrap',
+      boxId: 'registerTurnstileBox',
+      errorId: 'registerTurnstileError',
+    });
   }
 
   initGoogleAuth({
@@ -39,7 +60,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     submit: loginSubmit,
     registerSubmit,
     mode: registerForm ? 'register' : 'login',
+    getLoginPayload: () => getLoginAuxPayload(loginSecurity),
     getRegisterPayload: () => getRegisterAuxPayload(registerSecurity),
+    onLoginFailure: () => resetTurnstileWidget(loginSecurity),
     onRegisterPending: handleRegisterPending,
     onRegisterFailure: () => resetTurnstileWidget(registerSecurity),
   });
@@ -52,9 +75,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     event.preventDefault();
     clearError('emailError');
     clearError('passwordError');
+    clearError('loginTurnstileError');
 
     const emailValue = document.getElementById('email')?.value.trim() || '';
     const passwordValue = document.getElementById('password')?.value.trim() || '';
+    const turnstileToken = getTurnstileTokenOrShowError(loginSecurity, 'loginTurnstileError');
     let valid = true;
 
     if (!emailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)) {
@@ -67,6 +92,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       valid = false;
     }
 
+    if (loginSecurity.turnstileEnabled && !turnstileToken) {
+      valid = false;
+    }
+
     if (!valid) return;
 
     setAuthSubmitState(loginSubmit, true, 'Memproses...');
@@ -75,6 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const result = await apiFetch('/auth/login', {
         email: emailValue,
         password: passwordValue,
+        turnstileToken: turnstileToken || undefined,
       });
       persistAuth(result);
       showToast('Login berhasil. Membuka dashboard...', 'success');
@@ -82,8 +112,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = '/user/#/home';
       }, 500);
     } catch (err) {
-      setError('passwordError', err.message || 'Login gagal.');
+      applyLoginErrorMessage(err.message || 'Login gagal.');
       showToast(err.message || 'Login gagal.', 'error');
+      resetTurnstileWidget(loginSecurity);
       setAuthSubmitState(loginSubmit, false);
     }
   });
@@ -134,14 +165,14 @@ function hydrateRegisterFormFromUrl() {
   }
 }
 
-async function initRegisterSecurity(state) {
-  const wrap = document.getElementById('registerTurnstileWrap');
-  const box = document.getElementById('registerTurnstileBox');
+async function initTurnstileSecurity(state, { configPath, wrapId, boxId, errorId }) {
+  const wrap = document.getElementById(wrapId);
+  const box = document.getElementById(boxId);
 
   if (!wrap || !box) return;
 
   try {
-    const config = await apiGet('/auth/register/config');
+    const config = await apiGet(configPath);
     const turnstile = config?.turnstile || {};
     if (!turnstile.enabled || !turnstile.siteKey) {
       wrap.hidden = true;
@@ -161,20 +192,20 @@ async function initRegisterSecurity(state) {
       sitekey: state.turnstileSiteKey,
       callback(token) {
         state.turnstileToken = token || '';
-        clearError('registerTurnstileError');
+        clearError(errorId);
       },
       'expired-callback'() {
         state.turnstileToken = '';
-        setError('registerTurnstileError', 'Captcha kedaluwarsa. Silakan verifikasi ulang.');
+        setError(errorId, 'Captcha kedaluwarsa. Silakan verifikasi ulang.');
       },
       'error-callback'() {
         state.turnstileToken = '';
-        setError('registerTurnstileError', 'Captcha gagal dimuat. Muat ulang halaman lalu coba lagi.');
+        setError(errorId, 'Captcha gagal dimuat. Muat ulang halaman lalu coba lagi.');
       },
     });
   } catch (err) {
     wrap.hidden = false;
-    setError('registerTurnstileError', err.message || 'Verifikasi keamanan belum siap.');
+    setError(errorId, err.message || 'Verifikasi keamanan belum siap.');
   }
 }
 
@@ -253,7 +284,7 @@ function getRegisterAuxPayload(state) {
     throw new Error('Kode referral belum valid.');
   }
 
-  const turnstileToken = getTurnstileTokenOrShowError(state);
+  const turnstileToken = getTurnstileTokenOrShowError(state, 'registerTurnstileError');
   if (state.turnstileEnabled && !turnstileToken) {
     throw new Error('Selesaikan verifikasi keamanan terlebih dahulu.');
   }
@@ -264,10 +295,21 @@ function getRegisterAuxPayload(state) {
   };
 }
 
-function getTurnstileTokenOrShowError(state) {
+function getLoginAuxPayload(state) {
+  clearError('loginTurnstileError');
+  const turnstileToken = getTurnstileTokenOrShowError(state, 'loginTurnstileError');
+  if (state.turnstileEnabled && !turnstileToken) {
+    throw new Error('Selesaikan verifikasi keamanan terlebih dahulu.');
+  }
+  return {
+    turnstileToken: turnstileToken || undefined,
+  };
+}
+
+function getTurnstileTokenOrShowError(state, errorId = 'registerTurnstileError') {
   if (!state.turnstileEnabled) return '';
   if (state.turnstileToken) return state.turnstileToken;
-  setError('registerTurnstileError', 'Selesaikan verifikasi keamanan terlebih dahulu.');
+  setError(errorId, 'Selesaikan verifikasi keamanan terlebih dahulu.');
   return '';
 }
 
@@ -302,6 +344,14 @@ function applyRegisterErrorMessage(message) {
     setError('registerTurnstileError', message);
   } else {
     setError('registerEmailError', message);
+  }
+}
+
+function applyLoginErrorMessage(message) {
+  if (/captcha|verifikasi keamanan/i.test(message)) {
+    setError('loginTurnstileError', message);
+  } else {
+    setError('passwordError', message);
   }
 }
 
@@ -426,7 +476,7 @@ async function unwrapApiResponse(response) {
   return payload.data ?? payload;
 }
 
-async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode, getRegisterPayload, onRegisterPending, onRegisterFailure }) {
+async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode, getLoginPayload, getRegisterPayload, onLoginFailure, onRegisterPending, onRegisterFailure }) {
   if (!buttonSlot || !hint) return;
 
   try {
@@ -467,8 +517,12 @@ async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode, 
             return;
           }
 
+          const loginPayload = typeof getLoginPayload === 'function'
+            ? getLoginPayload()
+            : {};
           const result = await apiFetch('/auth/google', {
             credential: response.credential,
+            turnstileToken: loginPayload.turnstileToken,
           });
           persistAuth(result);
           showToast('Login Google berhasil.', 'success');
@@ -478,12 +532,15 @@ async function initGoogleAuth({ buttonSlot, hint, submit, registerSubmit, mode, 
         } catch (err) {
           if (mode === 'register') {
             applyRegisterErrorMessage(err.message || 'Daftar Google gagal.');
+          } else {
+            applyLoginErrorMessage(err.message || 'Login Google gagal.');
           }
           hint.textContent = err.message || 'Login Google gagal.';
           hint.classList.add('is-error');
           showToast(err.message || (mode === 'register' ? 'Daftar Google gagal.' : 'Login Google gagal.'), 'error');
           setAuthSubmitState(currentSubmit, false);
           setGoogleBusy(buttonSlot, hint, false);
+          onLoginFailure?.();
           onRegisterFailure?.();
         }
       },
