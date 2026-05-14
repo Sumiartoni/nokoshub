@@ -81,7 +81,6 @@
         else if (pageId === 'promo') loadPromoSettings();
         else if (pageId === 'announcement') loadAnnouncementSettings();
         else if (pageId === 'newsletter') loadNewsletterPage();
-        else if (pageId === 'seo-pages') loadSeoPagesPage();
         else if (pageId === 'deposit-settings') loadPaymentSettings();
         else if (pageId === 'maintenance') loadMaintenanceDashboard();
         else if (pageId === 'users') loadUsers();
@@ -101,7 +100,6 @@
         promo:        { title: 'Promo',       sub: 'Kelola promo aktif, bonus deposit, dan alur klaim di bot CS' },
         announcement: { title: 'Pengumuman', sub: 'Kelola popup pengumuman yang tampil ke user saat dashboard direload' },
         newsletter:   { title: 'Newsletter',  sub: 'Broadcast email dan Telegram ke pengguna terpilih' },
-        'seo-pages':  { title: 'SEO Pages',   sub: 'Kelola slug, meta, dan artikel SEO yang dipublish ke landing page' },
         'deposit-settings': { title: 'Minimum Deposit', sub: 'Atur nominal minimal top up saldo user' },
         maintenance:  { title: 'Maintenance', sub: 'Kontrol stabilitas, housekeeping, dan operasional sistem' },
         users:        { title: 'Users',       sub: 'Manajemen pengguna & penyesuaian saldo' },
@@ -316,7 +314,6 @@
         else if (page === 'promo') loadPromoSettings();
         else if (page === 'announcement') loadAnnouncementSettings();
         else if (page === 'newsletter') loadNewsletterPage();
-        else if (page === 'seo-pages') loadSeoPagesPage();
         else if (page === 'deposit-settings') loadPaymentSettings();
         else if (page === 'maintenance') loadMaintenanceDashboard();
         else if (page === 'users') loadUsers();
@@ -1816,192 +1813,6 @@
                 Kirim Broadcast`;
         }
     };
-
-    let _seoPagesData = [];
-
-    window.loadSeoPagesPage = async function () {
-        const body = document.getElementById('seoPagesListBody');
-        if (!body) return;
-        body.innerHTML = loadingHTML();
-
-        try {
-            const res = await api('/api/admin/seo-pages');
-            if (!res.success) throw new Error(res.error || 'Gagal memuat halaman SEO');
-            _seoPagesData = res.data || [];
-            renderSeoPagesList(_seoPagesData);
-
-            const currentId = document.getElementById('seoPageIdInput')?.value;
-            const current = _seoPagesData.find((page) => page.id === currentId);
-            if (current) {
-                fillSeoPageForm(current);
-            } else if (_seoPagesData.length) {
-                fillSeoPageForm(_seoPagesData[0]);
-            } else {
-                createSeoPageDraft();
-            }
-        } catch (err) {
-            body.innerHTML = errorHTML(err.message || 'Gagal memuat halaman SEO');
-        }
-    };
-
-    window.filterSeoPagesList = function () {
-        const q = (document.getElementById('seoPageSearchInput')?.value || '').trim().toLowerCase();
-        const filtered = !q
-            ? _seoPagesData
-            : _seoPagesData.filter((page) => (
-                (page.slug || '').toLowerCase().includes(q) ||
-                (page.title || '').toLowerCase().includes(q) ||
-                (page.heroTitle || '').toLowerCase().includes(q)
-            ));
-        renderSeoPagesList(filtered);
-    };
-
-    window.createSeoPageDraft = function () {
-        fillSeoPageForm({
-            id: '',
-            slug: '',
-            title: '',
-            metaDescription: '',
-            heroBadge: '',
-            heroTitle: '',
-            intro: '',
-            content: '',
-            primaryCtaLabel: 'Daftar Gratis',
-            primaryCtaHref: '/register/',
-            secondaryCtaLabel: 'Lihat FAQ',
-            secondaryCtaHref: '/#faq',
-            isPublished: true,
-        });
-    };
-
-    window.previewSeoPage = function () {
-        const slug = (document.getElementById('seoPageSlugInput')?.value || '').trim().toLowerCase().replace(/^\/+|\/+$/g, '');
-        if (!slug) {
-            showToast('Isi slug terlebih dahulu', 'warning');
-            return;
-        }
-        window.open(buildPublicSeoUrl(slug), '_blank', 'noopener');
-    };
-
-    window.saveSeoPage = async function () {
-        const btn = document.getElementById('saveSeoPageBtn');
-        const payload = {
-            id: document.getElementById('seoPageIdInput')?.value || undefined,
-            slug: document.getElementById('seoPageSlugInput')?.value.trim() || '',
-            title: document.getElementById('seoPageTitleInput')?.value.trim() || '',
-            metaDescription: document.getElementById('seoPageMetaInput')?.value.trim() || '',
-            heroBadge: document.getElementById('seoPageBadgeInput')?.value.trim() || '',
-            heroTitle: document.getElementById('seoPageHeroTitleInput')?.value.trim() || '',
-            intro: document.getElementById('seoPageIntroInput')?.value.trim() || '',
-            content: document.getElementById('seoPageContentInput')?.value.trim() || '',
-            primaryCtaLabel: document.getElementById('seoPagePrimaryLabelInput')?.value.trim() || '',
-            primaryCtaHref: document.getElementById('seoPagePrimaryHrefInput')?.value.trim() || '',
-            secondaryCtaLabel: document.getElementById('seoPageSecondaryLabelInput')?.value.trim() || '',
-            secondaryCtaHref: document.getElementById('seoPageSecondaryHrefInput')?.value.trim() || '',
-            isPublished: (document.getElementById('seoPagePublishedInput')?.value || 'true') === 'true',
-        };
-
-        if (!payload.slug || !payload.title || !payload.metaDescription || !payload.content) {
-            showToast('Slug, title, meta description, dan isi artikel wajib diisi', 'warning');
-            return;
-        }
-
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-inline"></span> Menyimpan...';
-
-        try {
-            const res = await api('/api/admin/seo-pages', {
-                method: 'POST',
-                body: JSON.stringify(payload),
-            });
-            if (!res.success) throw new Error(res.error || 'Gagal menyimpan halaman SEO');
-            showToast(res.message || 'Halaman SEO berhasil disimpan', 'success');
-            await loadSeoPagesPage();
-            fillSeoPageForm(res.data);
-        } catch (err) {
-            showToast(err.message || 'Gagal menyimpan halaman SEO', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Simpan Halaman';
-        }
-    };
-
-    window.deleteSeoPage = async function () {
-        const id = document.getElementById('seoPageIdInput')?.value || '';
-        if (!id) {
-            showToast('Pilih halaman yang ingin dihapus terlebih dahulu', 'warning');
-            return;
-        }
-
-        openConfirm({
-            title: 'Hapus Halaman SEO',
-            message: 'Halaman SEO ini akan dihapus dari registry dan URL terkait tidak akan dipublish lagi. Lanjutkan?',
-            okText: 'Hapus',
-            color: 'danger',
-            onOk: async () => {
-                try {
-                    const res = await api(`/api/admin/seo-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
-                    if (!res.success) throw new Error(res.error || 'Gagal menghapus halaman SEO');
-                    showToast(res.message || 'Halaman SEO berhasil dihapus', 'success');
-                    createSeoPageDraft();
-                    await loadSeoPagesPage();
-                } catch (err) {
-                    showToast(err.message || 'Gagal menghapus halaman SEO', 'error');
-                }
-            },
-        });
-    };
-
-    function renderSeoPagesList(data) {
-        const body = document.getElementById('seoPagesListBody');
-        if (!body) return;
-        if (!data.length) {
-            body.innerHTML = emptyHTML('Belum ada halaman SEO. Klik "Halaman Baru" untuk membuat satu.');
-            return;
-        }
-
-        body.innerHTML = `
-            <div style="display:grid;gap:12px">
-                ${data.map((page) => `
-                    <button class="btn btn-outline" style="justify-content:flex-start;text-align:left;padding:14px 16px;display:block" onclick="selectSeoPage(${escAttr(page.id)})">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-                            <strong style="color:var(--text-primary)">${escText(page.heroBadge || page.title)}</strong>
-                            <span class="badge ${page.isPublished ? 'success' : 'warning'}">${page.isPublished ? 'Published' : 'Draft'}</span>
-                        </div>
-                        <div class="mono text-muted" style="margin-top:6px">/${escText(page.slug)}/</div>
-                        <div class="text-sm text-muted" style="margin-top:6px">${escText(page.title)}</div>
-                    </button>
-                `).join('')}
-            </div>`;
-    }
-
-    window.selectSeoPage = function (id) {
-        const page = _seoPagesData.find((item) => item.id === id);
-        if (!page) return;
-        fillSeoPageForm(page);
-    };
-
-    function fillSeoPageForm(page) {
-        document.getElementById('seoPageIdInput').value = page.id || '';
-        document.getElementById('seoPageSlugInput').value = page.slug || '';
-        document.getElementById('seoPageTitleInput').value = page.title || '';
-        document.getElementById('seoPageMetaInput').value = page.metaDescription || '';
-        document.getElementById('seoPageBadgeInput').value = page.heroBadge || '';
-        document.getElementById('seoPageHeroTitleInput').value = page.heroTitle || '';
-        document.getElementById('seoPageIntroInput').value = page.intro || '';
-        document.getElementById('seoPageContentInput').value = page.content || '';
-        document.getElementById('seoPagePrimaryLabelInput').value = page.primaryCtaLabel || 'Daftar Gratis';
-        document.getElementById('seoPagePrimaryHrefInput').value = page.primaryCtaHref || '/register/';
-        document.getElementById('seoPageSecondaryLabelInput').value = page.secondaryCtaLabel || 'Lihat FAQ';
-        document.getElementById('seoPageSecondaryHrefInput').value = page.secondaryCtaHref || '/#faq';
-        document.getElementById('seoPagePublishedInput').value = page.isPublished === false ? 'false' : 'true';
-    }
-
-    function buildPublicSeoUrl(slug) {
-        const host = window.location.host || '';
-        const publicHost = host.startsWith('admin.') ? host.slice(6) : host;
-        return `${window.location.protocol}//${publicHost}/${slug}/`;
-    }
 
     window.loadServices = async function () {
         const body = document.getElementById('servicesTableBody');

@@ -1,10 +1,10 @@
-const CACHE_NAME = 'nokoshub-user-v2';
+const CACHE_NAME = 'nokoshub-user-v3';
 const APP_SHELL = [
   '/user/',
   '/user/index.html',
   '/user/manifest.webmanifest',
-  '/user/assets/css/dashboard.css?v=20260514-1',
-  '/user/assets/js/dashboard.js?v=20260514-1',
+  '/user/assets/css/dashboard.css?v=20260515-1',
+  '/user/assets/js/dashboard.js?v=20260515-1',
   '/user/assets/images/favicon.png',
   '/user/assets/images/logo.png',
 ];

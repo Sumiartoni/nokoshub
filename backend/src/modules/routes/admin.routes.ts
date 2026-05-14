@@ -16,7 +16,6 @@ import { paymentSettingsService } from '../settings/payment-settings.service';
 import { csBotSettingsService } from '../settings/cs-bot-settings.service';
 import { promoSettingsService } from '../settings/promo-settings.service';
 import { announcementSettingsService } from '../settings/announcement-settings.service';
-import { seoPagesService } from '../settings/seo-pages.service';
 import { getConfiguredProviderBalances } from '../providers/provider-runtime';
 import { getProviderDescriptor } from '../providers/provider-registry';
 import { userService } from '../users/user.service';
@@ -52,22 +51,6 @@ const announcementSettingsSchema = z.object({
     enabled: z.boolean(),
     title: z.string().min(3, 'Judul pengumuman minimal 3 karakter').max(120),
     message: z.string().min(8, 'Isi pengumuman minimal 8 karakter').max(2000),
-});
-
-const seoPageSchema = z.object({
-    id: z.string().optional(),
-    slug: z.string().min(2).max(120),
-    title: z.string().min(10).max(180),
-    metaDescription: z.string().min(30).max(320),
-    heroBadge: z.string().min(2).max(80),
-    heroTitle: z.string().min(10).max(180),
-    intro: z.string().min(30).max(1200),
-    content: z.string().min(40).max(20000),
-    primaryCtaLabel: z.string().min(2).max(60),
-    primaryCtaHref: z.string().min(1).max(200),
-    secondaryCtaLabel: z.string().min(2).max(60),
-    secondaryCtaHref: z.string().min(1).max(200),
-    isPublished: z.boolean(),
 });
 
 const smtpSettingsSchema = z.object({
@@ -1262,42 +1245,6 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             message: 'Pengaturan pengumuman berhasil disimpan',
             data: settings,
         };
-    });
-
-    fastify.get('/seo-pages', async (req, reply) => {
-        if (!requireAdmin(req, reply)) return;
-        const pages = await seoPagesService.list();
-        return { success: true, data: pages };
-    });
-
-    fastify.post('/seo-pages', async (req, reply) => {
-        if (!requireAdmin(req, reply)) return;
-        const parsed = seoPageSchema.safeParse(req.body);
-        if (!parsed.success) {
-            return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
-        }
-
-        try {
-            const page = await seoPagesService.save(parsed.data);
-            return { success: true, message: 'Halaman SEO berhasil disimpan', data: page };
-        } catch (err: any) {
-            return reply.status(400).send({ success: false, error: err.message || 'Gagal menyimpan halaman SEO' });
-        }
-    });
-
-    fastify.delete('/seo-pages/:id', async (req, reply) => {
-        if (!requireAdmin(req, reply)) return;
-        const params = req.params as { id?: string };
-        if (!params.id) {
-            return reply.status(400).send({ success: false, error: 'ID halaman wajib diisi' });
-        }
-
-        const removed = await seoPagesService.remove(params.id);
-        if (!removed) {
-            return reply.status(404).send({ success: false, error: 'Halaman tidak ditemukan' });
-        }
-
-        return { success: true, message: 'Halaman SEO berhasil dihapus' };
     });
 
     // GET /api/admin/newsletter/templates
