@@ -97,7 +97,6 @@
         <div class="sidebar-nav-group">Akun</div>
         <div class="sidebar-nav-item"         id="n-profile"      onclick="nav('profile')"><span class="n-icon"><i data-lucide="circle-user"></i></span> Profil Saya</div>
         <div class="sidebar-nav-item referral-desktop-nav" id="n-referral" onclick="nav('referral')"><span class="n-icon"><i data-lucide="gift"></i></span> Referral</div>
-        <div class="sidebar-nav-item"         id="n-api"          onclick="nav('api')"><span class="n-icon"><i data-lucide="key-round"></i></span> API Key</div>
       </nav>
 
       <!-- Footer -->
@@ -224,11 +223,6 @@
                 <div class="q-icon" style="background:#D4FFF0;"><i data-lucide="clipboard-list" style="color:var(--accent-dark);"></i></div>
                 <div class="q-label">Pesanan</div>
                 <div class="q-desc">Status & OTP</div>
-              </div>
-              <div class="quick-card" onclick="nav('api')">
-                <div class="q-icon" style="background:#F3D4FF;"><i data-lucide="key-round" style="color:var(--purple);"></i></div>
-                <div class="q-label">API Key</div>
-                <div class="q-desc">Integrasi</div>
               </div>
             </div>
           </div>
@@ -827,43 +821,6 @@
           </div>
         </div><!-- /page-help -->
 
-
-        <!-- =============================================
-             PAGE: API KEY
-             ============================================= -->
-        <div class="page" id="page-api">
-          <div class="ph"><h1>🔑 API Key</h1><p>Integrasi layanan NokosHUB ke sistem kamu secara otomatis.</p></div>
-
-          <div class="table-card" style="margin-bottom:16px;">
-            <div class="card-title" style="margin-bottom:12px;">🔑 API Key Aktif</div>
-            <p style="font-size:0.82rem;color:var(--muted);font-weight:600;margin-bottom:4px;">Jangan bagikan API key ini. Gunakan environment variable.</p>
-            <div class="api-key-box">
-              <div class="api-key-txt" id="apiKeyTxt">nk_live_••••••••••••••••••••••••••••••••</div>
-              <button class="btn btn-outline btn-xs" onclick="toggleApi()" id="btnToggleApi">👁 Tampil</button>
-              <button class="btn btn-primary btn-xs" onclick="copyApiKey()">📋 Salin</button>
-            </div>
-            <div class="profile-inline-actions" style="margin-top:14px;">
-              <button class="btn btn-danger btn-sm" onclick="showToast('API key direset! Key baru aktif 🔑','warning')">🔄 Reset Key</button>
-              <button class="btn btn-outline btn-sm" onclick="showToast('Dokumentasi segera tersedia! 📖','info')">📖 Dokumentasi</button>
-            </div>
-          </div>
-
-          <div class="table-card" style="margin-bottom:16px;">
-            <div class="card-title" style="margin-bottom:14px;">📊 Statistik Penggunaan</div>
-            <div class="api-stats-grid">
-              <div class="stat-card" style="background:#DBF4FF;" data-e="📡"><div class="stat-icon" style="background:#b3e5ff;">📡</div><div class="stat-val">247</div><div class="stat-label">Req Hari Ini</div></div>
-              <div class="stat-card" style="background:#D4FFF0;" data-e="📈"><div class="stat-icon" style="background:#a0ffd9;">📈</div><div class="stat-val">5.840</div><div class="stat-label">Total Request</div></div>
-              <div class="stat-card" style="background:#FFF3D4;" data-e="⚡"><div class="stat-icon" style="background:#ffe9a0;">⚡</div><div class="stat-val">10.000</div><div class="stat-label">Limit/Hari</div></div>
-            </div>
-            <div style="background:var(--bg-dark);border:var(--bw) solid var(--border);border-radius:var(--r-md);padding:16px;box-shadow:var(--shadow-s);">
-              <div style="font-size:0.68rem;font-weight:800;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">💻 Contoh Request cURL</div>
-              <pre style="color:var(--accent);font-size:0.78rem;overflow-x:auto;line-height:1.8;white-space:pre-wrap;">curl -X GET "https://api.nokoshub.com/v1/order" \
-  -H "Authorization: Bearer nk_live_xxx" \
-  -H "Content-Type: application/json" \
-  -d '{"service":"wa","country":"id"}'</pre>
-            </div>
-          </div>
-        </div><!-- /page-api -->
 
       </div><!-- /page-wrap -->
 

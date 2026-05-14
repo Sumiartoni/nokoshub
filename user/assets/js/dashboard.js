@@ -74,7 +74,6 @@ const S = {
     busy: false,
     ordering: false,
   },
-  api: { visible: false, key: 'nk_live_a8f2c3d9e1b7634512098765fedcba43' },
   orders: [],
   transactions: [],
   invoices: [],
@@ -100,7 +99,6 @@ const TTLS = {
   referral: 'Referral',
   help: 'Bantuan',
   profile: 'Profil',
-  api: 'API Key',
 };
 
 const ROUTES = Object.keys(TTLS);
@@ -482,7 +480,7 @@ function nav(page, options = {}) {
   document.getElementById('n-' + route)?.classList.add('active');
 
   document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-  const mnMap = { home: 'mn-home', buy: 'mn-buy', topup: 'mn-topup', orders: 'mn-orders', transactions: 'mn-orders', referral: 'mn-profile', help: 'mn-profile', profile: 'mn-profile', api: 'mn-profile' };
+  const mnMap = { home: 'mn-home', buy: 'mn-buy', topup: 'mn-topup', orders: 'mn-orders', transactions: 'mn-orders', referral: 'mn-profile', help: 'mn-profile', profile: 'mn-profile' };
   document.getElementById(mnMap[route] || '')?.classList.add('active');
 
   set('topbarTitle', TTLS[route] || route);
@@ -2212,14 +2210,6 @@ function getReferralInviteStatus(invite) {
   }
   return { label: 'Belum Deposit', className: 'pending' };
 }
-
-function toggleApi() {
-  S.api.visible = !S.api.visible;
-  set('apiKeyTxt', S.api.visible ? S.api.key : 'nk_live_••••••••••••••••••••••••••••••••');
-  set('btnToggleApi', S.api.visible ? '🙈 Sembunyikan' : '👁 Tampil');
-}
-
-function copyApiKey() { copyText(S.api.key); }
 
 function doLogout() {
   if (confirm('Yakin mau keluar?')) {
