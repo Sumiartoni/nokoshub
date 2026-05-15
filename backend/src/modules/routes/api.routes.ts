@@ -17,6 +17,7 @@ import { paymentSettingsService } from '../settings/payment-settings.service';
 import { promoSettingsService } from '../settings/promo-settings.service';
 import { announcementSettingsService } from '../settings/announcement-settings.service';
 import { seoPagesService, normalizeSlug, type SeoPageRecord } from '../settings/seo-pages.service';
+import { clearWebAuthCookie, setWebAuthCookie } from '../../utils/web-auth';
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -197,7 +198,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         try {
             await maintenanceService.assertActionAllowed('registrations');
-            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req), {
+                expectedHostname: getRequestHostname(req),
+                expectedAction: 'register',
+            });
             const result = await authService.register(parsed.data);
             return { success: true, data: result };
         } catch (err) {
@@ -214,6 +218,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         try {
             const result = await authService.verifyRegisterOtp(parsed.data);
+            setWebAuthCookie(reply, result.token);
             return { success: true, data: result };
         } catch (err) {
             return sendPublicAuthError(reply, err, { fallbackStatus: 400 });
@@ -243,8 +248,12 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
-            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req), {
+                expectedHostname: getRequestHostname(req),
+                expectedAction: 'login',
+            });
             const result = await authService.login(parsed.data);
+            setWebAuthCookie(reply, result.token);
             return { success: true, data: result };
         } catch (err) {
             return sendPublicAuthError(reply, err, {
@@ -273,8 +282,12 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
-            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req), {
+                expectedHostname: getRequestHostname(req),
+                expectedAction: 'login',
+            });
             const result = await authService.loginWithGoogle(parsed.data.credential);
+            setWebAuthCookie(reply, result.token);
             return { success: true, data: result };
         } catch (err) {
             logger.warn({ err, route: '/api/auth/google' }, 'Google login failed');
@@ -294,7 +307,10 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
 
         try {
             await maintenanceService.assertActionAllowed('registrations');
-            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req));
+            await turnstileService.assertToken(parsed.data.turnstileToken, getRequestIp(req), {
+                expectedHostname: getRequestHostname(req),
+                expectedAction: 'register',
+            });
             const result = await authService.startGoogleRegistration(parsed.data);
             return { success: true, data: result };
         } catch (err) {
@@ -306,17 +322,22 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
     // GET /api/auth/me
     fastify.get('/auth/me', async (req, reply) => {
         try {
-            const user = await authService.requireUser(req.headers.authorization);
+            const user = await authService.requireUserFromRequest(req.headers as Record<string, string | string[] | undefined>);
             return { success: true, data: { user } };
         } catch {
             return reply.status(401).send({ success: false, error: 'Unauthorized' });
         }
     });
 
+    fastify.post('/auth/logout', async (_req, reply) => {
+        clearWebAuthCookie(reply);
+        return { success: true };
+    });
+
     // POST /api/auth/telegram-link/code
     fastify.post('/auth/telegram-link/code', { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req, reply) => {
         try {
-            const webUser = await authService.requireUser(req.headers.authorization);
+            const webUser = await authService.requireUserFromRequest(req.headers as Record<string, string | string[] | undefined>);
             const result = await authService.createTelegramLinkCode(webUser.id);
             return { success: true, data: result };
         } catch (err) {
@@ -391,8 +412,8 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
                 firstName: parsed.data.firstName,
                 lastName: parsed.data.lastName,
             });
-        } else if (req.headers.authorization) {
-            const webUser = await authService.requireUser(req.headers.authorization);
+        } else if (req.headers.authorization || req.headers.cookie) {
+            const webUser = await authService.requireUserFromRequest(req.headers as Record<string, string | string[] | undefined>);
             user = await resolveUserForWebSession(webUser, true);
         }
 
@@ -423,9 +444,9 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         let webUser = null;
         let referral = null;
 
-        if (req.headers.authorization) {
+        if (req.headers.authorization || req.headers.cookie) {
             try {
-                webUser = await authService.getUserFromAuthHeader(req.headers.authorization);
+                webUser = await authService.getUserFromRequest(req.headers as Record<string, string | string[] | undefined>);
                 if (webUser?.id) {
                     const summary = await referralService.getSummary(webUser.id);
                     referral = {
@@ -682,7 +703,7 @@ export const apiRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         try {
-            const webUser = await authService.requireUser(req.headers.authorization);
+            const webUser = await authService.requireUserFromRequest(req.headers as Record<string, string | string[] | undefined>);
             const result = await handleWebDepositProof(webUser, parsed.data);
             return { success: true, data: result };
         } catch (err) {
@@ -977,8 +998,8 @@ async function resolveOwnedUserFromRequest(
     req: { headers: Record<string, any> },
     input: { telegramId?: string; createIfMissing: boolean }
 ) {
-    if (req.headers.authorization) {
-        const webUser = await authService.requireUser(req.headers.authorization);
+    if (req.headers.authorization || req.headers.cookie) {
+        const webUser = await authService.requireUserFromRequest(req.headers as Record<string, string | string[] | undefined>);
         const user = await resolveUserForWebSession(webUser, input.createIfMissing);
         return { user, webUser };
     }
@@ -1060,6 +1081,12 @@ function extractQrisImageUrl(gatewayPayload?: string | null) {
 function getRequestIp(req: { headers: Record<string, any>; ip?: string }) {
     const forwarded = String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     return forwarded || req.ip || '';
+}
+
+function getRequestHostname(req: { headers: Record<string, any> }) {
+    const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+    const host = forwardedHost || String(req.headers.host || '').trim();
+    return host.replace(/:\d+$/, '').toLowerCase();
 }
 
 function hasInternalAccess(req: { headers: Record<string, any> }) {

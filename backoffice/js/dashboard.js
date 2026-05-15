@@ -1349,6 +1349,12 @@
         }
     };
 
+    let _smtpSecretsStatus = {
+        hasPassword: false,
+        hasApiKey: false,
+        hasResendApiKey: false,
+    };
+
     window.loadSmtpSettings = async function () {
         const transportInput = document.getElementById('emailTransportInput');
         const hostInput = document.getElementById('smtpHostInput');
@@ -1368,14 +1374,22 @@
             if (!res.success) throw new Error(res.error || 'Gagal memuat SMTP');
 
             const settings = res.data || {};
+            _smtpSecretsStatus = {
+                hasPassword: Boolean(settings.hasPassword),
+                hasApiKey: Boolean(settings.hasApiKey),
+                hasResendApiKey: Boolean(settings.hasResendApiKey),
+            };
             transportInput.value = settings.transport || 'smtp';
             hostInput.value = settings.host || '';
             portInput.value = settings.port || 587;
             secureInput.value = String(Boolean(settings.secure));
             usernameInput.value = settings.username || '';
-            passwordInput.value = settings.password || '';
-            apiKeyInput.value = settings.apiKey || '';
-            resendApiKeyInput.value = settings.resendApiKey || '';
+            passwordInput.value = '';
+            apiKeyInput.value = '';
+            resendApiKeyInput.value = '';
+            passwordInput.placeholder = settings.hasPassword ? 'Password tersimpan. Kosongkan jika tidak ingin mengubah.' : 'Password SMTP';
+            apiKeyInput.placeholder = settings.hasApiKey ? 'API key tersimpan. Kosongkan jika tidak ingin mengubah.' : 'Brevo API key';
+            resendApiKeyInput.placeholder = settings.hasResendApiKey ? 'API key tersimpan. Kosongkan jika tidak ingin mengubah.' : 'Resend API key';
             fromNameInput.value = settings.fromName || 'NokosHUB';
             fromEmailInput.value = settings.fromEmail || '';
             syncEmailTransportFields();
@@ -1427,16 +1441,16 @@
         }
 
         if (payload.transport === 'brevo_api') {
-            if (!payload.apiKey) {
+            if (!payload.apiKey && !_smtpSecretsStatus.hasApiKey) {
                 showToast('Isi Brevo API key terlebih dahulu', 'warning');
                 return;
             }
         } else if (payload.transport === 'resend_api') {
-            if (!payload.resendApiKey) {
+            if (!payload.resendApiKey && !_smtpSecretsStatus.hasResendApiKey) {
                 showToast('Isi Resend API key terlebih dahulu', 'warning');
                 return;
             }
-        } else if (!payload.host || !payload.username || !payload.password) {
+        } else if (!payload.host || !payload.username || (!payload.password && !_smtpSecretsStatus.hasPassword)) {
             showToast('Lengkapi host, username, password, dan email pengirim SMTP', 'warning');
             return;
         }
@@ -1996,6 +2010,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
     let _usersMap = new Map();
     let _userAccountFilter = 'ALL';
+    let _adjustTargetLocked = false;
 
     window.loadUsers = async function () {
         const body = document.getElementById('usersTableBody');
@@ -2088,12 +2103,15 @@
                     ${users.map(u => {
                         const displayName = [u.firstName, u.lastName].filter(Boolean).join(' ') || u.username || '—';
                         const canAdjust = Boolean((u.telegramId && /^\d+$/.test(String(u.telegramId).trim())) || u.webUserId);
+                        const webUserMeta = u.webUserId
+                            ? `<div class="mono text-sm text-muted" style="margin-bottom:4px">ID: ${escText(u.webUserId)}</div>`
+                            : '';
                         return `<tr>
                         <td>
                             ${userTypeBadge(u.accountType)}
                             <div class="text-sm text-muted" style="margin-top:4px">${escText(displayName)}</div>
                         </td>
-                        <td>${u.email ? `<span class="fw-600">${escText(u.email)}</span>` : '<span class="text-muted">—</span>'}</td>
+                        <td>${u.email ? `${webUserMeta}<span class="fw-600">${escText(u.email)}</span>` : '<span class="text-muted">—</span>'}</td>
                         <td>
                             <div class="mono text-indigo fw-600">${u.telegramId ? escText(u.telegramId) : '—'}</div>
                             <div class="text-sm text-muted">${u.username ? '@' + escText(u.username) : (u.telegramId ? 'Belum ada username' : 'Belum linked')}</div>
@@ -2104,7 +2122,7 @@
                         <td class="mono">${u.successOrderCount || 0} / ${u.orderCount || 0}</td>
                         <td class="text-muted text-sm">${formatDateShort(u.lastActivity)}</td>
                         <td class="actions-cell">
-                            <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjustForUser(${escAttr(u.accountType)}, ${escAttr(u.telegramId || '')}, ${escAttr(u.webUserId || '')}, ${escAttr(u.email || displayName)})"` : 'disabled title="Target user tidak valid"'} >
+                            <button class="btn btn-sm btn-outline" ${canAdjust ? `onclick="prefillAdjustForUser(${escAttr(u.accountType)}, ${escAttr(u.telegramId || '')}, ${escAttr(u.webUserId || '')}, ${escAttr(u.email || displayName)}, ${escAttr(displayName)})"` : 'disabled title="Target user tidak valid"'} >
                                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                                 </svg>
@@ -2126,7 +2144,18 @@
         if (webGroup) webGroup.hidden = targetType !== 'web';
     };
 
+    function setAdjustFieldLock(locked) {
+        _adjustTargetLocked = Boolean(locked);
+        const targetTypeInput = document.getElementById('adjTargetType');
+        const telegramInput = document.getElementById('adjTelegramId');
+        const webUserInput = document.getElementById('adjWebUserId');
+        if (targetTypeInput) targetTypeInput.disabled = _adjustTargetLocked;
+        if (telegramInput) telegramInput.readOnly = _adjustTargetLocked;
+        if (webUserInput) webUserInput.readOnly = _adjustTargetLocked;
+    }
+
     window.showAdjustBalanceModal = function (targetType = 'telegram') {
+        setAdjustFieldLock(false);
         document.getElementById('adjTargetType').value = targetType;
         document.getElementById('adjTelegramId').value = '';
         document.getElementById('adjWebUserId').value = '';
@@ -2138,12 +2167,19 @@
         document.getElementById('balanceModal').style.display = 'flex';
     };
 
-    window.prefillAdjustForUser = function (accountType, telegramId, webUserId, label) {
-        const targetType = webUserId && (!telegramId || accountType === 'WEB_ONLY') ? 'web' : 'telegram';
+    window.prefillAdjustForUser = function (accountType, telegramId, webUserId, email, displayName) {
+        const targetType = webUserId ? 'web' : 'telegram';
         showAdjustBalanceModal(targetType);
         document.getElementById('adjTelegramId').value = telegramId || '';
         document.getElementById('adjWebUserId').value = webUserId || '';
-        document.getElementById('adjTargetLabel').value = label || telegramId || webUserId || '';
+        document.getElementById('adjTargetLabel').value = buildAdjustTargetLabel({
+            accountType,
+            telegramId,
+            webUserId,
+            email,
+            displayName,
+        });
+        setAdjustFieldLock(true);
     };
 
     window.submitAdjustBalance = async function () {
@@ -2192,6 +2228,15 @@
                 </svg> Simpan`;
         }
     };
+
+    function buildAdjustTargetLabel({ accountType, telegramId, webUserId, email, displayName }) {
+        const parts = [];
+        if (displayName) parts.push(displayName);
+        if (email) parts.push(email);
+        if (webUserId) parts.push(`Web ID: ${webUserId}`);
+        if (telegramId && accountType !== 'WEB_ONLY') parts.push(`Telegram: ${telegramId}`);
+        return parts.join(' | ') || telegramId || webUserId || 'Target user';
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     //  HELPERS

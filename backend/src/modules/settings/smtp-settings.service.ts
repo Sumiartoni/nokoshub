@@ -55,7 +55,14 @@ export const smtpSettingsService = {
     },
 
     async saveSettings(input: Partial<SmtpSettings>): Promise<SmtpSettings> {
-        const normalized = normalizeSmtpSettings(input);
+        const current = await this.getSettings();
+        const normalized = normalizeSmtpSettings({
+            ...current,
+            ...input,
+            password: shouldKeepExistingSecret(input.password) ? current.password : input.password,
+            apiKey: shouldKeepExistingSecret(input.apiKey) ? current.apiKey : input.apiKey,
+            resendApiKey: shouldKeepExistingSecret(input.resendApiKey) ? current.resendApiKey : input.resendApiKey,
+        });
         await prisma.appSetting.upsert({
             where: { key: SMTP_SETTINGS_KEY },
             update: { value: JSON.stringify(normalized) },
@@ -157,4 +164,8 @@ function applyResendFallbackOverride(settings: SmtpSettings): SmtpSettings {
         ...settings,
         resendApiKey: config.RESEND_API_KEY.trim(),
     };
+}
+
+function shouldKeepExistingSecret(value: unknown) {
+    return value === undefined || value === null || String(value).trim() === '';
 }

@@ -49,8 +49,7 @@ export async function buildServer() {
     await app.register(rateLimit, {
         max: 100,
         timeWindow: '1 minute',
-        keyGenerator: (req) =>
-            req.headers['x-forwarded-for']?.toString() || req.ip,
+        keyGenerator: (req) => req.ip,
     });
 
     // ─── Dashboard + Health check at root for Koyeb ──────────────────────────

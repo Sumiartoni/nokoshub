@@ -4,6 +4,7 @@ import { config } from '../../app/config';
 import { userService } from '../users/user.service';
 import { emailService } from '../email/email.service';
 import { referralService } from '../referrals/referral.service';
+import { WEB_AUTH_COOKIE_NAME } from '../../utils/web-auth';
 
 const TOKEN_TTL_SECONDS = parseDurationToSeconds(config.JWT_EXPIRES_IN);
 const LINK_CODE_TTL_MINUTES = 10;
@@ -211,8 +212,25 @@ export const authService = {
         return user ? sanitizeWebUser(user) : null;
     },
 
+    async getUserFromRequest(headers: Record<string, string | string[] | undefined>) {
+        const bearerToken = extractBearerToken(String(headers.authorization || ''));
+        const cookieToken = extractCookieToken(String(headers.cookie || ''), WEB_AUTH_COOKIE_NAME);
+        const token = bearerToken || cookieToken;
+        if (!token) return null;
+
+        const payload = verifyToken(token);
+        const user = await prisma.webUser.findUnique({ where: { id: payload.sub } });
+        return user ? sanitizeWebUser(user) : null;
+    },
+
     async requireUser(authHeader?: string) {
         const user = await authService.getUserFromAuthHeader(authHeader);
+        if (!user) throw new Error('Unauthorized');
+        return user;
+    },
+
+    async requireUserFromRequest(headers: Record<string, string | string[] | undefined>) {
+        const user = await authService.getUserFromRequest(headers);
         if (!user) throw new Error('Unauthorized');
         return user;
     },
@@ -489,6 +507,18 @@ function verifyToken(token: string): AuthTokenPayload {
 function extractBearerToken(authHeader?: string) {
     const match = authHeader?.match(/^Bearer\s+(.+)$/i);
     return match?.[1] ?? null;
+}
+
+function extractCookieToken(cookieHeader: string, cookieName: string) {
+    if (!cookieHeader) return null;
+
+    for (const item of cookieHeader.split(';')) {
+        const [rawName, ...rawValue] = item.trim().split('=');
+        if (rawName !== cookieName) continue;
+        return decodeURIComponent(rawValue.join('=') || '');
+    }
+
+    return null;
 }
 
 function sign(value: string) {

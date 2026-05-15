@@ -1120,7 +1120,18 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.get('/settings/smtp', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
         const settings = await smtpSettingsService.getSettings();
-        return { success: true, data: settings };
+        return {
+            success: true,
+            data: {
+                ...settings,
+                password: settings.password ? '********' : '',
+                apiKey: settings.apiKey ? '********' : '',
+                resendApiKey: settings.resendApiKey ? '********' : '',
+                hasPassword: Boolean(settings.password),
+                hasApiKey: Boolean(settings.apiKey),
+                hasResendApiKey: Boolean(settings.resendApiKey),
+            },
+        };
     });
 
     // PATCH /api/admin/settings/smtp - save email transport settings

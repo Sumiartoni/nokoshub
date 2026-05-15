@@ -185,7 +185,7 @@ function persistAuth(result) {
   const user = result?.user;
   if (!token || !user) throw new Error('Response auth tidak valid.');
 
-  localStorage.setItem('nokoshub.auth.token', token);
+  localStorage.removeItem('nokoshub.auth.token');
   saveUserSession({
     email: user.email,
     firstName: user.firstName || '',
@@ -208,6 +208,7 @@ function saveUserSession(partial) {
 async function apiFetch(path, body) {
   const response = await fetch(apiUrl(path), {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });

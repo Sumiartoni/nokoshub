@@ -225,6 +225,7 @@ async function apiFetch(path, options = {}) {
     try {
       response = await fetch(apiUrl(path, params), {
         method: body ? 'POST' : 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -558,6 +559,7 @@ async function loadDashboardData({ silent = false } = {}) {
   const unauthorized = errors.find(isUnauthorizedError);
   if (unauthorized) {
     localStorage.removeItem(STORE_KEYS.token);
+    localStorage.removeItem(STORE_KEYS.session);
     window.location.href = '/login/';
     return;
   }
@@ -2213,9 +2215,12 @@ function getReferralInviteStatus(invite) {
 
 function doLogout() {
   if (confirm('Yakin mau keluar?')) {
-    localStorage.removeItem(STORE_KEYS.session);
-    showToast('Sampai jumpa!', 'info');
-    setTimeout(() => { window.location.href = '/'; }, 800);
+    apiFetch('/auth/logout', { body: {}, retries: 0 }).catch(() => null).finally(() => {
+      localStorage.removeItem(STORE_KEYS.token);
+      localStorage.removeItem(STORE_KEYS.session);
+      showToast('Sampai jumpa!', 'info');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    });
   }
 }
 
@@ -2723,11 +2728,6 @@ document.addEventListener('click', (event) => {
 });
 
 (async function init() {
-  if (!localStorage.getItem(STORE_KEYS.token)) {
-    window.location.href = '/login/';
-    return;
-  }
-
   hydrateSessionFromUrl();
   applySession(readSession());
   S.notificationsSeenAt = Number(localStorage.getItem(STORE_KEYS.notificationSeenAt) || 0);

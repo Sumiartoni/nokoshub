@@ -1,11 +1,20 @@
 import axios from 'axios';
-import logger from './src/utils/logger';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 async function remoteTrigger() {
+    const baseUrl = process.env.REMOTE_SYNC_URL;
+    const adminApiKey = process.env.ADMIN_API_KEY;
+
+    if (!baseUrl || !adminApiKey) {
+        throw new Error('Isi REMOTE_SYNC_URL dan ADMIN_API_KEY di environment sebelum menjalankan test-remote.ts');
+    }
+
     try {
-        const res = await axios.post('https://likely-bette-ann-mkrrm-24e1aebd.koyeb.app/api/admin/sync', {}, {
+        const res = await axios.post(baseUrl, {}, {
             headers: {
-                'x-admin-key': 'NokosHub2026_AdminKey!'
+                'x-admin-key': adminApiKey
             },
             timeout: 60000 // Wait up to 60s
         });

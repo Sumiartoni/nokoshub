@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     turnstileSiteKey: '',
     turnstileWidgetId: null,
     turnstileToken: '',
+    turnstileAction: 'login',
   };
 
   const registerSecurity = {
@@ -29,6 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     turnstileSiteKey: '',
     turnstileWidgetId: null,
     turnstileToken: '',
+    turnstileAction: 'register',
   };
 
   bindPasswordToggle(document.getElementById('passwordToggle'), document.getElementById('password'));
@@ -190,6 +192,7 @@ async function initTurnstileSecurity(state, { configPath, wrapId, boxId, errorId
 
     state.turnstileWidgetId = window.turnstile.render(box, {
       sitekey: state.turnstileSiteKey,
+      action: state.turnstileAction || undefined,
       callback(token) {
         state.turnstileToken = token || '';
         clearError(errorId);
@@ -393,7 +396,7 @@ function persistAuth(result) {
   const user = result?.user;
   if (!token || !user) throw new Error('Response auth tidak valid.');
 
-  localStorage.setItem('nokoshub.auth.token', token);
+  localStorage.removeItem('nokoshub.auth.token');
   saveUserSession({
     email: user.email,
     firstName: user.firstName || '',
@@ -405,6 +408,7 @@ function persistAuth(result) {
 async function apiFetch(path, body) {
   const response = await fetchWithRetry(apiUrl(path), {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }, AUTH_TIMEOUT_MS);
@@ -414,6 +418,7 @@ async function apiFetch(path, body) {
 async function apiGet(path) {
   const response = await fetchWithRetry(apiUrl(path), {
     method: 'GET',
+    credentials: 'include',
     headers: { Accept: 'application/json' },
   }, AUTH_TIMEOUT_MS);
   return unwrapApiResponse(response);

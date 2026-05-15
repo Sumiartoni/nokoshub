@@ -22,7 +22,14 @@ export const turnstileService = {
         };
     },
 
-    async assertToken(token?: string | null, remoteIp?: string | null) {
+    async assertToken(
+        token?: string | null,
+        remoteIp?: string | null,
+        options?: {
+            expectedHostname?: string | null;
+            expectedAction?: string | null;
+        }
+    ) {
         if (!this.isEnabled()) return;
 
         if (!token) {
@@ -53,6 +60,16 @@ export const turnstileService = {
                 throw new Error('Captcha sudah kedaluwarsa. Silakan verifikasi ulang.');
             }
             throw new Error('Verifikasi keamanan gagal. Silakan coba lagi.');
+        }
+
+        const expectedHostname = String(options?.expectedHostname || '').trim().toLowerCase();
+        if (expectedHostname && String(payload.hostname || '').trim().toLowerCase() !== expectedHostname) {
+            throw new Error('Hostname verifikasi keamanan tidak cocok.');
+        }
+
+        const expectedAction = String(options?.expectedAction || '').trim();
+        if (expectedAction && String(payload.action || '').trim() !== expectedAction) {
+            throw new Error('Action verifikasi keamanan tidak cocok.');
         }
     },
 };
