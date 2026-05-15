@@ -670,19 +670,39 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                     status: 'SUCCESS',
                 },
                 select: {
+                    id: true,
                     userId: true,
-                    price: {
-                        select: { sellPrice: true },
-                    },
                 },
             });
+
+            const successOrderIds = successfulOrders.map((order) => order.id);
+            const deductTransactions = successOrderIds.length
+                ? await prisma.transaction.findMany({
+                    where: {
+                        userId: { in: relevantUserIds },
+                        type: 'DEDUCT',
+                        reference: { in: successOrderIds },
+                    },
+                    select: {
+                        userId: true,
+                        reference: true,
+                        amount: true,
+                    },
+                })
+                : [];
+
+            const deductByOrderId = new Map<string, number>();
+            for (const tx of deductTransactions) {
+                if (!tx.reference) continue;
+                deductByOrderId.set(tx.reference, Math.abs(Number(tx.amount || 0)));
+            }
 
             for (const order of successfulOrders) {
                 const summary = successfulOrderSummary.get(order.userId) ?? {
                     totalPurchase: 0,
                     successOrderCount: 0,
                 };
-                summary.totalPurchase += order.price.sellPrice;
+                summary.totalPurchase += deductByOrderId.get(order.id) ?? 0;
                 summary.successOrderCount += 1;
                 successfulOrderSummary.set(order.userId, summary);
             }
