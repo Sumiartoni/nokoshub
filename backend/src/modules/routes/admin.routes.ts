@@ -747,8 +747,47 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
         const rows = new Map<string, any>();
 
+        function getUserMetrics(userId?: string | null) {
+            if (!userId) {
+                return {
+                    txCount: 0,
+                    totalDeposit: 0,
+                    totalRefund: 0,
+                    totalDeduct: 0,
+                    totalPurchase: 0,
+                    successOrderCount: 0,
+                    lastActivity: null as Date | null,
+                };
+            }
+
+            return txSummary.get(userId) ?? {
+                txCount: 0,
+                totalDeposit: 0,
+                totalRefund: 0,
+                totalDeduct: 0,
+                totalPurchase: 0,
+                successOrderCount: 0,
+                lastActivity: null as Date | null,
+            };
+        }
+
+        function combineMetrics(
+            primary: ReturnType<typeof getUserMetrics>,
+            secondary: ReturnType<typeof getUserMetrics>
+        ) {
+            return {
+                txCount: (primary.txCount ?? 0) + (secondary.txCount ?? 0),
+                totalDeposit: (primary.totalDeposit ?? 0) + (secondary.totalDeposit ?? 0),
+                totalRefund: (primary.totalRefund ?? 0) + (secondary.totalRefund ?? 0),
+                totalDeduct: (primary.totalDeduct ?? 0) + (secondary.totalDeduct ?? 0),
+                totalPurchase: (primary.totalPurchase ?? 0) + (secondary.totalPurchase ?? 0),
+                successOrderCount: (primary.successOrderCount ?? 0) + (secondary.successOrderCount ?? 0),
+                lastActivity: maxDate(primary.lastActivity, secondary.lastActivity) as Date | null,
+            };
+        }
+
         for (const user of realTelegramUsers) {
-            const summary = txSummary.get(user.id);
+            const summary = getUserMetrics(user.id);
             rows.set(`telegram:${user.id}`, {
                 id: user.id,
                 telegramUserId: user.id,
@@ -763,13 +802,13 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
                 isActive: user.isActive,
                 orderCount: user._count.orders,
                 invoiceCount: user._count.invoices,
-                txCount: summary?.txCount ?? user._count.transactions,
-                totalDeposit: summary?.totalDeposit ?? 0,
-                totalRefund: summary?.totalRefund ?? 0,
-                totalDeduct: summary?.totalDeduct ?? 0,
-                totalPurchase: summary?.totalPurchase ?? 0,
-                successOrderCount: summary?.successOrderCount ?? 0,
-                lastActivity: summary?.lastActivity ?? user.updatedAt,
+                txCount: summary.txCount || user._count.transactions,
+                totalDeposit: summary.totalDeposit ?? 0,
+                totalRefund: summary.totalRefund ?? 0,
+                totalDeduct: summary.totalDeduct ?? 0,
+                totalPurchase: summary.totalPurchase ?? 0,
+                successOrderCount: summary.successOrderCount ?? 0,
+                lastActivity: summary.lastActivity ?? user.updatedAt,
                 createdAt: user.createdAt,
                 webCreatedAt: null,
                 telegramCreatedAt: user.createdAt,
@@ -780,7 +819,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             const linkedTelegramUser = webUser.telegramId ? usersByTelegramId.get(webUser.telegramId) : null;
             if (!linkedTelegramUser) {
                 const webWallet = webWalletUsers.get(webUser.id);
-                const summary = webWallet ? txSummary.get(webWallet.id) : null;
+                const summary = webWallet ? getUserMetrics(webWallet.id) : null;
                 rows.set(`web:${webUser.id}`, {
                     id: webUser.id,
                     telegramUserId: webWallet?.id ?? null,
@@ -811,15 +850,48 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
             const key = `telegram:${linkedTelegramUser.id}`;
             const existing = rows.get(key);
+            const linkedWallet = webWalletUsers.get(webUser.id);
+            const linkedWalletMetrics = linkedWallet ? getUserMetrics(linkedWallet.id) : getUserMetrics(null);
+            const baseMetrics = combineMetrics(
+                {
+                    txCount: existing?.txCount ?? 0,
+                    totalDeposit: existing?.totalDeposit ?? 0,
+                    totalRefund: existing?.totalRefund ?? 0,
+                    totalDeduct: existing?.totalDeduct ?? 0,
+                    totalPurchase: existing?.totalPurchase ?? 0,
+                    successOrderCount: existing?.successOrderCount ?? 0,
+                    lastActivity: existing?.lastActivity ?? linkedTelegramUser.updatedAt,
+                },
+                linkedWalletMetrics
+            );
+            const balance = Number(existing?.balance ?? linkedTelegramUser.balance ?? 0) + Number(linkedWallet?.balance ?? 0);
+            const orderCount = Number(existing?.orderCount ?? linkedTelegramUser._count.orders ?? 0) + Number(linkedWallet?._count.orders ?? 0);
+            const invoiceCount = Number(existing?.invoiceCount ?? linkedTelegramUser._count.invoices ?? 0) + Number(linkedWallet?._count.invoices ?? 0);
+
             rows.set(key, {
-                ...existing,
+                id: existing?.id ?? linkedTelegramUser.id,
+                telegramUserId: linkedTelegramUser.id,
                 webUserId: webUser.id,
                 accountType: 'WEB_LINKED',
                 email: webUser.email,
+                telegramId: existing?.telegramId ?? linkedTelegramUser.telegramId,
+                username: existing?.username ?? linkedTelegramUser.username,
                 firstName: webUser.firstName ?? existing?.firstName,
                 lastName: webUser.lastName ?? existing?.lastName,
+                balance,
+                isActive: existing?.isActive ?? linkedTelegramUser.isActive,
+                orderCount,
+                invoiceCount,
+                txCount: baseMetrics.txCount,
+                totalDeposit: baseMetrics.totalDeposit,
+                totalRefund: baseMetrics.totalRefund,
+                totalDeduct: baseMetrics.totalDeduct,
+                totalPurchase: baseMetrics.totalPurchase,
+                successOrderCount: baseMetrics.successOrderCount,
+                createdAt: existing?.createdAt ?? linkedTelegramUser.createdAt,
                 webCreatedAt: webUser.createdAt,
-                lastActivity: maxDate(existing?.lastActivity, webUser.updatedAt),
+                telegramCreatedAt: existing?.telegramCreatedAt ?? linkedTelegramUser.createdAt,
+                lastActivity: maxDate(baseMetrics.lastActivity, maxDate(linkedWallet?.updatedAt ?? null, webUser.updatedAt)),
             });
         }
 
