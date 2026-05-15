@@ -57,6 +57,7 @@ BACKOFFICE_COOKIE_SECURE=true
 Sebelum domain dibuka ke publik:
 
 - Isi `INTERNAL_API_SECRET`, `JWT_SECRET`, `ADMIN_API_KEY`, dan `BACKOFFICE_SESSION_SECRET` dengan string acak panjang.
+- Default sesi auth user sekarang `24h` via `JWT_EXPIRES_IN=24h`. Jika ingin semua sesi lama langsung logout saat rollout kebijakan ini, rotate `JWT_SECRET`.
 - Jika memakai webhook BAYAR GG, isi `PUBLIC_API_BASE_URL` dan `BAYAR_GG_WEBHOOK_SECRET`, lalu pastikan callback diarahkan ke URL webhook yang tampil di panel maintenance/backoffice. Webhook sekarang diverifikasi dengan signature, bukan token query string.
 - Jangan buka port `3000`, `8080`, `8081`, `5432`, atau `6379` ke publik. Publik cukup lewat port `80` dan `443` milik reverse proxy.
 - Set `BACKOFFICE_COOKIE_SECURE=true` setelah memakai HTTPS.

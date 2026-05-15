@@ -93,7 +93,7 @@ const envSchema = z.object({
     SMTP_PASSWORD: z.string().default(''),
 
     JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
-    JWT_EXPIRES_IN: z.string().default('7d'),
+    JWT_EXPIRES_IN: z.string().default('24h'),
 
     SELL_PRICE_MULTIPLIER: z.string().default('3.5').transform(Number),
     PROVIDER_SYNC_ON_STARTUP: z.string().default('true').transform((value) => {
