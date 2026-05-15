@@ -1138,7 +1138,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.patch('/settings/smtp', async (req, reply) => {
         if (!requireAdmin(req, reply)) return;
 
-        const parsed = smtpSettingsSchema.safeParse(req.body);
+        const currentSettings = await smtpSettingsService.getSettings();
+        const body = (req.body || {}) as Record<string, unknown>;
+        const smtpPayload = {
+            ...body,
+            password: shouldKeepExistingSecret(body.password) ? currentSettings.password : body.password,
+            apiKey: shouldKeepExistingSecret(body.apiKey) ? currentSettings.apiKey : body.apiKey,
+            resendApiKey: shouldKeepExistingSecret(body.resendApiKey) ? currentSettings.resendApiKey : body.resendApiKey,
+        };
+
+        const parsed = smtpSettingsSchema.safeParse(smtpPayload);
         if (!parsed.success) {
             return reply.status(400).send({ success: false, error: parsed.error.flatten().fieldErrors });
         }
@@ -1404,3 +1413,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         };
     });
 };
+
+function shouldKeepExistingSecret(value: unknown) {
+    return value === undefined || value === null || String(value).trim() === '';
+}

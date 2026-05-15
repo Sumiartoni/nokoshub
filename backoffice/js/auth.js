@@ -90,7 +90,7 @@
             };
         }
         if (!res.ok || data.success === false) {
-            const error = new Error(humanizeAuthError(data.error || 'Request failed'));
+            const error = new Error(humanizeAuthError(normalizeApiError(data.error || 'Request failed')));
             error.status = res.status;
             throw error;
         }
@@ -157,6 +157,25 @@
             return 'Koneksi server sedang sibuk atau lambat. Coba lagi beberapa saat.';
         }
         return text;
+    }
+
+    function normalizeApiError(value) {
+        if (!value) return 'Request failed';
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) {
+            return value.map(normalizeApiError).filter(Boolean).join(', ');
+        }
+        if (typeof value === 'object') {
+            const parts = [];
+            for (const [key, entry] of Object.entries(value)) {
+                if (entry == null) continue;
+                const normalized = normalizeApiError(entry);
+                if (!normalized) continue;
+                parts.push(normalized === String(entry) ? normalized : `${key}: ${normalized}`);
+            }
+            return parts.join(' | ') || 'Request failed';
+        }
+        return String(value);
     }
 
     function isRetryableError(err) {
